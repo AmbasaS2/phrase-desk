@@ -1,0 +1,9 @@
+{
+  "name": "🔤 Phrase Desk",
+  "display_name": "🔤 Phrase Desk",
+  "version": "1.3.1",
+  "description": "Phrase Desk: English phrase notebook and translation helper",
+  "author": "private",
+  "js": "index.js",
+  "css": "style.css"
+}
