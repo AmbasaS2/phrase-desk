@@ -2795,18 +2795,37 @@ function queueMessageButtonHydration(scope=document) {
     hydrateMessageTranslateButtons(scope || document);
   });
 }
+const MESSAGE_OBSERVER_RETRY_DELAY = 500;
+const MESSAGE_OBSERVER_RETRY_LIMIT = 20;
+function clearMessageObserverRetry() {
+  if (pdGlobalState.messageButtonObserverRetryTimer) {
+    clearTimeout(pdGlobalState.messageButtonObserverRetryTimer);
+    pdGlobalState.messageButtonObserverRetryTimer = null;
+  }
+}
 function scheduleMessageButtonHydration() {
   setupMessageButtonObserver();
 }
 function setupMessageButtonObserver() {
   const chatEl = document.getElementById('chat') || document.getElementById('chat_container');
-  if (!chatEl) { setTimeout(setupMessageButtonObserver, 500); return; }
-  hydrateMessageTranslateButtons(chatEl);
+  if (!chatEl) {
+    const attempts = Number(pdGlobalState.messageButtonObserverRetryAttempts || 0);
+    if (attempts >= MESSAGE_OBSERVER_RETRY_LIMIT || pdGlobalState.messageButtonObserverRetryTimer) return;
+    pdGlobalState.messageButtonObserverRetryAttempts = attempts + 1;
+    pdGlobalState.messageButtonObserverRetryTimer = setTimeout(() => {
+      pdGlobalState.messageButtonObserverRetryTimer = null;
+      setupMessageButtonObserver();
+    }, MESSAGE_OBSERVER_RETRY_DELAY);
+    return;
+  }
+  clearMessageObserverRetry();
+  pdGlobalState.messageButtonObserverRetryAttempts = 0;
 
   // Store the observer on globalThis, not in a module-local variable.
   // SillyTavern can evaluate an extension module more than once during reconnect/reload flows;
   // module-local guards reset, but global guards survive within the page.
   if (pdGlobalState.messageButtonObserver && pdGlobalState.messageButtonObserverTarget === chatEl) return;
+  hydrateMessageTranslateButtons(chatEl);
   try { pdGlobalState.messageButtonObserver?.disconnect?.(); } catch {}
 
   const observer = new MutationObserver((mutations) => {
@@ -4819,6 +4838,10 @@ function setupMessageRenderHooks() {
     try {
       const handler = (...args) => {
         refreshCharacterPromptField();
+        // The render hooks are also the late-arrival fallback: if the chat DOM was
+        // not present during the bounded startup window, attach the same single
+        // observer as soon as SillyTavern actually renders or switches a chat.
+        setupMessageButtonObserver();
         const payload = payloadFromEventArgs(args);
         if (payload?.mes) {
           ensureMessageTranslateButton(payload.mes);
