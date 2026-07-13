@@ -1147,6 +1147,18 @@ function codeFenceShape(value = '') {
 function protectedFormatTokens(value = '') {
   return String(value || '').match(/⟪PDH_\d{4}⟫/g) || [];
 }
+function normalizeProtectedFormatTokenVariants(value = '', sourceText = '') {
+  const sourceTokens = protectedFormatTokens(sourceText);
+  if (!sourceTokens.length) return String(value || '');
+  const allowed = new Set(sourceTokens);
+  return String(value || '').replace(
+    /`{0,3}\s*[⟪《〈＜<\[\{]\s*PDH[\s_-]*(\d{1,4})\s*[⟫》〉＞>\]\}]\s*`{0,3}/gi,
+    (whole, digits) => {
+      const token = `⟪PDH_${String(digits || '').padStart(4, '0')}⟫`;
+      return allowed.has(token) ? token : whole;
+    },
+  );
+}
 function languageCounts(value = '') {
   const text = String(value || '').replace(/<[^>]+>/g, ' ');
   return {
@@ -1207,7 +1219,7 @@ function aiErrorIsRetryable(error) {
 }
 async function callAI(prompt, maxTokens = MAX_TOKENS, meta = {}) {
   if (!requireProfile()) return '';
-  const maxAttempts = meta?.retryOnFailure ? 3 : 1;
+  const maxAttempts = 1; // Translation requests never repeat automatically. Use manual retranslation instead.
   let lastError = null;
   let lastIssues = [];
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -1234,10 +1246,13 @@ async function callAI(prompt, maxTokens = MAX_TOKENS, meta = {}) {
       const res = await ctx.ConnectionManagerRequestService.sendRequest(settings.profile, [{ role:'user', content: requestPrompt }], tokenBudget);
       const text = extractAIText(res);
       const cleaned = cleanTranslationArtifacts(String(text || ''), '');
-      lastIssues = meta?.validateStructure ? translationStructureIssues(meta?.sourceText || '', cleaned, { kind: meta?.kind || '' }) : (cleaned.trim() ? [] : ['empty']);
+      const normalized = meta?.validateStructure
+        ? normalizeProtectedFormatTokenVariants(cleaned, meta?.sourceText || '')
+        : cleaned;
+      lastIssues = meta?.validateStructure ? translationStructureIssues(meta?.sourceText || '', normalized, { kind: meta?.kind || '' }) : (normalized.trim() ? [] : ['empty']);
       // Keep debug logs safe: record lengths/status only, never the actual prompt or translated text.
-      logDebug({ type:'ai', attempt, promptLength:requestPrompt.length, rawLength:String(text || '').length, resultLength:cleaned.length, structureIssues:lastIssues.join(',') });
-      if (cleaned.trim() && !lastIssues.length) return cleaned;
+      logDebug({ type:'ai', attempt, promptLength:requestPrompt.length, rawLength:String(text || '').length, resultLength:normalized.length, structureIssues:lastIssues.join(',') });
+      if (normalized.trim() && !lastIssues.length) return normalized;
       lastError = new Error(lastIssues.length ? `translation validation failed: ${lastIssues.join(', ')}` : 'empty response');
     } catch (e) {
       lastError = e;
@@ -3124,9 +3139,9 @@ async function translateMessagePayload(payload, forceRetranslate = false, option
       restoredResult = safeTranslationPostprocess(restoredResult, original, kind);
       const inventedKinship = unsupportedInventedKinshipTerms(restoredResult, sourceForPrompt, promptMeta);
       if (inventedKinship.length) {
-        const correction = 'Correction requirement: the previous translation invented an age- or gender-specific Korean kinship title that is not supported by the source or recent context. Re-translate without inventing family hierarchy or relationship labels. Preserve the same meaning, voice, and formatting.\n\n';
-        rawResult = await callAI(correction + basePrompt, MAX_TOKENS, { sourceText: protectedSource.text, kind, validateStructure: true, retryOnFailure: true });
-        restoredResult = safeTranslationPostprocess(protectedSource.restore(rawResult), original, kind);
+        // Do not silently send a second translation request. Keep the first result and leave
+        // retranslation under explicit user control.
+        logDebug({ type:'translation-warning', warning:'unsupported-invented-kinship', count:inventedKinship.length });
       }
       if (!separateParts && kind === 'full') restoredResult = normalizeFencedInfoBlocksInText(restoredResult);
       result = separateParts ? finalizeSeparateBilingualResult(restoredResult, separateParts.body, separateParts.info, original) : normalizeInfoBlockBilingualResult(restoredResult, original, kind);
