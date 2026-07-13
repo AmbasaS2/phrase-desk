@@ -165,11 +165,61 @@ function uid(p='pd') { return `${p}_${Date.now().toString(36)}_${Math.random().t
 function hash(v='') { let h=2166136261; for(let i=0;i<v.length;i++){h^=v.charCodeAt(i); h+=(h<<1)+(h<<4)+(h<<7)+(h<<8)+(h<<24);} return (h>>>0).toString(36); }
 
 function protectTranslationFormat(text = '') {
-  // v1.1.14: keep HTML/Markdown/code-fence structure via prompt instructions; do not inject new PD_FMT tokens.
-  // HTML/Markdown/code-fence 보존은 프롬프트 지시와 SillyTavern 렌더러에 맡긴다.
-  // 이미 과거 캐시에 남은 PD_FMT 찌꺼기는 pd-safe-utils 후처리에서만 정리한다.
+  // Keep HTML/custom-tag markup outside the model's editable prose while leaving the
+  // human-readable text between tags available for translation.
   const source = String(text || '').replace(/\r\n/g, '\n');
-  return { text: source, restore(value = '') { return String(value || ''); }, hasLocks: false };
+  const locks = [];
+  const tokenFor = (raw) => {
+    const token = `⟪PDH_${String(locks.length + 1).padStart(4, '0')}⟫`;
+    locks.push([token, raw]);
+    return token;
+  };
+  let out = '';
+  let i = 0;
+  while (i < source.length) {
+    if (source.startsWith('<!--', i)) {
+      out += tokenFor('<!--');
+      i += 4;
+      continue;
+    }
+    if (source.startsWith('-->', i)) {
+      out += tokenFor('-->');
+      i += 3;
+      continue;
+    }
+    if (source[i] === '<' && /[A-Za-z/!?]/.test(source[i + 1] || '')) {
+      let j = i + 1;
+      let quote = '';
+      while (j < source.length) {
+        const ch = source[j];
+        if (quote) {
+          if (ch === quote && source[j - 1] !== '\\') quote = '';
+        } else if (ch === '"' || ch === "'") {
+          quote = ch;
+        } else if (ch === '>') {
+          j += 1;
+          break;
+        }
+        j += 1;
+      }
+      if (j <= source.length && source[j - 1] === '>') {
+        out += tokenFor(source.slice(i, j));
+        i = j;
+        continue;
+      }
+    }
+    out += source[i];
+    i += 1;
+  }
+  return {
+    text: out,
+    hasLocks: locks.length > 0,
+    restore(value = '') {
+      let restored = String(value || '');
+      for (const [token, raw] of locks) restored = restored.split(token).join(raw);
+      return restored;
+    },
+  };
 }
 
 
@@ -617,6 +667,74 @@ function pdReadSwipeText(msg, swipeId = pdSwipeId(msg)) {
   } catch {}
   return '';
 }
+function pdCollectKnownTranslationTexts(msg) {
+  const out = new Set();
+  const add = (value) => {
+    const clean = norm(value || '');
+    if (clean) out.add(clean);
+  };
+  const addStore = (store) => {
+    if (!store || typeof store !== 'object') return;
+    add(store.display_text);
+    for (const value of Object.values(store.translations || {})) add(value);
+    for (const variant of Object.values(store.variants || {})) {
+      for (const value of Object.values(variant?.translations || {})) add(value);
+    }
+  };
+  add(msg?.extra?.display_text);
+  addStore(msg?.extra?.phraseDesk);
+  for (const saved of Object.values(msg?.extra?.phraseDeskSwipeTranslations || {})) {
+    add(saved?.display_text);
+    addStore(saved?.phraseDesk);
+  }
+  return out;
+}
+function pdIsKnownTranslationText(msg, value = '') {
+  const clean = norm(value || '');
+  return !!clean && pdCollectKnownTranslationTexts(msg).has(clean);
+}
+function pdStoredOriginalForCurrentSwipe(msg) {
+  if (!msg) return '';
+  const swipeId = pdSwipeId(msg);
+  const candidates = [];
+  if (swipeId !== null) {
+    const saved = msg.extra?.phraseDeskSwipeTranslations?.[swipeId];
+    const savedActive = saved?.phraseDesk?.variants?.[saved?.phraseDesk?.activeKey];
+    candidates.push(saved?.original_mes, saved?.phraseDeskOriginal, savedActive?.original, saved?.phraseDesk?.original);
+  }
+  const currentId = msg.extra?.phraseDeskSwipeId;
+  if (swipeId === null || currentId === undefined || currentId === null || String(currentId) === String(swipeId)) {
+    const root = msg.extra?.phraseDesk;
+    const active = root?.variants?.[root?.activeKey];
+    candidates.push(msg.extra?.original_mes, msg.extra?.phraseDeskOriginal, active?.original, root?.original);
+    if (swipeId !== null) {
+      for (const variant of Object.values(root?.variants || {})) {
+        if (variant && String(variant.swipeId ?? '') === String(swipeId)) candidates.push(variant.original);
+      }
+    }
+  }
+  for (const value of candidates) {
+    const text = messageSourceText(value || '', null);
+    if (!norm(text)) continue;
+    if (!pdIsKnownTranslationText(msg, text)) return text;
+  }
+  return '';
+}
+function pdBestOriginalSource(msg, allowKnownFallback = false) {
+  if (!msg) return '';
+  const swipeId = pdSwipeId(msg);
+  const swipeText = swipeId !== null ? pdReadSwipeText(msg, swipeId) : '';
+  const rawMes = messageSourceText(typeof msg.mes === 'string' ? msg.mes : '', null);
+  // Prefer a live source only when it is not one of Phrase Desk's displayed/cached translations.
+  // This lets edited originals win while preventing ST display synchronization from becoming the
+  // next retranslation source.
+  if (norm(swipeText) && !pdIsKnownTranslationText(msg, swipeText)) return swipeText;
+  if (norm(rawMes) && !pdIsKnownTranslationText(msg, rawMes)) return rawMes;
+  const stored = pdStoredOriginalForCurrentSwipe(msg);
+  if (norm(stored)) return stored;
+  return allowKnownFallback ? (swipeText || rawMes || '') : '';
+}
+
 function pdSwipeStore(msg, create = false) {
   if (!msg) return null;
   msg.extra = msg.extra || {};
@@ -695,16 +813,7 @@ function pdSwipeMismatchWithoutSource(msg) {
 }
 function pdCurrentRawMessageSource(msg) {
   if (!msg) return '';
-  const swipeId = pdSwipeId(msg);
-  if (swipeId !== null) {
-    const swipeText = pdReadSwipeText(msg, swipeId);
-    if (norm(swipeText)) return swipeText;
-    if (pdSwipeMismatchWithoutSource(msg)) return '';
-  }
-  const raw = typeof msg.mes === 'string' ? msg.mes : '';
-  const display = String(msg.extra?.display_text || '').trim();
-  if (display && norm(raw) === norm(display)) return '';
-  return messageSourceText(raw, null);
+  return pdBestOriginalSource(msg);
 }
 function messageStableKey(payload) {
   const idx = Number.isFinite(payload?.idx) ? String(payload.idx) : '';
@@ -751,32 +860,22 @@ function backupOriginalFromMsg(payload, state = null) {
   const msg = payload?.msg;
   if (!msg) return '';
   msg.extra = msg.extra || {};
-  const swipeId = pdSwipeId(msg);
-  const savedSwipeId = msg.extra.phraseDeskSwipeId;
-  const swipeText = swipeId !== null ? pdReadSwipeText(msg, swipeId) : '';
-  if (swipeId !== null && savedSwipeId !== undefined && savedSwipeId !== null && String(savedSwipeId) !== String(swipeId)) {
-    if (norm(swipeText)) return messageSourceText(swipeText, null);
-    return '';
-  }
-  if (norm(swipeText)) return messageSourceText(swipeText, null);
-  const explicit = String(msg.extra.original_mes || msg.extra.phraseDeskOriginal || '').trim();
-  if (explicit) return messageSourceText(explicit, null);
-  const raw = typeof msg.mes === 'string' ? msg.mes : '';
-  const display = String(msg.extra.display_text || '').trim();
-  const translated = state ? pickCachedMessageTranslation(state, state.activeMode || translationCacheKey(settings.chatMode || 'full')).text : '';
-  // If ST leaked display_text back into msg.mes, keep the older state.original instead.
-  if (display && norm(raw) === norm(display) && state?.original) return messageSourceText(state.original, null);
-  if (translated && norm(raw) === norm(translated) && state?.original) return messageSourceText(state.original, null);
-  return messageSourceText(raw, null);
+  const liveOriginal = pdBestOriginalSource(msg);
+  if (norm(liveOriginal)) return liveOriginal;
+  const stateOriginal = messageSourceText(state?.original || '', null);
+  if (norm(stateOriginal) && !pdIsKnownTranslationText(msg, stateOriginal)) return stateOriginal;
+  const stored = pdStoredOriginalForCurrentSwipe(msg);
+  if (norm(stored)) return stored;
+  return '';
 }
 function ensureOriginalBackup(payload, state = null, source = '') {
   const msg = payload?.msg;
   const original = String(source || backupOriginalFromMsg(payload, state) || '').trim();
   if (!msg || !original) return original;
   msg.extra = msg.extra || {};
-  if (!msg.extra.original_mes) msg.extra.original_mes = original;
-  if (!msg.extra.phraseDeskOriginal) msg.extra.phraseDeskOriginal = original;
-  return messageSourceText(msg.extra.original_mes || original, null);
+  if (!msg.extra.original_mes || pdIsKnownTranslationText(msg, msg.extra.original_mes)) msg.extra.original_mes = original;
+  if (!msg.extra.phraseDeskOriginal || pdIsKnownTranslationText(msg, msg.extra.phraseDeskOriginal)) msg.extra.phraseDeskOriginal = original;
+  return messageSourceText(original, null);
 }
 function currentMessageOriginal(payload) {
   if (!payload) return '';
@@ -785,13 +884,14 @@ function currentMessageOriginal(payload) {
   const fromDom = messageSourceText(payload?.textEl?.html?.() || payload?.textEl?.text?.() || '', payload?.textEl);
   return fromDom || payload?.bodyText || '';
 }
-function messageOriginalForTranslation(payload, state = null) {
-  // Translate/retranslate from the preserved original, never from display_text or rendered DOM.
+function messageOriginalForTranslation(payload, state = null, freshRetranslation = false) {
+  // A fresh retranslation may use a live original or a preserved original, but never display_text,
+  // a cached translation, or rendered translated DOM as an emergency fallback.
   const original = backupOriginalFromMsg(payload, state);
   if (norm(original)) return original;
-  const storedOriginal = typeof state?.original === 'string' ? state.original : '';
-  if (norm(storedOriginal)) return messageSourceText(storedOriginal, null);
-  return currentMessageOriginal(payload);
+  const storedOriginal = typeof state?.original === 'string' ? messageSourceText(state.original, null) : '';
+  if (norm(storedOriginal) && !pdIsKnownTranslationText(payload?.msg, storedOriginal)) return storedOriginal;
+  return freshRetranslation ? '' : currentMessageOriginal(payload);
 }
 function rootStoreForPayload(payload, create = false) {
   let root = getCachedMessageStore(payload);
@@ -1044,7 +1144,29 @@ function codeFenceShape(value = '') {
   }
   return out;
 }
-function translationStructureIssues(sourceText = '', resultText = '') {
+function protectedFormatTokens(value = '') {
+  return String(value || '').match(/⟪PDH_\d{4}⟫/g) || [];
+}
+function languageCounts(value = '') {
+  const text = String(value || '').replace(/<[^>]+>/g, ' ');
+  return {
+    ko: (text.match(/[가-힣]/g) || []).length,
+    en: (text.match(/[A-Za-z]/g) || []).length,
+  };
+}
+function looksLikeReversedBilingual(sourceText = '', resultText = '', kind = '') {
+  if (String(kind || '') !== 'full' || (settings.bilingualStyle || 'side_sentence') === 'separate') return false;
+  const sourceCounts = languageCounts(sourceText);
+  if (sourceCounts.en < 4 || sourceCounts.en <= sourceCounts.ko) return false;
+  const result = String(resultText || '');
+  const firstBracket = result.match(/\[([^\]\n]{1,800})\]/);
+  if (!firstBracket) return false;
+  const before = result.slice(0, firstBracket.index).replace(/⟪PDH_\d{4}⟫/g, ' ');
+  const beforeCounts = languageCounts(before);
+  const bracketCounts = languageCounts(firstBracket[1]);
+  return beforeCounts.ko >= 2 && beforeCounts.ko > beforeCounts.en && bracketCounts.en >= 3 && bracketCounts.en > bracketCounts.ko;
+}
+function translationStructureIssues(sourceText = '', resultText = '', meta = {}) {
   const source = String(sourceText || '');
   const result = String(resultText || '');
   if (!source.trim() || !result.trim()) return result.trim() ? [] : ['empty'];
@@ -1061,6 +1183,9 @@ function translationStructureIssues(sourceText = '', resultText = '') {
   const resultUrls = collectExactTokens(result, /https?:\/\/[^\s<>"')\]]+/gi);
   if (!containsTokenMultiset(resultUrls, sourceUrls)) issues.push('url');
 
+  const sourceProtected = protectedFormatTokens(source);
+  if (sourceProtected.length && !sameTokenList(sourceProtected, protectedFormatTokens(result))) issues.push('protected-format-token');
+
   if (looksLikeStructuralHtml(source)) {
     const sourceTags = htmlTagShape(source);
     const resultTags = htmlTagShape(result);
@@ -1069,6 +1194,7 @@ function translationStructureIssues(sourceText = '', resultText = '') {
     const resultAttrs = protectedAttributeTokens(result);
     if (!containsTokenMultiset(resultAttrs, sourceAttrs)) issues.push('html-attributes');
   }
+  if (looksLikeReversedBilingual(source, result, meta?.kind || '')) issues.push('bilingual-direction');
   return issues;
 }
 function aiErrorIsRetryable(error) {
@@ -1091,8 +1217,16 @@ async function callAI(prompt, maxTokens = MAX_TOKENS, meta = {}) {
       // repeated identical requests. Increase only on retry, up to the same practical ceiling
       // used by robust translator flows; the first request keeps the original budget.
       const tokenBudget = Math.min(32768, Math.max(256, Math.ceil(Number(maxTokens || MAX_TOKENS) * Math.pow(2, attempt - 1))));
+      const retryDetails = [];
+      if (lastIssues.includes('protected-format-token')) retryDetails.push('Keep every protected format token such as ⟪PDH_0001⟫ exactly once and in the same order. Do not translate, alter, duplicate, or omit those tokens.');
+      if (lastIssues.includes('bilingual-direction')) retryDetails.push('The previous response reversed the bilingual direction. Keep each source-language sentence first and place only its Korean translation inside the following square brackets.');
+      if (lastIssues.includes('html-tag-shape') || lastIssues.includes('html-attributes')) retryDetails.push('Preserve every HTML/custom tag and attribute exactly.');
+      if (lastIssues.includes('code-fence-shape')) retryDetails.push('Preserve every code fence exactly.');
+      if (lastIssues.includes('macro-or-placeholder')) retryDetails.push('Preserve every macro and placeholder exactly.');
+      if (lastIssues.includes('url')) retryDetails.push('Preserve every URL exactly.');
+      if (lastIssues.includes('empty')) retryDetails.push('Return the complete requested translation rather than an empty response.');
       const retryNote = attempt > 1 && lastIssues.length
-        ? `Retry requirement: the previous response was rejected because it damaged or omitted ${lastIssues.join(', ')}. Return the complete transformed text while preserving those structures exactly.\n\n`
+        ? `Retry requirement: ${retryDetails.join(' ')} Return only the complete transformed text.\n\n`
         : '';
       // Put retry instructions before the original request. Appending them after the source text
       // can make a translation model mistake the retry note for source content.
@@ -1100,7 +1234,7 @@ async function callAI(prompt, maxTokens = MAX_TOKENS, meta = {}) {
       const res = await ctx.ConnectionManagerRequestService.sendRequest(settings.profile, [{ role:'user', content: requestPrompt }], tokenBudget);
       const text = extractAIText(res);
       const cleaned = cleanTranslationArtifacts(String(text || ''), '');
-      lastIssues = meta?.validateStructure ? translationStructureIssues(meta?.sourceText || '', cleaned) : (cleaned.trim() ? [] : ['empty']);
+      lastIssues = meta?.validateStructure ? translationStructureIssues(meta?.sourceText || '', cleaned, { kind: meta?.kind || '' }) : (cleaned.trim() ? [] : ['empty']);
       // Keep debug logs safe: record lengths/status only, never the actual prompt or translated text.
       logDebug({ type:'ai', attempt, promptLength:requestPrompt.length, rawLength:String(text || '').length, resultLength:cleaned.length, structureIssues:lastIssues.join(',') });
       if (cleaned.trim() && !lastIssues.length) return cleaned;
@@ -1121,6 +1255,8 @@ async function callAI(prompt, maxTokens = MAX_TOKENS, meta = {}) {
     'url': 'URL',
     'html-tag-shape': 'HTML 태그 구조',
     'html-attributes': 'HTML 속성',
+    'protected-format-token': 'HTML/서식 구조',
+    'bilingual-direction': '영한 병기 방향',
   };
   const message = lastIssues.length
     ? `번역 결과에서 ${lastIssues.map(x => issueLabels[x] || x).join(', ')} 보존에 실패했습니다.`
@@ -1395,13 +1531,30 @@ function contextLines(meta = {}) {
   const live = liveContext();
   const chat = Array.isArray(live?.chat) ? live.chat : (Array.isArray(ctx?.chat) ? ctx.chat : []);
   let end = chat.length;
+  let resolvedTarget = false;
   const requestedIndex = Number(meta?.targetIndex);
-  if (Number.isInteger(requestedIndex) && requestedIndex >= 0 && requestedIndex <= chat.length) {
+  if (Number.isInteger(requestedIndex) && requestedIndex >= 0 && requestedIndex < chat.length) {
     end = requestedIndex;
-  } else if (meta?.targetMsg) {
-    const found = chat.indexOf(meta.targetMsg);
-    if (found >= 0) end = found;
+    resolvedTarget = true;
   }
+  if (!resolvedTarget && meta?.targetMsg) {
+    let found = chat.indexOf(meta.targetMsg);
+    if (found < 0) {
+      const targetIds = [meta.targetMsg?.id, meta.targetMsg?.send_date, meta.targetMsg?.sendDate]
+        .filter(v => v !== undefined && v !== null && String(v) !== '')
+        .map(String);
+      if (targetIds.length) {
+        found = chat.findIndex(m => targetIds.includes(String(m?.id ?? '')) || targetIds.includes(String(m?.send_date ?? '')) || targetIds.includes(String(m?.sendDate ?? '')));
+      }
+    }
+    if (found >= 0) {
+      end = found;
+      resolvedTarget = true;
+    }
+  }
+  // When a target was supplied but cannot be located, omit context rather than accidentally
+  // feeding the target's displayed translation back as its own reference.
+  if (meta?.targetMsg && !resolvedTarget) return '';
   const lines = [];
   for (let i = Math.max(0, end - CONTEXT_COUNT); i < end; i++) {
     const m = chat[i]; if (!m?.mes && !sceneBoardSourceTextFromMsg(m)) continue;
@@ -2038,6 +2191,12 @@ function buildPrompt(text, kind, meta = {}) {
     '- Verify that no mechanical English subject repetition, pronoun chain, nominalization, or word order remains when natural Korean can preserve the same meaning.',
     '- Perform this check silently. Return only the requested translated text.',
   ];
+
+  if (meta?.freshRetranslation) lines.push(
+    '',
+    'Fresh retranslation pass',
+    '- Translate independently from the preserved source text from the beginning. Do not reuse, imitate, repair, or infer wording from any earlier translation; no previous translation is reference material for this request.',
+  );
 
   const gp = globalPrompt().trim();
   if (gp) lines.push('', 'Global terminology or tone preferences:', gp);
@@ -2775,8 +2934,8 @@ function applyCommittedTranslationToMessage(msg, cloned, original = '') {
   const active = cloned.variants?.[cloned.activeKey] || null;
   const picked = active?.showing ? pickCachedMessageTranslation(active, active.activeMode || translationCacheKey(settings.chatMode || 'full')).text : '';
   const preservedOriginal = active?.original || cloned.original || original || msg.extra.original_mes || msg.mes || '';
-  if (preservedOriginal && !msg.extra.original_mes) msg.extra.original_mes = String(preservedOriginal);
-  if (preservedOriginal && !msg.extra.phraseDeskOriginal) msg.extra.phraseDeskOriginal = String(preservedOriginal);
+  if (preservedOriginal && (!msg.extra.original_mes || pdIsKnownTranslationText(msg, msg.extra.original_mes))) msg.extra.original_mes = String(preservedOriginal);
+  if (preservedOriginal && (!msg.extra.phraseDeskOriginal || pdIsKnownTranslationText(msg, msg.extra.phraseDeskOriginal))) msg.extra.phraseDeskOriginal = String(preservedOriginal);
   if (picked) msg.extra.display_text = String(displayTranslationText(picked, active?.activeMode || settings.chatMode || 'full'));
   else if (active && !active.showing) delete msg.extra.display_text;
   const swipeId = pdSwipeId(msg);
@@ -2848,7 +3007,9 @@ async function translateMessagePayload(payload, forceRetranslate = false, option
   const liveOriginal = data.original || currentMessageOriginal(payload);
   // Always translate from the real original message. Long-press retranslation does not reuse
   // the displayed translation or old translation cache; it creates a new result from this source.
-  const original = messageOriginalForTranslation(payload, state) || liveOriginal || '';
+  const original = forceRetranslate
+    ? (messageOriginalForTranslation(payload, state, true) || '')
+    : (messageOriginalForTranslation(payload, state, false) || liveOriginal || '');
   const sceneOriginal = sceneBoardSourceText(payload);
   if (!norm(original) && !norm(sceneOriginal)) return toast('번역할 메시지를 찾지 못했습니다.', 'warn');
   if (!norm(original) && norm(sceneOriginal)) {
@@ -2935,9 +3096,9 @@ async function translateMessagePayload(payload, forceRetranslate = false, option
       const separateParts = isFullSeparateMode(kind) ? splitTrailingInfoBlockForSeparate(original) : null;
       const sourceForPrompt = separateParts ? separateParts.body : original;
       // 완전분리 모드는 AI에게 RP 본문만 보내고, 원문 전체는 하단에 그대로 다시 붙입니다.
-      // 보호 토큰이 첫 문단 앞에 남거나 하단 원문 첫 문단/코드블럭이 사라지는 일을 막기 위해 이 모드에서는 보호 토큰을 주입하지 않습니다.
-      const protectedSource = separateParts ? { text: sourceForPrompt, restore: (v) => String(v || '') } : protectTranslationFormat(sourceForPrompt);
-      const promptMeta = { targetIndex: payload?.idx, targetMsg: payload?.msg };
+      // HTML/custom-tag 잠금은 모든 모드에서 적용하고, 표시/저장 전에 반드시 원래 마크업으로 복원합니다.
+      const protectedSource = protectTranslationFormat(sourceForPrompt);
+      const promptMeta = { targetIndex: payload?.idx, targetMsg: payload?.msg, freshRetranslation: !!forceRetranslate };
       const basePrompt = buildPrompt(protectedSource.text, kind, promptMeta);
       let rawResult = await callAI(basePrompt, MAX_TOKENS, { sourceText: protectedSource.text, kind, validateStructure: true, retryOnFailure: true });
       let restoredResult = protectedSource.restore(rawResult);
