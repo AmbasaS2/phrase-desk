@@ -215,11 +215,103 @@ function protectTranslationFormat(text = '') {
     text: out,
     hasLocks: locks.length > 0,
     restore(value = '') {
-      let restored = String(value || '');
+      let restored = normalizeProtectedFormatTokenVariants(String(value || ''), out);
+      const sourceTokens = locks.map(([token]) => token);
+      const resultTokens = protectedFormatTokens(restored);
+      if (sourceTokens.length && !sameTokenList(sourceTokens, resultTokens)) {
+        // Never discard a non-empty translation because the model altered a markup lock.
+        // Rebuild the original tag skeleton and distribute the translated prose back into
+        // the original text slots. This keeps every original tag/attribute exact while still
+        // showing the model's first response, matching the reference translator's permissive
+        // result flow instead of turning a formatting imperfection into a failed translation.
+        restored = rebuildProtectedFormatSkeleton(out, restored);
+        logDebug({
+          type: 'translation-structure-warning',
+          warning: 'protected-format-token-rebuilt',
+          expectedTokens: sourceTokens.length,
+          receivedTokens: resultTokens.length,
+        });
+      }
       for (const [token, raw] of locks) restored = restored.split(token).join(raw);
       return restored;
     },
   };
+}
+
+function stripProtectedFormatTokenVariants(value = '') {
+  return String(value || '').replace(
+    /`{0,3}\s*[⟪《〈＜<\[\{]\s*PDH[\s_-]*\d{1,4}\s*[⟫》〉＞>\]\}]\s*`{0,3}/gi,
+    '',
+  );
+}
+
+function preferredTextBoundary(text = '', target = 0, minimum = 0) {
+  const source = String(text || '');
+  if (target <= minimum) return minimum;
+  if (target >= source.length) return source.length;
+  const radius = Math.min(320, Math.max(80, Math.floor(source.length * 0.08)));
+  const from = Math.max(minimum + 1, target - radius);
+  const to = Math.min(source.length - 1, target + radius);
+  const candidates = [];
+  for (let i = from; i <= to; i++) {
+    const prev = source[i - 1] || '';
+    const next = source[i] || '';
+    let rank = 99;
+    if (prev === '\n' && next === '\n') rank = 0;
+    else if (prev === '\n') rank = 1;
+    else if (/[.!?。！？…]/.test(prev) && /\s/.test(next)) rank = 2;
+    else if (/[,;:，；：]/.test(prev) && /\s/.test(next)) rank = 3;
+    else if (/\s/.test(prev) || /\s/.test(next)) rank = 4;
+    if (rank < 99) candidates.push({ i, rank, distance: Math.abs(i - target) });
+  }
+  candidates.sort((a, b) => a.rank - b.rank || a.distance - b.distance);
+  return candidates[0]?.i ?? Math.max(minimum, Math.min(source.length, target));
+}
+
+function splitTranslatedTextByWeights(value = '', weights = []) {
+  const text = String(value || '');
+  if (!weights.length) return [];
+  if (weights.length === 1) return [text];
+  const positive = weights.map(x => Math.max(1, Number(x) || 1));
+  const totalWeight = positive.reduce((sum, x) => sum + x, 0);
+  const out = [];
+  let cursor = 0;
+  let cumulative = 0;
+  for (let i = 0; i < positive.length - 1; i++) {
+    cumulative += positive[i];
+    const target = Math.round(text.length * (cumulative / totalWeight));
+    const cut = preferredTextBoundary(text, target, cursor);
+    out.push(text.slice(cursor, cut));
+    cursor = cut;
+  }
+  out.push(text.slice(cursor));
+  return out;
+}
+
+function rebuildProtectedFormatSkeleton(sourceProtected = '', translatedValue = '') {
+  const source = String(sourceProtected || '');
+  const parts = source.split(/(⟪PDH_\d{4}⟫)/g);
+  const textSlotIndexes = [];
+  const weights = [];
+  for (let i = 0; i < parts.length; i += 2) {
+    const slot = String(parts[i] || '');
+    if (!slot.trim()) continue;
+    textSlotIndexes.push(i);
+    weights.push(Math.max(1, slot.trim().length));
+  }
+  if (!textSlotIndexes.length) return source;
+
+  const translatedPlain = stripProtectedFormatTokenVariants(translatedValue).trim();
+  if (!translatedPlain) return source;
+  const chunks = splitTranslatedTextByWeights(translatedPlain, weights);
+  const rebuilt = [...parts];
+  textSlotIndexes.forEach((partIndex, idx) => {
+    const originalSlot = String(parts[partIndex] || '');
+    const leading = originalSlot.match(/^\s*/)?.[0] || '';
+    const trailing = originalSlot.match(/\s*$/)?.[0] || '';
+    rebuilt[partIndex] = `${leading}${String(chunks[idx] || '').trim()}${trailing}`;
+  });
+  return rebuilt.join('');
 }
 
 
@@ -1209,76 +1301,57 @@ function translationStructureIssues(sourceText = '', resultText = '', meta = {})
   if (looksLikeReversedBilingual(source, result, meta?.kind || '')) issues.push('bilingual-direction');
   return issues;
 }
-function aiErrorIsRetryable(error) {
-  const status = Number(error?.status ?? error?.statusCode ?? error?.response?.status ?? 0);
-  const text = [error?.message, error?.name, error?.code, error?.responseText]
-    .filter(Boolean).join(' ').toLowerCase();
-  if ([400, 401, 403, 404, 413].includes(status)) return false;
-  if (/unauthor|forbidden|invalid api|bad request|context length|too large|too long|safety|blocked|content filter/.test(text)) return false;
-  return true;
-}
 async function callAI(prompt, maxTokens = MAX_TOKENS, meta = {}) {
   if (!requireProfile()) return '';
-  const maxAttempts = 1; // Translation requests never repeat automatically. Use manual retranslation instead.
-  let lastError = null;
-  let lastIssues = [];
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    let shouldRetry = true;
-    try {
-      // Empty/truncated responses from thinking models often need output headroom rather than
-      // repeated identical requests. Increase only on retry, up to the same practical ceiling
-      // used by robust translator flows; the first request keeps the original budget.
-      const tokenBudget = Math.min(32768, Math.max(256, Math.ceil(Number(maxTokens || MAX_TOKENS) * Math.pow(2, attempt - 1))));
-      const retryDetails = [];
-      if (lastIssues.includes('protected-format-token')) retryDetails.push('Keep every protected format token such as ⟪PDH_0001⟫ exactly once and in the same order. Do not translate, alter, duplicate, or omit those tokens.');
-      if (lastIssues.includes('bilingual-direction')) retryDetails.push('The previous response reversed the bilingual direction. Keep each source-language sentence first and place only its Korean translation inside the following square brackets.');
-      if (lastIssues.includes('html-tag-shape') || lastIssues.includes('html-attributes')) retryDetails.push('Preserve every HTML/custom tag and attribute exactly.');
-      if (lastIssues.includes('code-fence-shape')) retryDetails.push('Preserve every code fence exactly.');
-      if (lastIssues.includes('macro-or-placeholder')) retryDetails.push('Preserve every macro and placeholder exactly.');
-      if (lastIssues.includes('url')) retryDetails.push('Preserve every URL exactly.');
-      if (lastIssues.includes('empty')) retryDetails.push('Return the complete requested translation rather than an empty response.');
-      const retryNote = attempt > 1 && lastIssues.length
-        ? `Retry requirement: ${retryDetails.join(' ')} Return only the complete transformed text.\n\n`
-        : '';
-      // Put retry instructions before the original request. Appending them after the source text
-      // can make a translation model mistake the retry note for source content.
-      const requestPrompt = retryNote + String(prompt || '');
-      const res = await ctx.ConnectionManagerRequestService.sendRequest(settings.profile, [{ role:'user', content: requestPrompt }], tokenBudget);
-      const text = extractAIText(res);
-      const cleaned = cleanTranslationArtifacts(String(text || ''), '');
-      const normalized = meta?.validateStructure
-        ? normalizeProtectedFormatTokenVariants(cleaned, meta?.sourceText || '')
-        : cleaned;
-      lastIssues = meta?.validateStructure ? translationStructureIssues(meta?.sourceText || '', normalized, { kind: meta?.kind || '' }) : (normalized.trim() ? [] : ['empty']);
-      // Keep debug logs safe: record lengths/status only, never the actual prompt or translated text.
-      logDebug({ type:'ai', attempt, promptLength:requestPrompt.length, rawLength:String(text || '').length, resultLength:normalized.length, structureIssues:lastIssues.join(',') });
-      if (normalized.trim() && !lastIssues.length) return normalized;
-      lastError = new Error(lastIssues.length ? `translation validation failed: ${lastIssues.join(', ')}` : 'empty response');
-    } catch (e) {
-      lastError = e;
-      lastIssues = [];
-      shouldRetry = aiErrorIsRetryable(e);
-      logDebug({ type:'ai-retry-error', attempt, retryable:shouldRetry, error:e?.message || String(e), promptLength:String(prompt || '').length });
+  const requestPrompt = String(prompt || '');
+  try {
+    const tokenBudget = Math.min(32768, Math.max(256, Math.ceil(Number(maxTokens || MAX_TOKENS))));
+    const res = await ctx.ConnectionManagerRequestService.sendRequest(
+      settings.profile,
+      [{ role:'user', content: requestPrompt }],
+      tokenBudget,
+    );
+    const text = extractAIText(res);
+    const cleaned = cleanTranslationArtifacts(String(text || ''), '');
+    const normalized = meta?.validateStructure
+      ? normalizeProtectedFormatTokenVariants(cleaned, meta?.sourceText || '')
+      : cleaned;
+    const issues = meta?.validateStructure
+      ? translationStructureIssues(meta?.sourceText || '', normalized, { kind: meta?.kind || '' })
+      : (normalized.trim() ? [] : ['empty']);
+
+    // Keep debug logs safe: record lengths/status only, never prompt or translated content.
+    logDebug({
+      type:'ai',
+      attempt:1,
+      promptLength:requestPrompt.length,
+      rawLength:String(text || '').length,
+      resultLength:normalized.length,
+      structureIssues:issues.join(','),
+    });
+
+    if (normalized.trim()) {
+      // Match the reference translator's permissive result flow: a non-empty first response is
+      // displayed. Structure checks are diagnostics, while the restore layer repairs HTML locks.
+      if (issues.length) {
+        logDebug({
+          type:'translation-structure-warning',
+          warning:issues.join(','),
+          resultLength:normalized.length,
+        });
+      }
+      return normalized;
     }
-    if (!shouldRetry || attempt >= maxAttempts) break;
-    await new Promise(resolve => setTimeout(resolve, (900 * attempt) + Math.floor(Math.random() * 350)));
+
+    const error = new Error('empty response');
+    logDebug({ type:'error', error:error.message, promptLength:requestPrompt.length, structureIssues:issues.join(',') });
+    toast(`요청 실패: ${error.message}`, 'error');
+    return '';
+  } catch (e) {
+    logDebug({ type:'error', error:e?.message || String(e), promptLength:requestPrompt.length, structureIssues:'' });
+    toast(`요청 실패: ${e?.message || e || '알 수 없는 오류'}`, 'error');
+    return '';
   }
-  const issueLabels = {
-    'empty': '빈 응답',
-    'code-fence-shape': '코드 블록',
-    'macro-or-placeholder': '매크로/플레이스홀더',
-    'url': 'URL',
-    'html-tag-shape': 'HTML 태그 구조',
-    'html-attributes': 'HTML 속성',
-    'protected-format-token': 'HTML/서식 구조',
-    'bilingual-direction': '영한 병기 방향',
-  };
-  const message = lastIssues.length
-    ? `번역 결과에서 ${lastIssues.map(x => issueLabels[x] || x).join(', ')} 보존에 실패했습니다.`
-    : `요청 실패: ${lastError?.message || lastError || '빈 응답'}`;
-  logDebug({ type:'error', error:lastError?.message || String(lastError || ''), promptLength:String(prompt || '').length, structureIssues:lastIssues.join(',') });
-  toast(message, 'error');
-  return '';
 }
 function googleTargetForKind(kind = settings.chatMode || 'full') {
   return kind === 'input-en' ? 'en' : 'ko';
@@ -1755,7 +1828,14 @@ function restoreMarkdownLineStructure(value = '', original = '') {
 }
 
 function safeTranslationPostprocess(value = '', original = '', kind = '') {
-  let out = cleanTranslationArtifacts(value, original, { detectFailure: true });
+  const received = String(value || '');
+  let out = cleanTranslationArtifacts(received, original, { detectFailure: false });
+  // Never turn a non-empty model response into an empty translation. Cleanup may normalize
+  // wrappers and fences, but the user must still see what the model actually returned.
+  if (!out.trim() && received.trim()) {
+    out = received.replace(/\r\n/g, '\n').trim();
+    logDebug({ type:'translation-postprocess-warning', warning:'non-empty-result-preserved', resultLength:received.length });
+  }
   out = normalizeDisplayFenceLanguageTags(out);
   const mode = String(kind || '');
   if (mode === 'full' || mode === 'dialogue' || mode.includes(':full') || mode.includes(':dialogue')) {
@@ -2401,17 +2481,12 @@ async function translateInputToEnglish(source = '') {
     const raw = await callTranslationEngine(buildInputTranslationPrompt(protectedSource.text, strict), 3000, { kind:'input-en', sourceText: protectedSource.text });
     return normalizeInputEnglishResult(protectedSource.restore(raw), source);
   };
-  let result = await run(false);
-  let issues = inputEnglishResultIssues(result);
-  if (issues.length && settings.translationEngine !== 'google') {
-    logDebug({ type:'input-translation-validation-retry', issues:issues.join(','), resultLength:String(result || '').length });
-    result = await run(true);
-    issues = inputEnglishResultIssues(result);
-  }
+  const result = await run(false);
+  const issues = inputEnglishResultIssues(result);
   if (issues.length) {
-    logDebug({ type:'input-translation-validation-failed', issues:issues.join(','), resultLength:String(result || '').length });
-    toast('입력 번역 결과가 영어 단독 형식이 아니어서 적용하지 않았습니다.', 'error');
-    return '';
+    // Keep the first non-empty result instead of silently sending another request or refusing
+    // to apply it. The diagnostic remains available in the in-memory debug log.
+    logDebug({ type:'input-translation-format-warning', issues:issues.join(','), resultLength:String(result || '').length });
   }
   return result;
 }
