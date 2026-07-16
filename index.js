@@ -5179,14 +5179,12 @@ function setLorebookButtonVisual(btn, state = 'idle') {
   if (!btn) return;
   btn.classList.toggle('busy', state === 'busy');
   btn.classList.toggle('translated', state === 'translated');
-  let icon = btn.querySelector?.('.pd-lore-button-icon');
-  if (!icon) {
-    icon = document.createElement('span');
-    icon.className = 'pd-lore-button-icon';
-    icon.setAttribute('aria-hidden', 'true');
-    btn.replaceChildren(icon);
-  }
-  icon.textContent = state === 'busy' ? '🌀' : (state === 'translated' ? '↩️' : '🌐');
+  btn.classList.remove('fa-globe', 'fa-spinner', 'fa-spin', 'fa-arrow-rotate-left');
+  btn.classList.add('fa-solid');
+  if (state === 'busy') btn.classList.add('fa-spinner', 'fa-spin');
+  else if (state === 'translated') btn.classList.add('fa-arrow-rotate-left');
+  else btn.classList.add('fa-globe');
+  btn.replaceChildren();
   btn.setAttribute('title', state === 'translated' ? '번역 닫기' : (state === 'busy' ? '로어 번역 중' : '로어 번역'));
   btn.setAttribute('aria-label', btn.getAttribute('title'));
 }
@@ -5201,14 +5199,20 @@ function bindLorebookTranslateButton(btn) {
       try { console.error('[Phrase Desk] lorebook translate button failed', err); } catch {}
     }
   });
+  btn.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    ev.preventDefault();
+    btn.click();
+  });
 }
 function makeLorebookTranslateTools(entry) {
   const tools = document.createElement('span');
   tools.className = 'pd-lore-header-tools';
   tools.__pdLoreEntry = entry;
-  const btn = document.createElement('button');
-  btn.className = 'menu_button interactable pd-lore-translate-btn';
-  btn.type = 'button';
+  const btn = document.createElement('i');
+  btn.className = 'menu_button interactable fa-solid pd-lore-translate-btn';
+  btn.setAttribute('role', 'button');
+  btn.tabIndex = 0;
   btn.__pdLoreEntry = entry;
   setLorebookButtonVisual(btn, entry?.querySelector?.('.pd-lore-temp-box') ? 'translated' : 'idle');
   bindLorebookTranslateButton(btn);
