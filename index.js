@@ -2341,6 +2341,7 @@ function setupSettingsPanel() {
       <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
     </div>
     <div class="inline-drawer-content pd-settings-content" style="display:none;">
+      <div class="pd-settings-inner">
       <div class="pd-setting-row pd-two"><div><label>연결 프로필</label><select id="pd-profile" class="text_pole">${opts}</select></div><div><label>자동 번역</label><select id="pd-auto-mode" class="text_pole"><option value="off">꺼짐</option><option value="both">둘 다</option><option value="char">캐릭터만</option><option value="user">유저만</option></select></div></div>
       <div class="pd-setting-row pd-two"><div><label>채팅 번역</label><select id="pd-chat-mode" class="text_pole"><option value="ko">완전 한글</option><option value="full">전체 영한 병기 (스타일을 선택하세요)</option><option value="dialogue">대사만 영한 병기</option></select></div><div><label>병기 번역 스타일</label><select id="pd-bilingual-style" class="text_pole"><option value="side_sentence">문장마다 (옆으로)</option><option value="below_sentence">문장마다 (아래로)</option><option value="by_line">줄마다 (줄바꿈 기준)</option><option value="by_paragraph">문단마다 (빈 줄 기준)</option><option value="separate">한영 병기 (원문을 하단으로 완전 분리)</option></select></div></div>
       <div class="pd-setting-row pd-two"><div><label>번역 엔진</label><select id="pd-translation-engine" class="text_pole"><option value="profile">연결 프로필</option><option value="google">구글 간편 번역</option></select></div><div class="pd-setting-help">구글 간편 번역은 연결 프로필/모델 API를 사용하지 않습니다.</div></div>
@@ -2349,6 +2350,7 @@ function setupSettingsPanel() {
       <div class="pd-setting-row"><label>현재 캐릭터 전용 프롬프트 <small id="pd-char-name">${esc(char)}</small></label><textarea id="pd-char-prompt" class="text_pole" rows="3" placeholder="스펠링, 성별, 호칭, 말투 등 현재 캐릭터 번역에만 참고할 내용을 적어주세요.">${esc(currentPrompt())}</textarea></div>
       <div class="pd-settings-foot"><span><b>${settings.notebook.length}</b>개 표현 저장됨</span><button id="pd-clear-chat-cache" type="button" class="menu_button">이 채팅방 번역 캐시 삭제</button>${SHOW_DEBUG ? '<button id="pd-open-debug" type="button" class="menu_button">🐞 디버그 로그</button>' : ''}</div>
       ${SHOW_DEBUG ? `<div id="pd-debug-panel" style="display:none;"><div class="pd-debug-actions"><button id="pd-copy-debug" type="button" class="menu_button">로그 복사</button><button id="pd-clear-debug" type="button" class="menu_button">로그 비우기</button></div><textarea id="pd-debug-output" readonly rows="7" placeholder="최근 Phrase Desk 로그가 여기에 표시됩니다.">${esc(debugText())}</textarea></div>` : ''}
+      </div>
     </div>
   </div>`;
   ($('#extensions_settings2').length ? $('#extensions_settings2') : $('#extensions_settings')).append(html);
@@ -5047,15 +5049,8 @@ async function translateLorebookSource(source = '') {
 
 
 const PD_LOREBOOK_CHROME_SELECTOR = '.pd-lore-header-tools,.pd-lore-translate-btn,.pd-lore-temp-box';
-// Lorebook controls must stay inside actual World Info/Lorebook entries.
-// Rules for maintainers:
-// 1) Do not perform UI actions the user did not request.
-// 2) Do not attach broad observers / hover / focus scanners for lorebook controls.
-// 3) If a hook is necessary, keep it local and document why.
-const PD_LOREBOOK_STRICT_AREA_SELECTOR = '#WorldInfo,#world_info,#world_popup,#world_info_editor,#WI_panel,#WorldInfoMenu,#world_popup_body';
-const PD_LOREBOOK_EXCLUDE_SELECTOR = '#user-settings-block,#user_settings,#UserSettings,#rm_characters_block,#rm_character_panel,#character_popup,#persona-management,#persona-management-block,#persona-management-page,#extensions_settings,#extensions_settings2,#Backgrounds,#completion_prompt_manager,#floatingPrompt';
-const PD_LOREBOOK_ENTRY_SELECTOR = '.wi-card-entry,.world_entry,.world-entry,.world_entry_form,.world_entry_container,.world-info-entry,.WIEntry,[data-world-info-entry]';
-const PD_LOREBOOK_ACTION_SELECTOR = 'button,a,.menu_button,[role="button"],.interactable';
+const PD_LOREBOOK_ROOT_SELECTOR = '#world_popup';
+const PD_LOREBOOK_ENTRY_SELECTOR = '.world_entry';
 
 function cleanLorebookText(value = '') {
   const lines = String(value || '')
@@ -5087,181 +5082,6 @@ function getTextFromLorebookControl(el) {
   if (tag === 'INPUT') return String(el.value || '');
   if (el.isContentEditable) return String(el.innerText || el.textContent || '');
   return String(el.textContent || '');
-}
-function isExcludedLorebookPanel(node) {
-  try { return !!(node?.closest?.(PD_LOREBOOK_EXCLUDE_SELECTOR)); } catch { return false; }
-}
-function findLorebookKnownRoot(target) {
-  try {
-    const node = target?.nodeType === 1 ? target : target?.parentElement;
-    if (!node || isExcludedLorebookPanel(node)) return null;
-    const strict = node.closest?.(PD_LOREBOOK_STRICT_AREA_SELECTOR);
-    if (!strict || isExcludedLorebookPanel(strict)) return null;
-    return strict;
-  } catch { return null; }
-}
-function lorebookButtonishControl(el) {
-  try {
-    if (!el || el.nodeType !== 1 || el.closest?.(PD_LOREBOOK_CHROME_SELECTOR)) return null;
-    const closest = el.closest?.('button,a,.menu_button,[role="button"],.interactable');
-    return closest || el;
-  } catch { return null; }
-}
-function lorebookControlLabel(el) {
-  try {
-    if (!el || el.nodeType !== 1) return '';
-    return ([
-      el.getAttribute?.('title') || '',
-      el.getAttribute?.('aria-label') || '',
-      el.getAttribute?.('data-i18n') || '',
-      el.id || '',
-      el.className || '',
-      el.textContent || '',
-    ].join(' ')).toLowerCase();
-  } catch { return ''; }
-}
-function selectLooksLikeLorebookPosition(sel) {
-  try {
-    if (!sel || String(sel.tagName || '').toUpperCase() !== 'SELECT') return false;
-    const selected = String(sel.options?.[sel.selectedIndex]?.textContent || sel.value || '').trim();
-    const all = Array.from(sel.options || []).map(o => String(o.textContent || o.value || '').trim()).join(' | ');
-    return /캐릭터\s*정의\s*전|캐릭터\s*정의\s*후|작가\s*노트\s*전|작가\s*노트\s*후|before|after|depth|AN|Author/i.test(`${selected} ${all}`);
-  } catch { return false; }
-}
-function hasLorebookPositionControl(node) {
-  try {
-    return Array.from(node.querySelectorAll?.('select') || []).some(selectLooksLikeLorebookPosition);
-  } catch { return false; }
-}
-function getLorebookActionControls(entry) {
-  try {
-    if (!entry || entry.nodeType !== 1) return [];
-    const entryRect = lorebookVisibleRect(entry);
-    if (!entryRect) return [];
-    const actionLike = /trash|delete|remove|copy|clone|duplicate|paste|exchange|swap|right-left|arrow-right-arrow-left|fa-trash|fa-copy|fa-clone|fa-paste|fa-exchange|fa-arrow|삭제|복사|복제|교환|↔|🗑|📋/i;
-    const raw = Array.from(entry.querySelectorAll?.(`${PD_LOREBOOK_ACTION_SELECTOR}, .fa, .fas, .far, .fa-solid, .fa-regular`) || []);
-    const seen = new Set();
-    const controls = raw.map(lorebookButtonishControl).filter(Boolean).filter(el => {
-      if (seen.has(el) || el.closest?.(PD_LOREBOOK_CHROME_SELECTOR)) return false;
-      seen.add(el);
-      return true;
-    }).map(el => ({ el, rect: lorebookVisibleRect(el), label: lorebookControlLabel(el) }))
-      .filter(x => x.rect);
-    const inEntryHeaderRight = (x) => {
-      const r = x.rect;
-      const rightSide = r.left >= entryRect.left + Math.max(180, entryRect.width * 0.55);
-      const topBand = r.top <= entryRect.top + Math.min(180, Math.max(90, entryRect.height * 0.38));
-      const small = r.width <= 90 && r.height <= 70;
-      return rightSide && topBand && small;
-    };
-    const explicit = controls.filter(x => inEntryHeaderRight(x) && actionLike.test(x.label));
-    const sorted = (explicit.length ? explicit : controls.filter(x => inEntryHeaderRight(x) && !/toggle|collapse|expand|enable|disable|활성|접기|펼치기|globe|translate|번역/.test(x.label)))
-      .sort((a, b) => (a.rect.top - b.rect.top) || (a.rect.left - b.rect.left));
-    return sorted.map(x => x.el);
-  } catch (e) {
-    logDebug({ type:'lorebook-action-controls-error', error:e?.message || String(e) });
-    return [];
-  }
-}
-function isLikelyLorebookEntry(node, area = null) {
-  try {
-    if (!node || node.nodeType !== 1) return false;
-    if (node.matches?.(PD_LOREBOOK_EXCLUDE_SELECTOR) || node.closest?.(PD_LOREBOOK_EXCLUDE_SELECTOR)) return false;
-    const root = findLorebookKnownRoot(node);
-    if (!root || (area && root !== area)) return false;
-    if (node === root || node === document.body || node === document.documentElement) return false;
-    const rect = lorebookVisibleRect(node);
-    if (!rect || rect.width < 260 || rect.height < 70) return false;
-    const text = String(node.textContent || '').slice(0, 12000);
-    // Top toolbar / world selector area can have copy/delete/create buttons too. It is not an entry.
-    if (/만들기|검색|page|우선\s*순위|global\s*world\s*info/i.test(text)) {
-      const hasEntryTitleField = Array.from(node.querySelectorAll?.('textarea,input[type="text"],input:not([type])') || [])
-        .some(el => {
-          const v = cleanLorebookText(getTextFromLorebookControl(el));
-          return v && !/검색|no worlds active|click here to select/i.test(v) && v.length <= 260;
-        });
-      const hasEntryBody = /콘텐츠|Additional\s+Matching\s+Sources|기본\s*키워드/i.test(text);
-      if (!hasEntryTitleField || !hasEntryBody) return false;
-    }
-    const hasPosition = /위치\s*:|Position/i.test(text) || hasLorebookPositionControl(node);
-    if (!hasPosition) return false;
-    const actions = getLorebookActionControls(node);
-    if (actions.length < 2) return false;
-    const fields = Array.from(node.querySelectorAll?.('input[type="text"],textarea,input:not([type])') || [])
-      .filter(el => !el.closest?.(PD_LOREBOOK_CHROME_SELECTOR))
-      .map(el => cleanLorebookText(getTextFromLorebookControl(el)))
-      .filter(Boolean);
-    if (!fields.length) return false;
-    return true;
-  } catch { return false; }
-}
-function findLorebookEntryRootFromTarget(target, area = null) {
-  try {
-    const root = area || findLorebookKnownRoot(target);
-    if (!root) return null;
-    const node0 = target?.nodeType === 1 ? target : target?.parentElement;
-    if (!node0) return null;
-    const selectorHit = node0.closest?.(PD_LOREBOOK_ENTRY_SELECTOR);
-    if (selectorHit && isLikelyLorebookEntry(selectorHit, root)) return selectorHit;
-    let best = null;
-    let node = node0;
-    for (let depth = 0; node && node !== root && node !== document.body && depth < 16; depth++, node = node.parentElement) {
-      if (isLikelyLorebookEntry(node, root)) best = node; // keep nearest valid ancestor while climbing
-    }
-    return best;
-  } catch { return null; }
-}
-function getLorebookCandidateEntries(area, limit = 120) {
-  const out = [];
-  const seen = new Set();
-  if (!area || area.nodeType !== 1) return out;
-  const add = (entry) => {
-    if (!entry || seen.has(entry) || !isLikelyLorebookEntry(entry, area)) return;
-    seen.add(entry);
-    out.push(entry);
-  };
-  try {
-    Array.from(area.querySelectorAll?.(PD_LOREBOOK_ENTRY_SELECTOR) || []).forEach(add);
-    // Some SillyTavern builds/theme layouts do not expose a stable world-info entry class.
-    // Keep this fallback local to the lorebook root only, and cap it so it cannot become a document-wide crawl.
-    if (out.length < 1) {
-      Array.from(area.querySelectorAll?.('div,li,form') || []).slice(0, 260).forEach(add);
-    }
-  } catch {}
-  return out.slice(0, limit);
-}
-function refreshLorebookButtonsInArea(area, limit = 120) {
-  try {
-    if (!area || isExcludedLorebookPanel(area)) return;
-    cleanupMisplacedLorebookChrome(area);
-    getLorebookCandidateEntries(area, limit).forEach(entry => ensureLorebookHeaderTranslateButton(entry));
-  } catch (e) {
-    logDebug({ type:'lorebook-area-refresh-error', error:e?.message || String(e) });
-  }
-}
-function findVisibleLorebookEntriesNearTarget(target, limit = 8) {
-  const area = findLorebookKnownRoot(target);
-  const out = [];
-  const seen = new Set();
-  if (!area) return out;
-  const add = (entry) => {
-    if (!entry || seen.has(entry) || !isLikelyLorebookEntry(entry, area)) return;
-    seen.add(entry);
-    out.push(entry);
-  };
-  const direct = findLorebookEntryRootFromTarget(target, area);
-  add(direct);
-  if (out.length < 1) getLorebookCandidateEntries(area, limit).forEach(add);
-  return out.slice(0, limit);
-}
-function cleanupMisplacedLorebookChrome(scope = document) {
-  try {
-    scope.querySelectorAll?.(PD_LOREBOOK_CHROME_SELECTOR).forEach(el => {
-      const area = findLorebookKnownRoot(el);
-      const entry = area ? findLorebookEntryRootFromTarget(el, area) : null;
-      if (!area || !entry || !isLikelyLorebookEntry(entry, area)) el.remove();
-    });
-  } catch {}
 }
 function getLorebookContentTarget(entry) {
   try {
@@ -5354,67 +5174,40 @@ function buildLorebookEntrySource(entry) {
   parts.push(`콘텐츠:\n${content}`);
   return { source: parts.join('\n\n'), target };
 }
+
 function setLorebookButtonVisual(btn, state = 'idle') {
   if (!btn) return;
   btn.classList.toggle('busy', state === 'busy');
   btn.classList.toggle('translated', state === 'translated');
-  btn.textContent = state === 'busy' ? '🌀' : (state === 'translated' ? '↩️' : '🌐');
+  let icon = btn.querySelector?.('.pd-lore-button-icon');
+  if (!icon) {
+    icon = document.createElement('span');
+    icon.className = 'pd-lore-button-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    btn.replaceChildren(icon);
+  }
+  icon.textContent = state === 'busy' ? '🌀' : (state === 'translated' ? '↩️' : '🌐');
   btn.setAttribute('title', state === 'translated' ? '번역 닫기' : (state === 'busy' ? '로어 번역 중' : '로어 번역'));
-}
-function syncLorebookButtonSize(btn, anchor) {
-  try {
-    if (!btn || !anchor || !anchor.isConnected) return;
-    const rect = anchor.getBoundingClientRect?.();
-    const cs = window.getComputedStyle?.(anchor);
-    if (rect && rect.width > 0 && rect.height > 0) {
-      const w = Math.round(rect.width);
-      const h = Math.round(rect.height);
-      btn.style.width = `${w}px`;
-      btn.style.height = `${h}px`;
-      btn.style.minWidth = `${w}px`;
-      btn.style.minHeight = `${h}px`;
-      btn.style.maxWidth = `${w}px`;
-      btn.style.maxHeight = `${h}px`;
-    }
-    if (cs) {
-      btn.style.boxSizing = cs.boxSizing || 'border-box';
-      btn.style.padding = cs.padding || '0px';
-      btn.style.borderRadius = cs.borderRadius || '';
-      btn.style.lineHeight = cs.lineHeight || '1';
-      const px = Number.parseFloat(cs.fontSize || '');
-      if (Number.isFinite(px) && px > 0) {
-        btn.style.fontSize = `${Math.max(10, Math.round(px * 0.72))}px`;
-      }
-    }
-  } catch {}
+  btn.setAttribute('aria-label', btn.getAttribute('title'));
 }
 function bindLorebookTranslateButton(btn) {
   if (!btn || btn.__pdLoreClickBound) return;
   btn.__pdLoreClickBound = true;
-  const run = (ev) => {
+  btn.addEventListener('click', (ev) => {
     try {
-      const now = Date.now();
-      if (btn.__pdLoreLastToggleAt && now - btn.__pdLoreLastToggleAt < 450) {
-        ev?.preventDefault?.();
-        ev?.stopPropagation?.();
-        return;
-      }
-      btn.__pdLoreLastToggleAt = now;
       toggleLorebookTranslation(ev);
     } catch (err) {
       try { setLorebookButtonVisual(btn, 'idle'); } catch {}
       try { console.error('[Phrase Desk] lorebook translate button failed', err); } catch {}
     }
-  };
-  btn.addEventListener('pointerup', run);
-  btn.addEventListener('click', run);
+  });
 }
 function makeLorebookTranslateTools(entry) {
   const tools = document.createElement('span');
   tools.className = 'pd-lore-header-tools';
   tools.__pdLoreEntry = entry;
   const btn = document.createElement('button');
-  btn.className = 'menu_button pd-lore-translate-btn';
+  btn.className = 'menu_button interactable pd-lore-translate-btn';
   btn.type = 'button';
   btn.__pdLoreEntry = entry;
   setLorebookButtonVisual(btn, entry?.querySelector?.('.pd-lore-temp-box') ? 'translated' : 'idle');
@@ -5422,17 +5215,19 @@ function makeLorebookTranslateTools(entry) {
   tools.appendChild(btn);
   return tools;
 }
+function isRenderedLorebookEntry(entry) {
+  return !!(entry?.nodeType === 1 && entry.matches?.(PD_LOREBOOK_ENTRY_SELECTOR) && entry.closest?.(PD_LOREBOOK_ROOT_SELECTOR));
+}
 function ensureLorebookHeaderTranslateButton(entry) {
   try {
-    const area = findLorebookKnownRoot(entry);
-    if (!entry || !area || !isLikelyLorebookEntry(entry, area)) return null;
-    const anchor = getLorebookActionControls(entry)[0];
+    if (!isRenderedLorebookEntry(entry)) return null;
+    const anchor = entry.querySelector?.('.move_entry_button');
     if (!anchor) return null;
     let tools = entry.querySelector?.(':scope > .pd-lore-header-tools') || entry.querySelector?.('.pd-lore-header-tools');
     if (!tools || !tools.isConnected) {
       tools = makeLorebookTranslateTools(entry);
       anchor.insertAdjacentElement('beforebegin', tools);
-    } else if (tools.parentElement !== anchor.parentElement) {
+    } else if (tools.parentElement !== anchor.parentElement || tools.nextElementSibling !== anchor) {
       anchor.insertAdjacentElement('beforebegin', tools);
     }
     tools.__pdLoreEntry = entry;
@@ -5440,7 +5235,6 @@ function ensureLorebookHeaderTranslateButton(entry) {
     if (btn) {
       btn.__pdLoreEntry = entry;
       bindLorebookTranslateButton(btn);
-      syncLorebookButtonSize(btn, anchor);
       if (!btn.classList.contains('busy')) setLorebookButtonVisual(btn, entry.querySelector?.('.pd-lore-temp-box') ? 'translated' : 'idle');
     }
     return tools;
@@ -5451,12 +5245,9 @@ function ensureLorebookHeaderTranslateButton(entry) {
 }
 function lorebookEntryForButton(btn) {
   const saved = btn?.__pdLoreEntry || btn?.closest?.('.pd-lore-header-tools')?.__pdLoreEntry;
-  if (saved && saved.isConnected && findLorebookKnownRoot(saved)) return saved;
-  const area = findLorebookKnownRoot(btn);
-  if (!area) return null;
-  const closestEntry = btn?.closest?.(PD_LOREBOOK_ENTRY_SELECTOR);
-  if (closestEntry && closestEntry.isConnected && findLorebookKnownRoot(closestEntry)) return closestEntry;
-  return findLorebookEntryRootFromTarget(btn, area);
+  if (isRenderedLorebookEntry(saved)) return saved;
+  const closest = btn?.closest?.(PD_LOREBOOK_ENTRY_SELECTOR);
+  return isRenderedLorebookEntry(closest) ? closest : null;
 }
 function insertLorebookTranslationBox(entry, targetEl, box) {
   try {
@@ -5475,7 +5266,7 @@ async function toggleLorebookTranslation(e) {
     : e?.target?.closest?.('.pd-lore-translate-btn');
   if (!btn) return;
   const entry = lorebookEntryForButton(btn);
-  if (!entry || !findLorebookKnownRoot(entry)) {
+  if (!isRenderedLorebookEntry(entry)) {
     setLorebookButtonVisual(btn, 'idle');
     toast('로어 항목을 찾지 못했습니다.', 'warn');
     return;
@@ -5514,60 +5305,21 @@ async function toggleLorebookTranslation(e) {
     if (btn.classList.contains('busy')) setLorebookButtonVisual(btn, entry.querySelector?.('.pd-lore-temp-box') ? 'translated' : 'idle');
   }
 }
-function getLorebookObserverRoots() {
-  try {
-    const roots = Array.from(document.querySelectorAll(PD_LOREBOOK_STRICT_AREA_SELECTOR))
-      .filter(root => root?.nodeType === 1 && !isExcludedLorebookPanel(root));
-    // Observe the outermost lorebook shells. Nested strict roots are covered by
-    // their parent observer and are still used as the precise entry area below.
-    return roots.filter(root => !roots.some(other => other !== root && other.contains(root)));
-  } catch { return []; }
-}
-function refreshAllRenderedLorebookEntries() {
-  try {
-    Array.from(document.querySelectorAll(PD_LOREBOOK_STRICT_AREA_SELECTOR))
-      .filter(area => area?.nodeType === 1 && !isExcludedLorebookPanel(area))
-      .forEach(area => refreshLorebookButtonsInArea(area, 120));
-  } catch (e) {
-    logDebug({ type:'lorebook-local-refresh-error', error:e?.message || String(e) });
-  }
-}
-function hydrateLorebookEntriesFromAddedNode(node) {
+
+function hydrateLorebookEntriesFromNode(node) {
   try {
     const el = node?.nodeType === 1 ? node : null;
     if (!el || el.matches?.(PD_LOREBOOK_CHROME_SELECTOR) || el.closest?.(PD_LOREBOOK_CHROME_SELECTOR)) return;
-    const entries = [];
-    const seen = new Set();
-    const add = (entry) => {
-      if (!entry || seen.has(entry)) return;
-      const area = findLorebookKnownRoot(entry);
-      if (!area || !isLikelyLorebookEntry(entry, area)) return;
-      seen.add(entry);
-      entries.push(entry);
-    };
-    if (el.matches?.(PD_LOREBOOK_ENTRY_SELECTOR)) add(el);
-    el.querySelectorAll?.(PD_LOREBOOK_ENTRY_SELECTOR).forEach(add);
-    if (!entries.length) {
-      const area = findLorebookKnownRoot(el);
-      if (area) add(findLorebookEntryRootFromTarget(el, area));
-    }
-    entries.forEach(ensureLorebookHeaderTranslateButton);
+    const parentEntry = el.closest?.(PD_LOREBOOK_ENTRY_SELECTOR);
+    if (parentEntry) ensureLorebookHeaderTranslateButton(parentEntry);
+    el.querySelectorAll?.(PD_LOREBOOK_ENTRY_SELECTOR).forEach(ensureLorebookHeaderTranslateButton);
   } catch (e) {
     logDebug({ type:'lorebook-added-entry-error', error:e?.message || String(e) });
   }
 }
-function queueLorebookAreaRefresh(area) {
-  if (!area || area.__pdLoreRefreshQueued) return;
-  area.__pdLoreRefreshQueued = true;
-  requestAnimationFrame(() => {
-    area.__pdLoreRefreshQueued = false;
-    if (area.isConnected) refreshLorebookButtonsInArea(area, 120);
-  });
-}
 function setupLorebookLocalObserver() {
-  // The lorebook translator is intentionally local: no document click handler,
-  // no document observer, no polling. It reacts only when SillyTavern renders or
-  // replaces nodes inside the World Info/Lorebook panel.
+  // Local only: no document click handler, no polling, no attribute observer.
+  // Existing entries are hydrated once; afterwards only newly added lorebook nodes are handled.
   try {
     (window.__pdLorebookObservers || []).forEach(mo => { try { mo.disconnect(); } catch {} });
     window.__pdLorebookObservers = [];
@@ -5576,31 +5328,15 @@ function setupLorebookLocalObserver() {
     window.__pdLorebookClickCapture = null;
     window.__pdLorebookClickBubbled = null;
 
-    const roots = getLorebookObserverRoots();
-    roots.forEach(root => {
-      const observer = new MutationObserver(records => {
-        records.forEach(record => {
-          if (record.type === 'childList') {
-            record.addedNodes.forEach(hydrateLorebookEntriesFromAddedNode);
-          } else if (record.type === 'attributes') {
-            const target = record.target?.nodeType === 1 ? record.target : null;
-            if (!target || target.closest?.(PD_LOREBOOK_CHROME_SELECTOR)) return;
-            const area = findLorebookKnownRoot(target);
-            const entry = area ? findLorebookEntryRootFromTarget(target, area) : null;
-            if (entry) ensureLorebookHeaderTranslateButton(entry);
-            else if (area) queueLorebookAreaRefresh(area);
-          }
-        });
-      });
-      observer.observe(root, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: ['class', 'style', 'hidden', 'aria-hidden'],
-      });
-      window.__pdLorebookObservers.push(observer);
+    const shell = document.getElementById('world_popup') || document.getElementById('WorldInfo') || document.getElementById('world_info');
+    if (!shell) return;
+    shell.querySelectorAll?.(PD_LOREBOOK_ENTRY_SELECTOR).forEach(ensureLorebookHeaderTranslateButton);
+
+    const observer = new MutationObserver(records => {
+      records.forEach(record => record.addedNodes.forEach(hydrateLorebookEntriesFromNode));
     });
-    requestAnimationFrame(refreshAllRenderedLorebookEntries);
+    observer.observe(shell, { childList: true, subtree: true });
+    window.__pdLorebookObservers.push(observer);
   } catch (e) {
     logDebug({ type:'lorebook-observer-setup-error', error:e?.message || String(e) });
   }
@@ -5748,7 +5484,7 @@ function boot(){
   try{ setupMessageRenderHooks(); }catch(e){ console.error('[Phrase Desk] message render hooks failed',e); }
   try{ setupExtensionsMenuButton(); }catch(e){ console.error('[Phrase Desk] menu failed',e); }
   try{ scheduleMessageButtonHydration(); }catch(e){ console.error('[Phrase Desk] message buttons failed',e); }
-  logDebug({ type:'boot', stability:'global boot guard, one observer, one event hook set, memory-only debug logs, debounced chat cache saves, original/display guard, translation cache shape, safe cleanup, paginated old-chat DOM fallback, always-on bilingual blur-ready display wrapper, click-pinned blur reveal with lightweight rerender state, bilingual note display mode, input correction note save, single slash chat translation command, google simple translation engine, gated input correction, ST render flow, private fence warning guard, lightweight hydration guard, minimal render hook flow, lorebook entry action translation button, no lorebook observer, click-only message hydration', version:PD_VERSION, instanceId:pdInstanceId });
+  logDebug({ type:'boot', stability:'global boot guard, one observer, one event hook set, memory-only debug logs, debounced chat cache saves, original/display guard, translation cache shape, safe cleanup, paginated old-chat DOM fallback, always-on bilingual blur-ready display wrapper, click-pinned blur reveal with lightweight rerender state, bilingual note display mode, input correction note save, single slash chat translation command, google simple translation engine, gated input correction, ST render flow, private fence warning guard, lightweight hydration guard, minimal render hook flow, lorebook entry action translation button, scoped lorebook child-list observer, click-only message hydration', version:PD_VERSION, instanceId:pdInstanceId });
 }
 function scheduleBoot(){
   if (pdDuplicateModule) return;

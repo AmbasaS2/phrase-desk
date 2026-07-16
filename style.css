@@ -41,7 +41,7 @@
 #phrase-desk-settings select.text_pole,
 #phrase-desk-settings textarea.text_pole,
 #phrase-desk-settings .menu_button { font-family: inherit !important; }
-#phrase-desk-settings .pd-settings-content { padding: 8px 0 10px !important; font-size: 12px !important; }
+#phrase-desk-settings .pd-settings-content { font-size: 12px !important; }
 #phrase-desk-settings .pd-setting-row { margin-bottom: 8px !important; }
 #phrase-desk-settings .pd-two { display:grid !important; grid-template-columns: 1fr 1fr !important; gap:8px !important; }
 #phrase-desk-settings label { display:block !important; margin:0 0 4px !important; font-size:12px !important; font-weight:600 !important; opacity:.76 !important; line-height:1.35 !important; }
@@ -1402,15 +1402,8 @@ body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal {
 }
 
 
-/* final15: default-ST-sized settings and menu icon spacing */
+/* final15: keep the collapsed drawer title at SillyTavern's default size. */
 #phrase-desk-settings .inline-drawer-title { font-size: var(--mainFontSize, 14px) !important; line-height: 1.25 !important; }
-#phrase-desk-settings .pd-settings-content,
-#phrase-desk-settings .pd-setting-row,
-#phrase-desk-settings label,
-#phrase-desk-settings select.text_pole,
-#phrase-desk-settings textarea.text_pole,
-#phrase-desk-settings .menu_button { font-size: var(--mainFontSize, 14px) !important; }
-#phrase-desk-settings label { opacity: .82 !important; }
 .pd-context small { display:block !important; opacity:.62 !important; font-size: 11px !important; margin-bottom: 4px !important; }
 .pd-context-list .pd-context + .pd-context { margin-top: 7px !important; }
 
@@ -1443,9 +1436,6 @@ body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal {
 #phrase-desk-settings label small {
   font-size: 11px !important;
   opacity: .58 !important;
-}
-#phrase-desk-settings .pd-settings-content {
-  padding: 6px 0 8px !important;
 }
 #phrase-desk-settings .pd-setting-row {
   margin-bottom: 7px !important;
@@ -1751,15 +1741,20 @@ html.pd-bilingual-blur-enabled .mes_block .pd-bilingual-blur.pd-blur-revealed {
   display:inline-flex !important;
   align-items:center !important;
   justify-content:center !important;
-  padding:0 !important;
   margin:0 !important;
-  font-family:inherit !important;
-  font-size:calc(var(--standardIconSize, 1em) * .72) !important;
+  font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif !important;
   line-height:1 !important;
   cursor:pointer !important;
   opacity:1 !important;
   overflow:hidden !important;
   text-align:center !important;
+  vertical-align:middle !important;
+}
+.pd-lore-button-icon {
+  display:inline-block !important;
+  line-height:1 !important;
+  transform:translateY(1px) !important;
+  pointer-events:none !important;
 }
 .pd-lore-translate-btn:hover { opacity:1 !important; }
 .pd-lore-translate-btn.busy { opacity:.55 !important; pointer-events:none !important; }
@@ -1803,9 +1798,13 @@ html.pd-bilingual-blur-enabled .mes_block .pd-bilingual-blur.pd-blur-revealed {
 }
 
 
-/* v1.3.1: divider below the extension drawer title */
+/* v1.3.1: keep ST's animated drawer untouched; style the inner settings shell instead. */
 #phrase-desk-settings > .pd-settings-content {
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+#phrase-desk-settings .pd-settings-inner {
   border-top: 1px solid rgba(128, 118, 100, .18) !important;
-  margin-top: 0 !important;
-  padding-top: 8px !important;
+  padding: 8px 0 8px !important;
 }
