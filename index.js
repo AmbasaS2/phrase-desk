@@ -4958,7 +4958,7 @@ function setupMessageRenderHooks() {
 
 function setupExtensionsMenuButton(){
   const menu=document.querySelector('#extensionsMenu'); if(!menu||document.getElementById('pd-extension-menu-button')) return;
-  const b=document.createElement('div'); b.id='pd-extension-menu-button'; b.className='list-group-item flex-container flexGap5 interactable'; b.innerHTML=`<span class="pd-extension-icon" aria-hidden="true">🔤</span><span class="pd-extension-title">${esc(DISPLAY_NAME.replace(/^🔤\s*/, ''))}</span>`; menu.appendChild(b);
+  const b=document.createElement('div'); b.id='pd-extension-menu-button'; b.className='list-group-item flex-container flexGap5 interactable'; b.innerHTML=`<span class="pd-extension-icon extensionsMenuExtensionButton" aria-hidden="true">🔤</span><span class="pd-extension-title">${esc(DISPLAY_NAME.replace(/^🔤\s*/, ''))}</span>`; menu.appendChild(b);
 }
 function originalTextForEditTarget(target) {
   const editBtn = target?.closest?.('.mes_edit,.edit_mes,.mes_edit_button,[class*="mes_edit"],[class*="edit_mes"]') || target?.closest?.('.mes') || target;
@@ -5449,12 +5449,6 @@ function ensureLorebookHeaderTranslateButton(entry) {
     return null;
   }
 }
-function scheduleLorebookButtonRefreshFromTarget(target) {
-  // Kept for compatibility with older internal calls. Do not perform area-wide
-  // double refreshes; hydrate only from the user interaction target.
-  try { requestAnimationFrame(() => hydrateLorebookButtonsFromInteraction(target)); }
-  catch (e) { logDebug({ type:'lorebook-refresh-schedule-error', error:e?.message || String(e) }); }
-}
 function lorebookEntryForButton(btn) {
   const saved = btn?.__pdLoreEntry || btn?.closest?.('.pd-lore-header-tools')?.__pdLoreEntry;
   if (saved && saved.isConnected && findLorebookKnownRoot(saved)) return saved;
@@ -5520,50 +5514,96 @@ async function toggleLorebookTranslation(e) {
     if (btn.classList.contains('busy')) setLorebookButtonVisual(btn, entry.querySelector?.('.pd-lore-temp-box') ? 'translated' : 'idle');
   }
 }
+function getLorebookObserverRoots() {
+  try {
+    const roots = Array.from(document.querySelectorAll(PD_LOREBOOK_STRICT_AREA_SELECTOR))
+      .filter(root => root?.nodeType === 1 && !isExcludedLorebookPanel(root));
+    // Observe the outermost lorebook shells. Nested strict roots are covered by
+    // their parent observer and are still used as the precise entry area below.
+    return roots.filter(root => !roots.some(other => other !== root && other.contains(root)));
+  } catch { return []; }
+}
+function refreshAllRenderedLorebookEntries() {
+  try {
+    Array.from(document.querySelectorAll(PD_LOREBOOK_STRICT_AREA_SELECTOR))
+      .filter(area => area?.nodeType === 1 && !isExcludedLorebookPanel(area))
+      .forEach(area => refreshLorebookButtonsInArea(area, 120));
+  } catch (e) {
+    logDebug({ type:'lorebook-local-refresh-error', error:e?.message || String(e) });
+  }
+}
+function hydrateLorebookEntriesFromAddedNode(node) {
+  try {
+    const el = node?.nodeType === 1 ? node : null;
+    if (!el || el.matches?.(PD_LOREBOOK_CHROME_SELECTOR) || el.closest?.(PD_LOREBOOK_CHROME_SELECTOR)) return;
+    const entries = [];
+    const seen = new Set();
+    const add = (entry) => {
+      if (!entry || seen.has(entry)) return;
+      const area = findLorebookKnownRoot(entry);
+      if (!area || !isLikelyLorebookEntry(entry, area)) return;
+      seen.add(entry);
+      entries.push(entry);
+    };
+    if (el.matches?.(PD_LOREBOOK_ENTRY_SELECTOR)) add(el);
+    el.querySelectorAll?.(PD_LOREBOOK_ENTRY_SELECTOR).forEach(add);
+    if (!entries.length) {
+      const area = findLorebookKnownRoot(el);
+      if (area) add(findLorebookEntryRootFromTarget(el, area));
+    }
+    entries.forEach(ensureLorebookHeaderTranslateButton);
+  } catch (e) {
+    logDebug({ type:'lorebook-added-entry-error', error:e?.message || String(e) });
+  }
+}
+function queueLorebookAreaRefresh(area) {
+  if (!area || area.__pdLoreRefreshQueued) return;
+  area.__pdLoreRefreshQueued = true;
+  requestAnimationFrame(() => {
+    area.__pdLoreRefreshQueued = false;
+    if (area.isConnected) refreshLorebookButtonsInArea(area, 120);
+  });
+}
 function setupLorebookLocalObserver() {
-  // Legacy cleanup only. Earlier builds attached a subtree MutationObserver to the
-  // World Info panel; that caused repeated full lorebook refreshes while SillyTavern
-  // was rebuilding entry rows. Do not attach a lorebook observer here.
+  // The lorebook translator is intentionally local: no document click handler,
+  // no document observer, no polling. It reacts only when SillyTavern renders or
+  // replaces nodes inside the World Info/Lorebook panel.
   try {
     (window.__pdLorebookObservers || []).forEach(mo => { try { mo.disconnect(); } catch {} });
     window.__pdLorebookObservers = [];
+    try { document.removeEventListener('click', window.__pdLorebookClickCapture || (()=>{}), true); } catch {}
+    try { document.removeEventListener('click', window.__pdLorebookClickBubbled || (()=>{}), false); } catch {}
+    window.__pdLorebookClickCapture = null;
+    window.__pdLorebookClickBubbled = null;
+
+    const roots = getLorebookObserverRoots();
+    roots.forEach(root => {
+      const observer = new MutationObserver(records => {
+        records.forEach(record => {
+          if (record.type === 'childList') {
+            record.addedNodes.forEach(hydrateLorebookEntriesFromAddedNode);
+          } else if (record.type === 'attributes') {
+            const target = record.target?.nodeType === 1 ? record.target : null;
+            if (!target || target.closest?.(PD_LOREBOOK_CHROME_SELECTOR)) return;
+            const area = findLorebookKnownRoot(target);
+            const entry = area ? findLorebookEntryRootFromTarget(target, area) : null;
+            if (entry) ensureLorebookHeaderTranslateButton(entry);
+            else if (area) queueLorebookAreaRefresh(area);
+          }
+        });
+      });
+      observer.observe(root, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'style', 'hidden', 'aria-hidden'],
+      });
+      window.__pdLorebookObservers.push(observer);
+    });
+    requestAnimationFrame(refreshAllRenderedLorebookEntries);
   } catch (e) {
-    logDebug({ type:'lorebook-observer-cleanup-error', error:e?.message || String(e) });
+    logDebug({ type:'lorebook-observer-setup-error', error:e?.message || String(e) });
   }
-}
-function hydrateLorebookButtonsFromInteraction(target) {
-  try {
-    const area = findLorebookKnownRoot(target);
-    if (!area || isExcludedLorebookPanel(area)) return;
-    cleanupMisplacedLorebookChrome(area);
-    const direct = findLorebookEntryRootFromTarget(target, area);
-    if (direct) {
-      ensureLorebookHeaderTranslateButton(direct);
-      return;
-    }
-    const now = Date.now();
-    if (area.__pdLoreLastListHydrate && now - area.__pdLoreLastListHydrate < 700) return;
-    area.__pdLoreLastListHydrate = now;
-    getLorebookCandidateEntries(area, 60).forEach(entry => ensureLorebookHeaderTranslateButton(entry));
-  } catch (e) {
-    logDebug({ type:'lorebook-click-hydrate-error', error:e?.message || String(e) });
-  }
-}
-function setupLorebookClickHandler() {
-  try { document.removeEventListener('click', window.__pdLorebookClickCapture || (()=>{}), true); } catch {}
-  try { document.removeEventListener('click', window.__pdLorebookClickBubbled || (()=>{}), false); } catch {}
-  setupLorebookLocalObserver();
-  // Keep this as a lightweight user-action hook, not a capture-phase scanner.
-  // It only runs after the user clicks inside World Info/Lorebook, and never
-  // observes subtree mutations or repeatedly walks the document.
-  window.__pdLorebookClickBubbled = function(e) {
-    const t = e?.target;
-    if (!t) return;
-    if (t.closest?.('.pd-lore-translate-btn,.pd-lore-header-tools,.pd-lore-temp-box')) return;
-    if (!findLorebookKnownRoot(t)) return;
-    requestAnimationFrame(() => hydrateLorebookButtonsFromInteraction(t));
-  };
-  document.addEventListener('click', window.__pdLorebookClickBubbled, false);
 }
 
 function setupDelegates(){
@@ -5613,7 +5653,6 @@ function setupDelegates(){
     if ($(t).closest('#pd-input-translate').length) { if (inputLongPressFired) { e.preventDefault(); e.stopPropagation(); inputLongPressFired = false; return; } return toggleInputTranslation(e); }
     if ($(t).closest('#pd-study-open').length) { e.preventDefault(); e.stopPropagation(); return openQuickMenu($('#pd-study-open')[0]); }
     if ($(t).closest('#pd-extension-menu-button').length) { e.preventDefault(); e.stopPropagation(); return openNotebook(); }
-    if ($(t).closest('#extensionsMenuButton, #extensionsMenu_button, [title="Extensions"], [title="확장"]').length) setTimeout(setupExtensionsMenuButton, 80);
     if ($('.pd-menu').length && !$(t).closest('.pd-menu,#pd-study-open,.pd-selection-bubble').length) $('.pd-menu').remove();
     if ($('.pd-popover').length && !$(t).closest('.pd-popover,.pd-modal-backdrop,.pd-dialog,.pd-modal,.pd-menu,.pd-selection-bubble,#pd-study-open,#pd-input-buttons,.pd-message-translate-btn,#pd-extension-menu-button,#extensionsMenu,#extensions_settings,#extensions_settings2,.inline-drawer,.drawer-content').length && $(t).closest('#chat, #chat_container, #send_form, .mes').length) {
       closePhraseDesk();
@@ -5703,13 +5742,12 @@ function boot(){
   try{ setupSettingsPanel(); }catch(e){ console.error('[Phrase Desk] settings failed',e); }
   try{ setupInputButtonsOnce(); }catch(e){ console.error('[Phrase Desk] input failed',e); }
   try{ setupDelegates(); }catch(e){ console.error('[Phrase Desk] handlers failed',e); }
-  try{ setupLorebookClickHandler(); }catch(e){ console.error('[Phrase Desk] lorebook click handler failed',e); }
+  try{ setupLorebookLocalObserver(); }catch(e){ console.error('[Phrase Desk] lorebook observer failed',e); }
   try{ setupInputCorrectionInterceptors(); }catch(e){ console.error('[Phrase Desk] input correction failed',e); }
   try{ registerPhraseDeskSlashCommands(); }catch(e){ console.error('[Phrase Desk] slash commands failed',e); }
   try{ setupMessageRenderHooks(); }catch(e){ console.error('[Phrase Desk] message render hooks failed',e); }
   try{ setupExtensionsMenuButton(); }catch(e){ console.error('[Phrase Desk] menu failed',e); }
   try{ scheduleMessageButtonHydration(); }catch(e){ console.error('[Phrase Desk] message buttons failed',e); }
-  setTimeout(()=>{ try{ setupExtensionsMenuButton(); }catch(e){} }, 900);
   logDebug({ type:'boot', stability:'global boot guard, one observer, one event hook set, memory-only debug logs, debounced chat cache saves, original/display guard, translation cache shape, safe cleanup, paginated old-chat DOM fallback, always-on bilingual blur-ready display wrapper, click-pinned blur reveal with lightweight rerender state, bilingual note display mode, input correction note save, single slash chat translation command, google simple translation engine, gated input correction, ST render flow, private fence warning guard, lightweight hydration guard, minimal render hook flow, lorebook entry action translation button, no lorebook observer, click-only message hydration', version:PD_VERSION, instanceId:pdInstanceId });
 }
 function scheduleBoot(){

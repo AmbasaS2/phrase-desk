@@ -3,8 +3,6 @@
 #pd-input-buttons,
 #pd-input-buttons *,
 .pd-message-translate-btn,
-#pd-extension-menu-button,
-#pd-extension-menu-button *,
 .pd-popover,
 .pd-popover *,
 .pd-modal-backdrop,
@@ -107,9 +105,6 @@
 #pd-input-buttons .pd-input-btn:hover { background:rgba(128,128,128,.10) !important; opacity:1 !important; }
 #pd-input-buttons .pd-aa { font-weight:400 !important; letter-spacing:-.03em !important; }
 #pd-input-buttons .pd-input-btn.busy { opacity:.42 !important; pointer-events:none !important; }
-
-#extensionsMenu #pd-extension-menu-button { align-items:center !important; gap:8px !important; }
-.pd-menu-icon { display:inline-flex !important; align-items:center !important; justify-content:center !important; width:28px !important; height:28px !important; border:1px solid rgba(128,128,128,.18) !important; border-radius:8px !important; font-weight:500 !important; background:rgba(255,255,255,.35) !important; }
 
 .pd-selection-bubble { position:fixed !important; z-index:6500 !important; width:30px !important; height:24px !important; border:1px solid rgba(255,255,255,.78) !important; border-radius:999px !important; background:rgba(255,255,255,.84) !important; color:#3a3a31 !important; box-shadow:0 8px 24px rgba(0,0,0,.16) !important; backdrop-filter:blur(12px) !important; font-size:12px !important; font-weight:500 !important; line-height:1 !important; cursor:pointer !important; }
 .pd-menu { position:fixed !important; z-index:6400 !important; width:216px !important; padding:6px !important; border:1px solid var(--pd-line) !important; border-radius:16px !important; background:var(--pd-bg) !important; box-shadow:0 12px 34px rgba(0,0,0,.12) !important; backdrop-filter:blur(18px) !important; display:grid !important; gap:2px !important; }
@@ -750,15 +745,6 @@ body > .pd-modal-backdrop > .pd-modal {
 }
 .pd-message-translate-btn:hover,
 .pd-message-translate-btn.translated { opacity: 1 !important; background: transparent !important; }
-#pd-extension-menu-button .pd-menu-icon {
-  display: inline-flex !important;
-  width: 18px !important;
-  min-width: 18px !important;
-  align-items: center !important;
-  justify-content: center !important;
-  font-weight: 800 !important;
-  opacity: .9 !important;
-}
 @media (max-width:760px){
   .pd-popover {
     width: calc(100dvw - 18px) !important;
@@ -978,7 +964,6 @@ body > .pd-modal-backdrop:not(.pd-modal-in-popover) > .pd-modal {
 .pd-body {
   width: 100% !important;
 }
-#pd-extension-menu-button .pd-menu-icon,
 .pd-settings-title-icon {
   font-family: Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, system-ui, sans-serif !important;
   font-weight: 400 !important;
@@ -1042,11 +1027,6 @@ body > .pd-modal-backdrop:not(.pd-modal-in-popover) > .pd-modal {
   align-items: center !important;
   gap: 6px !important;
 }
-#pd-extension-menu-button {
-  gap: 6px !important;
-  align-items: center !important;
-}
-#pd-extension-menu-button .pd-menu-icon { width: auto !important; min-width: 0 !important; margin: 0 !important; }
 .pd-cal-week { margin-bottom: 9px !important; }
 .pd-cal-grid { margin-top: 0 !important; }
 .pd-cal-week span { padding-bottom: 2px !important; }
@@ -1431,79 +1411,10 @@ body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal {
 #phrase-desk-settings textarea.text_pole,
 #phrase-desk-settings .menu_button { font-size: var(--mainFontSize, 14px) !important; }
 #phrase-desk-settings label { opacity: .82 !important; }
-#extensionsMenu #pd-extension-menu-button { gap: 5px !important; column-gap: 5px !important; white-space: normal !important; }
 .pd-context small { display:block !important; opacity:.62 !important; font-size: 11px !important; margin-bottom: 4px !important; }
 .pd-context-list .pd-context + .pd-context { margin-top: 7px !important; }
 
 #phrase-desk-settings #pd-bilingual-style:disabled { opacity:.65 !important; cursor:not-allowed !important; }
-
-
-/* Phrase Desk extension menu alignment */
-#extensionsMenu #pd-extension-menu-button {
-  display: flex !important;
-  align-items: center !important;
-  gap: 6px !important;
-  column-gap: 6px !important;
-  font-size: inherit !important;
-  line-height: 1.25 !important;
-  white-space: normal !important;
-}
-#extensionsMenu #pd-extension-menu-button .pd-extension-icon {
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  width: 18px !important;
-  min-width: 18px !important;
-  height: 18px !important;
-  margin: 0 !important;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", system-ui, sans-serif !important;
-  font-size: 9px !important;
-  line-height: 1 !important;
-  font-weight: 700 !important;
-  letter-spacing: -0.08em !important;
-  border: 1px solid rgba(128,128,128,.32) !important;
-  border-radius: 4px !important;
-  opacity: .72 !important;
-}
-#extensionsMenu #pd-extension-menu-button .pd-extension-title {
-  display: inline-block !important;
-  line-height: 1.25 !important;
-  font-size: inherit !important;
-  font-weight: inherit !important;
-}
-
-
-/* final21: keep emoji icon, but match extension-menu spacing */
-#extensionsMenu #pd-extension-menu-button {
-  display: flex !important;
-  align-items: center !important;
-  gap: 10px !important;
-  column-gap: 10px !important;
-  min-height: 30px !important;
-  line-height: 1.35 !important;
-}
-#extensionsMenu #pd-extension-menu-button .pd-extension-icon {
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  width: 20px !important;
-  min-width: 20px !important;
-  height: 20px !important;
-  margin: 0 !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  font-family: inherit !important;
-  font-size: 15px !important;
-  line-height: 1 !important;
-  letter-spacing: 0 !important;
-  opacity: 1 !important;
-}
-#extensionsMenu #pd-extension-menu-button .pd-extension-title {
-  display: inline-block !important;
-  line-height: 1.35 !important;
-  font-size: inherit !important;
-  font-weight: inherit !important;
-}
 
 #phrase-desk-settings #pd-global-prompt,
 #phrase-desk-settings #pd-char-prompt {
