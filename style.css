@@ -1890,3 +1890,11 @@ html.pd-bilingual-blur-enabled .mes_block .pd-bilingual-blur.pd-blur-revealed {
   word-break:keep-all !important;
   font-family:inherit !important;
 }
+
+
+/* v1.3.1: divider below the extension drawer title */
+#phrase-desk-settings > .pd-settings-content {
+  border-top: 1px solid rgba(128, 118, 100, .18) !important;
+  margin-top: 0 !important;
+  padding-top: 8px !important;
+}
