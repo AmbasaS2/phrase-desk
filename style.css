@@ -1857,3 +1857,154 @@ html.pd-bilingual-blur-enabled .mes_block .pd-bilingual-blur.pd-blur-revealed {
   line-height: 1 !important;
   vertical-align: baseline !important;
 }
+
+/* v1.3.1 theme surfaces: follow the active SillyTavern theme without translucent panels. */
+.pd-popover,
+.pd-modal-backdrop,
+.pd-modal,
+.pd-menu,
+.pd-selection-bubble,
+.pd-toast,
+.pd-bilingual-note-popup,
+.pd-lore-temp-box {
+  --pd-font: inherit;
+  --pd-bg-source: var(--SmartThemeBlurTintColor, #f7f7f7);
+  --pd-ink-source: var(--SmartThemeBodyColor, #2d2e27);
+  --pd-bg: rgb(from var(--pd-bg-source) r g b / 1);
+  --pd-ink: rgb(from var(--pd-ink-source) r g b / 1);
+  --pd-muted: color-mix(in srgb, var(--pd-ink) 66%, var(--pd-bg) 34%);
+  --pd-line: color-mix(in srgb, var(--pd-ink) 18%, var(--pd-bg) 82%);
+  --pd-surface: color-mix(in srgb, var(--pd-ink) 5%, var(--pd-bg) 95%);
+  --pd-surface-strong: color-mix(in srgb, var(--pd-ink) 8%, var(--pd-bg) 92%);
+  --pd-surface-hover: color-mix(in srgb, var(--pd-ink) 12%, var(--pd-bg) 88%);
+  font-family: inherit !important;
+}
+
+.pd-popover,
+.pd-modal,
+.pd-menu,
+.pd-selection-bubble,
+.pd-toast,
+.pd-bilingual-note-popup,
+.pd-lore-temp-box {
+  background: var(--pd-bg) !important;
+  color: var(--pd-ink) !important;
+  border-color: var(--pd-line) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.pd-popover button,
+.pd-popover input,
+.pd-popover textarea,
+.pd-popover select,
+.pd-modal button,
+.pd-modal input,
+.pd-modal textarea,
+.pd-modal select,
+.pd-menu button,
+.pd-selection-bubble {
+  font-family: inherit !important;
+  color: var(--pd-ink) !important;
+}
+
+.pd-popover input:not([type="checkbox"]):not([type="radio"]),
+.pd-popover textarea,
+.pd-popover select,
+.pd-modal input:not([type="checkbox"]):not([type="radio"]),
+.pd-modal textarea,
+.pd-modal select,
+#pd-search,
+.pd-number {
+  background: var(--pd-surface-strong) !important;
+  color: var(--pd-ink) !important;
+  border-color: var(--pd-line) !important;
+}
+
+.pd-popover input::placeholder,
+.pd-popover textarea::placeholder,
+.pd-modal input::placeholder,
+.pd-modal textarea::placeholder,
+#pd-search::placeholder {
+  color: var(--pd-muted) !important;
+  opacity: 1 !important;
+}
+
+.pd-body aside,
+.pd-actions button,
+.pd-tags span,
+.pd-note,
+.pd-context,
+.pd-row,
+.pd-choice,
+.pd-quiz-type,
+.pd-suggest,
+.pd-history-item,
+.pd-loading,
+.pd-lite-btn,
+.pd-repeat-row,
+.pd-result-row,
+.pd-wrong-row,
+.pd-practice-card,
+.pd-practice-question,
+.pd-feedback,
+.pd-cal-cell,
+.pd-correction-box,
+.pd-bilingual-notes,
+.pd-bilingual-note,
+.pd-lore-temp-box {
+  background: var(--pd-surface) !important;
+  color: var(--pd-ink) !important;
+  border-color: var(--pd-line) !important;
+}
+
+.pd-primary,
+.pd-choice.ok,
+.pd-feedback.ok,
+.pd-correction-box.ok,
+.pd-cal-cell.today {
+  background: color-mix(in srgb, #6796dc 16%, var(--pd-bg) 84%) !important;
+}
+
+.pd-choice.bad,
+.pd-feedback.bad {
+  background: color-mix(in srgb, #d26464 13%, var(--pd-bg) 87%) !important;
+}
+
+.pd-repeat-row.is-selected,
+.pd-cal-cell.done {
+  background: color-mix(in srgb, #5d7e4e 12%, var(--pd-bg) 88%) !important;
+}
+
+.pd-menu button:hover,
+.pd-head-actions button:hover,
+.pd-body aside button:hover,
+.pd-body aside button.on,
+.pd-lite-btn:hover,
+.pd-title-calendar:hover,
+.pd-x:hover,
+.pd-wrong-del:hover,
+.pd-history-del:hover,
+.pd-practice-del:hover,
+.pd-bilingual-notes-toggle:hover {
+  background: var(--pd-surface-hover) !important;
+  color: var(--pd-ink) !important;
+}
+
+.pd-context span,
+.pd-repeat-row small,
+.pd-cal-cell.done b,
+.pd-cal-cell small,
+.pd-correction-box small,
+.pd-correction-notes small {
+  color: var(--pd-muted) !important;
+}
+
+.pd-bilingual-note-popup,
+.pd-lore-temp-box {
+  background: var(--pd-bg) !important;
+  color: var(--pd-ink) !important;
+  border-color: var(--pd-line) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
