@@ -2856,24 +2856,24 @@ function messageInfoAnchor(payload) {
   if (!$mes.length) return null;
   const metaParent = $mes.find('.mesAvatarWrapper').first();
   if (!metaParent.length) return null;
-  const info = metaParent.children('.mesIDDisplay, .mes_timer, .tokenCounterDisplay').filter(function() {
+
+  const visibleInfo = (selector) => metaParent.children(selector).filter(function() {
     return $(this).css('display') !== 'none' && norm($(this).text());
-  });
-  if (!info.length) return null;
+  }).first();
+
   const isUser = payloadIsUserMessage(payload);
-  return {
-    target: isUser ? info.first() : info.last(),
-    placement: isUser ? 'before' : 'after',
-    isUser,
-  };
+  const messageId = visibleInfo('.mesIDDisplay');
+  const tokenCount = visibleInfo('.tokenCounterDisplay');
+  const target = isUser ? messageId : (tokenCount.length ? tokenCount : messageId);
+  if (!target.length) return null;
+  return { target, isUser };
 }
 function placeMessageTranslateButton(btn, payload) {
   const anchor = messageInfoAnchor(payload);
   if (!anchor?.target?.length) return false;
   btn.toggleClass('pd-message-translate-user', anchor.isUser);
   btn.toggleClass('pd-message-translate-character', !anchor.isUser);
-  if (anchor.placement === 'before') anchor.target.before(btn);
-  else anchor.target.after(btn);
+  anchor.target.append(btn);
   return true;
 }
 function applyPersistedMessageTranslation(payload, btn=null) {
@@ -2913,7 +2913,7 @@ function ensureMessageTranslateButton(mes) {
   const stableMesId = (Number.isFinite(Number(payload.idx)) && Number(payload.idx) >= 0)
     ? String(payload.idx)
     : ($mes.attr('mesid') || $mes.attr('data-mesid') || '');
-  const btn = $('<button class="pd-message-translate-btn" type="button" aria-label="이 메시지 번역" title="이 메시지 번역 / 길게 눌러 재번역">🌐</button>');
+  const btn = $('<span class="pd-message-translate-btn interactable" aria-label="이 메시지 번역" title="이 메시지 번역 / 길게 눌러 재번역"><span class="pd-message-translate-icon" aria-hidden="true">🌐</span></span>');
   if (stableMesId !== '') btn.attr('data-pd-mesid', String(stableMesId));
   if (!placeMessageTranslateButton(btn, payload)) return false;
   applyPersistedMessageTranslation(payload, btn);
