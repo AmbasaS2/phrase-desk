@@ -79,9 +79,8 @@ function sourceContainsLine(source = '', line = '') {
   return !!probe && String(source || '').includes(probe);
 }
 
-// Magic Translation and other LLM translation extensions commonly request one fenced
-// payload and then extract only that outer block. Phrase Desk accepts the same safe
-// shape, but never unwraps a fence that already existed in the source itself.
+// Some model responses arrive inside one added outer code fence. Accept that safe
+// shape, but never unwrap a fence that already existed in the source itself.
 function unwrapAddedOuterFence(value = '', originalText = '') {
   let out = String(value || '').replace(/\r\n/g, '\n').trim();
   const source = String(originalText || '').trim();
