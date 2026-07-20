@@ -2854,25 +2854,19 @@ function payloadIsUserMessage(payload) {
 function messageInfoAnchor(payload) {
   const $mes = $(payload?.mes || []);
   if (!$mes.length) return null;
-  const info = $mes.find('.mesIDDisplay, .tokenCounterDisplay');
-  if (!info.length) return null;
   const isUser = payloadIsUserMessage(payload);
-  return {
-    target: isUser ? info.first() : info.last(),
-    placement: isUser ? 'before' : 'after',
-    isUser,
-  };
+  const messageIdInfo = $mes.find('.mesIDDisplay').first();
+  const tokenInfo = $mes.find('.tokenCounterDisplay').last();
+  const target = isUser ? messageIdInfo : (tokenInfo.length ? tokenInfo : messageIdInfo);
+  if (!target.length) return null;
+  return { target, isUser };
 }
 function placeMessageTranslateButton(btn, payload) {
   const anchor = messageInfoAnchor(payload);
   if (!anchor?.target?.length) return false;
   btn.toggleClass('pd-message-translate-user', anchor.isUser);
   btn.toggleClass('pd-message-translate-character', !anchor.isUser);
-  if (anchor.placement === 'before') {
-    if (btn.next()[0] !== anchor.target[0]) anchor.target.before(btn);
-  } else if (btn.prev()[0] !== anchor.target[0]) {
-    anchor.target.after(btn);
-  }
+  anchor.target.append(btn);
   return true;
 }
 function applyPersistedMessageTranslation(payload, btn=null) {
@@ -2903,22 +2897,15 @@ function applyPersistedMessageTranslation(payload, btn=null) {
   // Hydration only restores button state. It must not decorate or rerender cached messages.
 }
 function ensureMessageTranslateButton(mes) {
-  const payload = messagePayloadFromTarget(mes);
+  const $mes = $(mes || []);
+  if (!$mes.length) return false;
+  if ($mes.find('.pd-message-translate-btn').length) return true;
+
+  const payload = messagePayloadFromTarget($mes[0]);
   if (!payload?.mes) return false;
-  const $mes = $(payload.mes);
-  const existing = $mes.find('.pd-message-translate-btn').first();
   const stableMesId = (Number.isFinite(Number(payload.idx)) && Number(payload.idx) >= 0)
     ? String(payload.idx)
     : ($mes.attr('mesid') || $mes.attr('data-mesid') || '');
-  if (existing.length) {
-    if (stableMesId !== '') existing.attr('data-pd-mesid', String(stableMesId));
-    if (!placeMessageTranslateButton(existing, payload)) {
-      existing.remove();
-      return false;
-    }
-    applyPersistedMessageTranslation(payload, existing);
-    return true;
-  }
   const btn = $('<button class="pd-message-translate-btn" type="button" aria-label="이 메시지 번역" title="이 메시지 번역 / 길게 눌러 재번역">🌐</button>');
   if (stableMesId !== '') btn.attr('data-pd-mesid', String(stableMesId));
   if (!placeMessageTranslateButton(btn, payload)) return false;
