@@ -1034,14 +1034,32 @@ body > .pd-modal-backdrop:not(.pd-modal-in-popover) > .pd-modal {
   transform: translate(-50%, 0) !important;
 }
 .pd-message-translate-btn {
+  position: static !important;
+  inset: auto !important;
+  transform: none !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  display: inline !important;
+  flex: 0 0 auto !important;
+  align-self: center !important;
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 0 0 5px !important;
   border: 0 !important;
+  border-radius: 0 !important;
   background: transparent !important;
-  width: 20px !important;
-  height: 20px !important;
-  min-width: 20px !important;
-  min-height: 20px !important;
-  border-radius: 999px !important;
+  box-shadow: none !important;
+  color: inherit !important;
+  font-family: Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, system-ui, sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  line-height: 1 !important;
+  vertical-align: middle !important;
   opacity: .78 !important;
+  cursor: pointer !important;
 }
 .pd-message-translate-btn:hover { background: rgba(128,128,128,.10) !important; opacity: 1 !important; }
 .pd-message-translate-btn.translated { outline: 0 !important; background: rgba(95,145,214,.12) !important; }

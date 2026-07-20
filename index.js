@@ -2854,19 +2854,26 @@ function payloadIsUserMessage(payload) {
 function messageInfoAnchor(payload) {
   const $mes = $(payload?.mes || []);
   if (!$mes.length) return null;
+  const metaParent = $mes.find('.mesAvatarWrapper').first();
+  if (!metaParent.length) return null;
+  const info = metaParent.children('.mesIDDisplay, .mes_timer, .tokenCounterDisplay').filter(function() {
+    return $(this).css('display') !== 'none' && norm($(this).text());
+  });
+  if (!info.length) return null;
   const isUser = payloadIsUserMessage(payload);
-  const messageIdInfo = $mes.find('.mesIDDisplay').first();
-  const tokenInfo = $mes.find('.tokenCounterDisplay').last();
-  const target = isUser ? messageIdInfo : (tokenInfo.length ? tokenInfo : messageIdInfo);
-  if (!target.length) return null;
-  return { target, isUser };
+  return {
+    target: isUser ? info.first() : info.last(),
+    placement: isUser ? 'before' : 'after',
+    isUser,
+  };
 }
 function placeMessageTranslateButton(btn, payload) {
   const anchor = messageInfoAnchor(payload);
   if (!anchor?.target?.length) return false;
   btn.toggleClass('pd-message-translate-user', anchor.isUser);
   btn.toggleClass('pd-message-translate-character', !anchor.isUser);
-  anchor.target.append(btn);
+  if (anchor.placement === 'before') anchor.target.before(btn);
+  else anchor.target.after(btn);
   return true;
 }
 function applyPersistedMessageTranslation(payload, btn=null) {
