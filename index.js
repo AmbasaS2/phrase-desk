@@ -2864,7 +2864,10 @@ function messageInfoAnchor(payload) {
   const isUser = payloadIsUserMessage(payload);
   const messageId = visibleInfo('.mesIDDisplay');
   const tokenCount = visibleInfo('.tokenCounterDisplay');
-  const target = isUser ? messageId : (tokenCount.length ? tokenCount : messageId);
+  const responseTime = visibleInfo('.mes_timer');
+  const target = isUser
+    ? (messageId.length ? messageId : tokenCount)
+    : (tokenCount.length ? tokenCount : (responseTime.length ? responseTime : messageId));
   if (!target.length) return null;
   return { target, isUser };
 }
