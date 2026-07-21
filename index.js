@@ -5243,11 +5243,12 @@ function setLorebookButtonVisual(btn, state = 'idle') {
   let icon = btn.querySelector?.('.pd-lore-button-icon');
   if (!icon) {
     icon = document.createElement('span');
-    icon.className = 'pd-lore-button-icon';
     icon.setAttribute('aria-hidden', 'true');
     btn.replaceChildren(icon);
   }
-  icon.textContent = state === 'busy' ? '🌀' : (state === 'translated' ? '↩️' : '🌐');
+  const stateIconClass = state === 'busy' ? 'fa-spinner fa-spin' : (state === 'translated' ? 'fa-undo' : 'fa-globe');
+  icon.className = `pd-lore-button-icon fa-solid ${stateIconClass}`;
+  icon.textContent = '';
   btn.setAttribute('title', state === 'translated' ? '번역 닫기' : (state === 'busy' ? '로어 번역 중' : '로어 번역'));
   btn.setAttribute('aria-label', btn.getAttribute('title'));
 }
