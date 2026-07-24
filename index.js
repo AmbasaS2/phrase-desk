@@ -12,7 +12,7 @@ const IS_BETA = false;
 const SHOW_DEBUG = true;
 const MAX_TOKENS = 8000;
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.3.4";
+const PD_VERSION = "1.3.5";
 const PD_GLOBAL_KEY = "__PHRASE_DESK_GLOBAL_STATE__";
 const pdGlobalState = globalThis[PD_GLOBAL_KEY] && typeof globalThis[PD_GLOBAL_KEY] === 'object'
   ? globalThis[PD_GLOBAL_KEY]

@@ -128,16 +128,6 @@ function trimClearPromptLeak(value = '', originalText = '') {
   return leakSignals >= 4 ? '' : out;
 }
 
-function repairAsciiQuoteEnvelope(value = '', originalText = '') {
-  let out = String(value || '');
-  const source = String(originalText || '');
-  const sourceCount = (source.match(/"/g) || []).length;
-  if (sourceCount < 2) return out;
-  if (/^\s*"/.test(source) && !/^\s*"/.test(out)) out = `"${out}`;
-  if ((out.match(/"/g) || []).length % 2) out = `${out.trimEnd()}"`;
-  return out;
-}
-
 function readSquareBlock(text = '', start = 0) {
   if (text[start] !== '[') return null;
   let depth = 1;
@@ -250,7 +240,6 @@ export function cleanTranslationArtifacts(value = '', originalText = '', options
   out = cleanOrphanFormatTokens(out);
   if (options.detectFailure !== false && originalText && looksLikeTaskFailure(out, originalText)) return '';
   out = trimClearPromptLeak(out, originalText);
-  out = repairAsciiQuoteEnvelope(out, originalText);
   return String(out || '').replace(/\r\n/g, '\n').replace(/\n{4,}/g, '\n\n\n').trim();
 }
 
