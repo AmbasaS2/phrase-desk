@@ -12,7 +12,7 @@ const IS_BETA = false;
 const SHOW_DEBUG = true;
 const MAX_TOKENS = 8000;
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.3.1";
+const PD_VERSION = "1.3.4";
 const PD_GLOBAL_KEY = "__PHRASE_DESK_GLOBAL_STATE__";
 const pdGlobalState = globalThis[PD_GLOBAL_KEY] && typeof globalThis[PD_GLOBAL_KEY] === 'object'
   ? globalThis[PD_GLOBAL_KEY]
@@ -208,6 +208,13 @@ function protectTranslationFormat(text = '') {
         continue;
       }
     }
+    if (source[i] === '*') {
+      let j = i + 1;
+      while (source[j] === '*') j += 1;
+      out += tokenFor(source.slice(i, j));
+      i = j;
+      continue;
+    }
     out += source[i];
     i += 1;
   }
@@ -232,6 +239,7 @@ function protectTranslationFormat(text = '') {
           receivedTokens: resultTokens.length,
         });
       }
+      restored = removeInventedQuoteWrappersInsideAsteriskLocks(restored, out, locks);
       for (const [token, raw] of locks) restored = restored.split(token).join(raw);
       return restored;
     },
@@ -314,6 +322,55 @@ function rebuildProtectedFormatSkeleton(sourceProtected = '', translatedValue = 
   return rebuilt.join('');
 }
 
+
+function matchingOuterQuotePair(value = '') {
+  const trimmed = String(value || '').trim();
+  if (trimmed.length < 2) return null;
+  const pairs = [
+    ["'", "'"],
+    ['"', '"'],
+    ['‘', '’'],
+    ['“', '”'],
+    ['「', '」'],
+    ['『', '』'],
+  ];
+  return pairs.find(([open, close]) => trimmed.startsWith(open) && trimmed.endsWith(close)) || null;
+}
+
+function removeInventedQuoteWrappersInsideAsteriskLocks(value = '', sourceProtected = '', locks = []) {
+  let output = String(value || '');
+  const source = String(sourceProtected || '');
+  const stack = [];
+  const pairs = [];
+  for (const entry of locks || []) {
+    const [token, raw] = entry || [];
+    if (!token || !/^\*+$/.test(String(raw || ''))) continue;
+    const top = stack[stack.length - 1];
+    if (top && top[1] === raw) pairs.push([stack.pop(), entry]);
+    else stack.push(entry);
+  }
+  for (const [[openToken], [closeToken]] of pairs) {
+    const sourceOpen = source.indexOf(openToken);
+    const sourceClose = sourceOpen >= 0 ? source.indexOf(closeToken, sourceOpen + openToken.length) : -1;
+    if (sourceOpen < 0 || sourceClose < 0) continue;
+    const sourceInner = source.slice(sourceOpen + openToken.length, sourceClose);
+    if (matchingOuterQuotePair(sourceInner)) continue;
+
+    const outOpen = output.indexOf(openToken);
+    const outClose = outOpen >= 0 ? output.indexOf(closeToken, outOpen + openToken.length) : -1;
+    if (outOpen < 0 || outClose < 0) continue;
+    const innerStart = outOpen + openToken.length;
+    const inner = output.slice(innerStart, outClose);
+    const pair = matchingOuterQuotePair(inner);
+    if (!pair) continue;
+    const leading = inner.match(/^\s*/)?.[0] || '';
+    const trailing = inner.match(/\s*$/)?.[0] || '';
+    const trimmed = inner.trim();
+    const unwrapped = trimmed.slice(pair[0].length, trimmed.length - pair[1].length);
+    output = `${output.slice(0, innerStart)}${leading}${unwrapped}${trailing}${output.slice(outClose)}`;
+  }
+  return output;
+}
 
 function isFullSeparateMode(kind) {
   return kind === 'full' && (settings.bilingualStyle || 'side_sentence') === 'separate';
@@ -775,10 +832,6 @@ function pdCollectKnownTranslationTexts(msg) {
   };
   add(msg?.extra?.display_text);
   addStore(msg?.extra?.phraseDesk);
-  for (const saved of Object.values(msg?.extra?.phraseDeskSwipeTranslations || {})) {
-    add(saved?.display_text);
-    addStore(saved?.phraseDesk);
-  }
   return out;
 }
 function pdIsKnownTranslationText(msg, value = '') {
@@ -787,24 +840,10 @@ function pdIsKnownTranslationText(msg, value = '') {
 }
 function pdStoredOriginalForCurrentSwipe(msg) {
   if (!msg) return '';
-  const swipeId = pdSwipeId(msg);
-  const candidates = [];
-  if (swipeId !== null) {
-    const saved = msg.extra?.phraseDeskSwipeTranslations?.[swipeId];
-    const savedActive = saved?.phraseDesk?.variants?.[saved?.phraseDesk?.activeKey];
-    candidates.push(saved?.original_mes, saved?.phraseDeskOriginal, savedActive?.original, saved?.phraseDesk?.original);
-  }
-  const currentId = msg.extra?.phraseDeskSwipeId;
-  if (swipeId === null || currentId === undefined || currentId === null || String(currentId) === String(swipeId)) {
-    const root = msg.extra?.phraseDesk;
-    const active = root?.variants?.[root?.activeKey];
-    candidates.push(msg.extra?.original_mes, msg.extra?.phraseDeskOriginal, active?.original, root?.original);
-    if (swipeId !== null) {
-      for (const variant of Object.values(root?.variants || {})) {
-        if (variant && String(variant.swipeId ?? '') === String(swipeId)) candidates.push(variant.original);
-      }
-    }
-  }
+  const root = msg.extra?.phraseDesk;
+  const active = root?.variants?.[root?.activeKey];
+  const candidates = [msg.extra?.original_mes, msg.extra?.phraseDeskOriginal, active?.original, root?.original];
+  for (const variant of Object.values(root?.variants || {})) candidates.push(variant?.original);
   for (const value of candidates) {
     const text = messageSourceText(value || '', null);
     if (!norm(text)) continue;
@@ -827,82 +866,6 @@ function pdBestOriginalSource(msg, allowKnownFallback = false) {
   return allowKnownFallback ? (swipeText || rawMes || '') : '';
 }
 
-function pdSwipeStore(msg, create = false) {
-  if (!msg) return null;
-  msg.extra = msg.extra || {};
-  if (!msg.extra.phraseDeskSwipeTranslations && create) msg.extra.phraseDeskSwipeTranslations = {};
-  return msg.extra.phraseDeskSwipeTranslations && typeof msg.extra.phraseDeskSwipeTranslations === 'object' ? msg.extra.phraseDeskSwipeTranslations : null;
-}
-function pdStoreActiveSwipeState(msg, swipeId = pdSwipeId(msg)) {
-  if (!msg || swipeId === null) return;
-  msg.extra = msg.extra || {};
-  const hasUsefulState = !!(msg.extra.phraseDesk || msg.extra.display_text || msg.extra.original_mes || msg.extra.phraseDeskOriginal);
-  if (!hasUsefulState) return;
-  const store = pdSwipeStore(msg, true);
-  store[swipeId] = {
-    original_mes: msg.extra.original_mes || '',
-    phraseDeskOriginal: msg.extra.phraseDeskOriginal || msg.extra.original_mes || '',
-    display_text: msg.extra.display_text || '',
-    phraseDesk: msg.extra.phraseDesk ? clonePhraseStore(msg.extra.phraseDesk) : null,
-    updatedAt: Date.now(),
-  };
-}
-function pdRestoreSwipeState(msg, swipeId = pdSwipeId(msg)) {
-  if (!msg || swipeId === null) return false;
-  const store = pdSwipeStore(msg, false);
-  const saved = store?.[swipeId];
-  msg.extra = msg.extra || {};
-  if (!saved) return false;
-  if (saved.phraseDesk) msg.extra.phraseDesk = clonePhraseStore(saved.phraseDesk);
-  else delete msg.extra.phraseDesk;
-  if (saved.original_mes) msg.extra.original_mes = saved.original_mes;
-  else delete msg.extra.original_mes;
-  if (saved.phraseDeskOriginal) msg.extra.phraseDeskOriginal = saved.phraseDeskOriginal;
-  else if (saved.original_mes) msg.extra.phraseDeskOriginal = saved.original_mes;
-  else delete msg.extra.phraseDeskOriginal;
-  if (saved.display_text) msg.extra.display_text = saved.display_text;
-  else delete msg.extra.display_text;
-  msg.extra.phraseDeskSwipeId = swipeId;
-  return true;
-}
-function pdClearActiveSwipeState(msg, swipeId = pdSwipeId(msg)) {
-  if (!msg) return false;
-  msg.extra = msg.extra || {};
-  const had = !!(msg.extra.phraseDesk || msg.extra.display_text || msg.extra.original_mes || msg.extra.phraseDeskOriginal);
-  delete msg.extra.phraseDesk;
-  delete msg.extra.display_text;
-  delete msg.extra.original_mes;
-  delete msg.extra.phraseDeskOriginal;
-  if (swipeId !== null) msg.extra.phraseDeskSwipeId = swipeId;
-  return had;
-}
-function pdSyncSwipeState(payload) {
-  const msg = payload?.msg;
-  const swipeId = pdSwipeId(msg);
-  if (!msg || swipeId === null) return false;
-  msg.extra = msg.extra || {};
-  const currentSavedId = msg.extra.phraseDeskSwipeId;
-  if (currentSavedId === undefined || currentSavedId === null || currentSavedId === '') {
-    // First contact with this message in this build. Mark the active swipe so later swipes do not reuse it.
-    msg.extra.phraseDeskSwipeId = swipeId;
-    pdStoreActiveSwipeState(msg, swipeId);
-    return false;
-  }
-  if (String(currentSavedId) === String(swipeId)) return false;
-
-  pdStoreActiveSwipeState(msg, String(currentSavedId));
-  if (pdRestoreSwipeState(msg, swipeId)) return true;
-  pdClearActiveSwipeState(msg, swipeId);
-  return true;
-}
-function pdSwipeMismatchWithoutSource(msg) {
-  const swipeId = pdSwipeId(msg);
-  if (!msg || swipeId === null) return false;
-  const savedId = msg.extra?.phraseDeskSwipeId;
-  if (savedId === undefined || savedId === null || savedId === '') return false;
-  if (String(savedId) === String(swipeId)) return false;
-  return !norm(pdReadSwipeText(msg, swipeId));
-}
 function pdCurrentRawMessageSource(msg) {
   if (!msg) return '';
   return pdBestOriginalSource(msg);
@@ -923,18 +886,12 @@ function messageCacheKey(payload) {
   if (!payload) return '';
   const original = currentMessageOriginal(payload);
   const signature = original || sceneBoardSourceText(payload) || payload?.text || '';
-  const swipe = payload?.msg?.swipe_id;
-  if (swipe !== undefined && swipe !== null) return `swipe:${swipe}:${hash(signature)}`;
-  if (Number.isFinite(Number(payload.idx))) return `${payload.idx}:${hash(signature)}`;
   return hash(signature);
 }
 function getCachedMessageStore(payload) {
   if (!payload) return null;
   const msgStore = payload?.msg?.extra?.phraseDesk;
-  if (msgStore && typeof msgStore === 'object') return msgStore;
-  const liveStore = payload?.mes?.__pdTranslation;
-  if (liveStore && typeof liveStore === 'object') return liveStore;
-  return null;
+  return msgStore && typeof msgStore === 'object' ? msgStore : null;
 }
 function pruneChatTranslationCache() {
   // no-op: 캐시를 extension_settings에 저장하지 않으므로 별도 가지치기가 필요 없습니다.
@@ -1007,22 +964,20 @@ function variantForPayload(payload, create = false) {
       showing: !!root.showing,
       source: root.source || '',
       updatedAt: root.updatedAt || Date.now(),
-      swipeId: payload?.msg?.swipe_id,
     };
   }
   if (!root.variants[key] && create) {
-    root.variants[key] = { original, originalHash, translations:{}, activeMode:'', showing:false, source:payload?.source || '', updatedAt:Date.now(), swipeId: payload?.msg?.swipe_id };
+    root.variants[key] = { original, originalHash, translations:{}, activeMode:'', showing:false, source:payload?.source || '', updatedAt:Date.now() };
   }
   return { root, key, state: root.variants[key] || null, original };
 }
 function setCachedMessageStore(payload, store) {
-  if (!payload || !store) return;
+  if (!payload || !store || !payload.msg) return;
   const cloned = clonePhraseStore(store);
-  payload.mes && (payload.mes.__pdTranslation = cloned);
-  if (payload.msg) {
-    payload.msg.extra = payload.msg.extra || {};
-    payload.msg.extra.phraseDesk = cloned;
-  }
+  payload.msg.extra = payload.msg.extra || {};
+  delete payload.msg.extra.phraseDeskSwipeTranslations;
+  delete payload.msg.extra.phraseDeskSwipeId;
+  payload.msg.extra.phraseDesk = cloned;
 }
 function globalPrompt() { return String(settings.globalPrompt || ''); }
 function currentCharPromptKey() {
@@ -2221,6 +2176,7 @@ function buildPrompt(text, kind, meta = {}) {
     '',
     'Formatting and punctuation preservation',
     '- Preserve all original punctuation and formatting exactly as written. Do not replace, remove, or convert quotation marks, asterisks, dashes, brackets, or other symbols.',
+    '- Protected tokens such as ⟪PDH_0001⟫ are immutable formatting delimiters. Copy each token exactly once, in the same order and position around the translated text; never translate, replace, omit, merge, or move one.',
     '- Text enclosed in asterisks must remain enclosed in the same asterisks and must never be changed into quotation marks or another wrapper.',
     '- In bilingual modes, only the Korean translation brackets required by the selected layout may be added. Every original source symbol must otherwise remain unchanged and serve the same formatting role.',
     '',
@@ -2812,7 +2768,6 @@ function messagePayloadFromTarget(target) {
   }
   if (mes && $(mes).closest('.pd-popover,.pd-modal,.pd-modal-backdrop,.pd-menu,.pd-selection-bubble,#extensions_settings,#extensions_settings2').length) return null;
   if (msg?.is_system && !pdShouldIncludeHiddenChatRecord(msg, mes)) return null;
-  const swipeStateChanged = pdSyncSwipeState({ mes, msg, idx, textEl });
 
   if (!textEl.length && mes) textEl = $(mes);
   const sceneBoardText = sceneBoardSourceText({ msg });
@@ -2885,7 +2840,6 @@ function applyPersistedMessageTranslation(payload, btn=null) {
   // that can re-render every visible message, trigger render hooks again, and make
   // long chats feel frozen. Display updates happen only on explicit translation
   // toggles/retranslations; normal SillyTavern rendering owns extra.display_text.
-  pdSyncSwipeState(payload);
   const data = variantForPayload(payload, false);
   const { root, key, state } = data;
   const preferredKey = state?.activeMode || translationCacheKey(settings.chatMode || 'full');
@@ -2967,19 +2921,36 @@ function setupMessageButtonObserver() {
   try { pdGlobalState.messageButtonObserver?.disconnect?.(); } catch {}
 
   const observer = new MutationObserver((mutations) => {
+    const affectedMessages = new Set();
     let needsScopedHydration = false;
+    const rememberMessage = (node) => {
+      if (!node) return;
+      const element = node.nodeType === 1 ? node : node.parentElement;
+      const mes = element?.matches?.('.mes') ? element : element?.closest?.('.mes');
+      if (mes) affectedMessages.add(mes);
+    };
     for (const mutation of mutations) {
+      const target = mutation.target?.nodeType === 1 ? mutation.target : mutation.target?.parentElement;
+      const targetIsMessageMeta = !!target?.closest?.('.mesIDDisplay, .tokenCounterDisplay, .mes_timer');
+      if (targetIsMessageMeta) rememberMessage(target);
       for (const node of mutation.addedNodes || []) {
         if (!node || node.nodeType !== 1) continue;
-        if (node.matches?.('.mes')) ensureMessageTranslateButton(node);
+        if (node.matches?.('.mes')) affectedMessages.add(node);
         else if (node.querySelector?.('.mes')) needsScopedHydration = true;
+        if (node.matches?.('.mesIDDisplay, .tokenCounterDisplay, .mes_timer') || node.querySelector?.('.mesIDDisplay, .tokenCounterDisplay, .mes_timer')) rememberMessage(node);
+      }
+      for (const node of mutation.removedNodes || []) {
+        if (!node || node.nodeType !== 1) continue;
+        if (node.matches?.('.pd-message-translate-btn') || node.querySelector?.('.pd-message-translate-btn')) rememberMessage(target);
       }
     }
+    affectedMessages.forEach(mes => ensureMessageTranslateButton(mes));
     if (needsScopedHydration) queueMessageButtonHydration(chatEl);
   });
-  // Watch only chat-level additions. Subtree watching sees every tiny child node
-  // created during message rendering and can snowball on long chats.
-  observer.observe(chatEl, { childList: true, subtree: false });
+  // SillyTavern can rebuild only the metadata row inside an existing message during a swipe.
+  // Observe the chat subtree, but react only to message nodes, metadata anchors, or removal of
+  // Phrase Desk's own control; ordinary text rendering does not trigger a full-chat scan.
+  observer.observe(chatEl, { childList: true, subtree: true });
   pdGlobalState.messageButtonObserver = observer;
   pdGlobalState.messageButtonObserverTarget = chatEl;
 }
@@ -3005,8 +2976,6 @@ function applyMessageDisplayText(payload, value = '') {
   } else {
     msg.extra.display_text = displayValue;
   }
-  const swipeId = pdSwipeId(msg);
-  if (swipeId !== null) msg.extra.phraseDeskSwipeId = swipeId;
   if (msg.extra.display_text && msg.mes === msg.extra.display_text && msg.extra.original_mes) {
     msg.mes = msg.extra.original_mes;
   }
@@ -3087,6 +3056,8 @@ function refreshPayloadMessageReference(payload, expectedOriginal = '') {
 function applyCommittedTranslationToMessage(msg, cloned, original = '') {
   if (!msg || !cloned) return;
   msg.extra = msg.extra || {};
+  delete msg.extra.phraseDeskSwipeTranslations;
+  delete msg.extra.phraseDeskSwipeId;
   msg.extra.phraseDesk = clonePhraseStore(cloned);
   const active = cloned.variants?.[cloned.activeKey] || null;
   const picked = active?.showing ? pickCachedMessageTranslation(active, active.activeMode || translationCacheKey(settings.chatMode || 'full')).text : '';
@@ -3095,18 +3066,6 @@ function applyCommittedTranslationToMessage(msg, cloned, original = '') {
   if (preservedOriginal && (!msg.extra.phraseDeskOriginal || pdIsKnownTranslationText(msg, msg.extra.phraseDeskOriginal))) msg.extra.phraseDeskOriginal = String(preservedOriginal);
   if (picked) msg.extra.display_text = String(displayTranslationText(picked, active?.activeMode || settings.chatMode || 'full'));
   else if (active && !active.showing) delete msg.extra.display_text;
-  const swipeId = pdSwipeId(msg);
-  if (swipeId !== null) {
-    msg.extra.phraseDeskSwipeId = swipeId;
-    const swipeStore = pdSwipeStore(msg, true);
-    swipeStore[swipeId] = {
-      original_mes: msg.extra.original_mes || '',
-      phraseDeskOriginal: msg.extra.phraseDeskOriginal || msg.extra.original_mes || '',
-      display_text: msg.extra.display_text || '',
-      phraseDesk: clonePhraseStore(cloned),
-      updatedAt: Date.now(),
-    };
-  }
   if (msg.extra.display_text && msg.mes === msg.extra.display_text && msg.extra.original_mes) msg.mes = msg.extra.original_mes;
 }
 function scheduleCommittedTranslationStabilization(payload, store, expectedOriginal = '') {
@@ -3142,7 +3101,6 @@ function commitMessageTranslation(payload, store) {
   const active = cloned.variants?.[cloned.activeKey] || null;
   const expectedOriginal = active?.original || cloned.original || currentMessageOriginal(payload) || '';
   refreshPayloadMessageReference(payload, expectedOriginal);
-  if (payload.mes) payload.mes.__pdTranslation = clonePhraseStore(cloned);
   if (payload.msg) {
     applyCommittedTranslationToMessage(payload.msg, cloned, expectedOriginal);
     persistChatCache('translation-commit');
@@ -3154,7 +3112,6 @@ async function translateMessagePayload(payload, forceRetranslate = false, option
   if (messageBusy && !options.auto) return;
   if (!payload) return toast('번역할 메시지를 찾지 못했습니다.', 'warn');
   refreshPayloadMessageReference(payload);
-  pdSyncSwipeState(payload);
   const kind = settings.chatMode || 'full';
   const tKey = translationCacheKey(kind);
   const btn = payload.mes ? $(payload.mes).find('.pd-message-translate-btn').first() : $();
@@ -3291,7 +3248,6 @@ async function translateMessagePayload(payload, forceRetranslate = false, option
   state.source = payload.source;
   state.updatedAt = Date.now();
   state.version = (state.version || 0) + 1;
-  state.swipeId = payload?.msg?.swipe_id;
   root.activeKey = data.key;
   root.original = original;
   root.originalHash = hash(original || '');
@@ -3438,7 +3394,6 @@ function messagePayloadFromChatIndex(idx) {
   const text = sourceText || sceneBoardText;
   if (!norm(text) || !/[A-Za-z가-힣]/.test(text)) return null;
   const payload = { mes, msg, idx, textEl, text, bodyText:sourceText, sceneBoardText, source: noteSource(mes, msg) };
-  pdSyncSwipeState(payload);
   return payload;
 }
 function renderedChatMessagePayloads() {
@@ -3827,13 +3782,36 @@ function addNote(n) {
   settings.notebook.unshift(note); saveSettings(true); updateSavedCount(); return note;
 }
 function updateSavedCount(){ $('#phrase-desk-settings .pd-settings-foot span').html(`<b>${settings.notebook.length}</b>개 표현 저장됨`); }
+function clearPhraseDeskCacheFromExtra(extra) {
+  if (!extra || typeof extra !== 'object') return 0;
+  const hadPhraseDeskData = !!(
+    extra.phraseDesk || extra.phraseDeskOriginal ||
+    extra.phraseDeskSwipeTranslations || extra.phraseDeskSwipeId !== undefined
+  );
+  if (!hadPhraseDeskData) return 0;
+  delete extra.phraseDesk;
+  delete extra.phraseDeskOriginal;
+  delete extra.phraseDeskSwipeTranslations;
+  delete extra.phraseDeskSwipeId;
+  delete extra.display_text;
+  delete extra.original_mes;
+  return 1;
+}
+function clearPhraseDeskCacheFromMessage(msg) {
+  if (!msg || typeof msg !== 'object') return 0;
+  let count = clearPhraseDeskCacheFromExtra(msg.extra);
+  for (const info of Array.isArray(msg.swipe_info) ? msg.swipe_info : []) {
+    count += clearPhraseDeskCacheFromExtra(info?.extra);
+  }
+  return count;
+}
 async function clearCurrentChatTranslationCache(){
   if (!confirm('이 채팅방의 Phrase Desk 번역 캐시를 삭제할까요?')) return;
   let count = 0;
   const chat = Array.isArray(ctx?.chat) ? ctx.chat : [];
   $('.mes').each(function(){
     const payload = messagePayloadFromTarget(this);
-    const stored = payload?.msg?.extra?.phraseDesk || payload?.mes?.__pdTranslation;
+    const stored = payload?.msg?.extra?.phraseDesk;
     if (stored?.original && stored.showing && payload?.textEl?.length) {
       try { setMessageText(payload, stored.original, 'none'); } catch {}
       $(this).find('.pdb-message-translate-btn,.pd-message-translate-btn').removeClass('translated busy');
@@ -3841,10 +3819,7 @@ async function clearCurrentChatTranslationCache(){
     try { applySceneBoardOriginal(payload); } catch {}
   });
   for (const msg of chat) {
-    if (msg?.extra?.phraseDesk) {
-      delete msg.extra.phraseDesk;
-      count++;
-    }
+    count += clearPhraseDeskCacheFromMessage(msg);
     if (msg?.extra?.sceneBoard?.phraseDesk) {
       const original = msg.extra.sceneBoard.phraseDesk.original;
       if (original) msg.extra.sceneBoard.text = original;
@@ -4961,6 +4936,38 @@ function maybeAutoTranslateRenderedMessage(roleHint, args = []) {
 }
 
 
+
+function clearPhraseDeskTranslationAfterMessageUpdate(payload, args = []) {
+  let msg = payload?.msg || null;
+  let idx = messageIndexForPayload(payload);
+  if (!msg) {
+    for (const arg of args) {
+      const candidate = Number(arg?.mesid ?? arg?.messageId ?? arg?.index ?? arg?.id ?? arg);
+      if (Number.isFinite(candidate)) { idx = candidate; break; }
+    }
+    if (Number.isFinite(idx) && idx >= 0) {
+      const live = liveContext();
+      const chat = Array.isArray(live?.chat) ? live.chat : (Array.isArray(ctx?.chat) ? ctx.chat : []);
+      msg = chat[idx] || null;
+    }
+  }
+  if (!msg?.extra) return false;
+  const hadPhraseDeskTranslation = !!(
+    msg.extra.phraseDesk || msg.extra.original_mes || msg.extra.phraseDeskOriginal ||
+    msg.extra.phraseDeskSwipeTranslations || msg.extra.phraseDeskSwipeId !== undefined
+  );
+  if (!hadPhraseDeskTranslation) return false;
+  delete msg.extra.phraseDesk;
+  delete msg.extra.display_text;
+  delete msg.extra.original_mes;
+  delete msg.extra.phraseDeskOriginal;
+  delete msg.extra.phraseDeskSwipeTranslations;
+  delete msg.extra.phraseDeskSwipeId;
+  if (payload?.mes) $(payload.mes).find('.pd-message-translate-btn').removeClass('translated busy');
+  persistChatCache('message-edit-clear');
+  return true;
+}
+
 function setupMessageRenderHooks() {
   const es = ctx?.eventSource;
   const et = ctx?.event_types || ctx?.eventTypes || {};
@@ -4981,6 +4988,7 @@ function setupMessageRenderHooks() {
         // observer as soon as SillyTavern actually renders or switches a chat.
         setupMessageButtonObserver();
         const payload = payloadFromEventArgs(args);
+        if (key === 'MESSAGE_UPDATED') clearPhraseDeskTranslationAfterMessageUpdate(payload, args);
         if (payload?.mes) {
           ensureMessageTranslateButton(payload.mes);
           schedulePhraseDeskRenderDecoration(payload, key);
@@ -4990,6 +4998,12 @@ function setupMessageRenderHooks() {
             queueMessageButtonHydration(document.getElementById('chat') || document);
             if (settings.bilingualBlur || settings.bilingualNotes) reapplyVisiblePhraseDeskTranslations();
           }, 250);
+        } else if (key === 'MESSAGE_SWIPED' || key === 'MESSAGE_UPDATED') {
+          setTimeout(() => {
+            const refreshed = payloadFromEventArgs(args);
+            if (refreshed?.mes) ensureMessageTranslateButton(refreshed.mes);
+            else queueMessageButtonHydration(document.getElementById('chat') || document);
+          }, 40);
         }
         if (roleHint === 'char' || roleHint === 'user') maybeAutoTranslateRenderedMessage(roleHint, args);
       };
@@ -4999,12 +5013,13 @@ function setupMessageRenderHooks() {
       console.warn('[Phrase Desk] event hook bind failed', key, e);
     }
   };
-  // Minimal hook set: rendered user/character messages for button restore and optional auto translation,
-  // plus chat change for one light hydration pass. Broad update/swipe hooks are intentionally
-  // not bound because they can fire in bursts while SillyTavern is rebuilding a long chat.
+  // Render hooks restore controls on new messages; swipe/update hooks are narrow fallbacks for
+  // cases where SillyTavern replaces only an existing message's metadata row.
   bind('CHAT_CHANGED', '');
   bind('CHARACTER_MESSAGE_RENDERED', 'char');
   bind('USER_MESSAGE_RENDERED', 'user');
+  bind('MESSAGE_SWIPED', '');
+  bind('MESSAGE_UPDATED', '');
   pdGlobalState.messageRenderHooksBound = true;
 }
 
