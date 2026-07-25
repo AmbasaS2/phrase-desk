@@ -12,7 +12,7 @@ const IS_BETA = false;
 const SHOW_DEBUG = true;
 const MAX_TOKENS = 8000;
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.3.10";
+const PD_VERSION = "1.3.9";
 const PD_GLOBAL_KEY = "__PHRASE_DESK_GLOBAL_STATE__";
 const pdGlobalState = globalThis[PD_GLOBAL_KEY] && typeof globalThis[PD_GLOBAL_KEY] === 'object'
   ? globalThis[PD_GLOBAL_KEY]
@@ -331,16 +331,6 @@ function annotateTranslationStructure(value = '', options = {}) {
   }
   return { text:out, anchors };
 }
-function quoteDelimiterShape(value = '') {
-  const source = String(value || '').replace(/\r\n/g, '\n');
-  const mask = sourceStructureMask(source);
-  const out = [];
-  for (let i = 0; i < source.length; i++) {
-    if (mask[i] || isEscapedSourceChar(source, i)) continue;
-    if ('"“”「」『』'.includes(source[i])) out.push(source[i]);
-  }
-  return out;
-}
 function squareTranslationBlocks(value = '') {
   const text = String(value || '');
   const blocks = [];
@@ -420,7 +410,6 @@ function restoreTranslationStructureAnchors(value = '', source = '', anchors = [
     if (openIndex < 0 || closeIndex < 0 || closeIndex < openIndex || out.indexOf(anchor.openTag, openIndex + anchor.openTag.length) >= 0 || out.indexOf(anchor.closeTag, closeIndex + anchor.closeTag.length) >= 0) {
       // Never hide a non-empty translation because the model damaged an internal format anchor.
       // Remove any stray internal tags and keep the model's visible text as-is.
-      logDebug({ type:'translation-structure-warning', warning:'anchor-missing-or-duplicated', anchorType:anchor.type });
       out = out.split(anchor.openTag).join('').split(anchor.closeTag).join('');
       continue;
     }
@@ -437,7 +426,6 @@ function restoreTranslationStructureAnchors(value = '', source = '', anchors = [
           replacement = `${anchor.open}${String(anchor.body || '').replace(/\s+$/g, '')} [${ko}]${anchor.close}`;
         } else {
           // Best effort only: preserve the returned text instead of rejecting the whole translation.
-          logDebug({ type:'translation-structure-warning', warning:'bilingual-korean-not-found' });
           replacement = `${anchor.open}${inside.trim()}${anchor.close}`;
         }
       } else {
@@ -463,14 +451,7 @@ function restoreTranslationStructureAnchors(value = '', source = '', anchors = [
     out = before + replacement + after;
   }
   if (/<\/?pd-fmt-[^>]+>/i.test(out)) {
-    logDebug({ type:'translation-structure-warning', warning:'stray-format-anchor-removed' });
     out = out.replace(/<\/?pd-fmt-[^>]+>/gi, '');
-  }
-  if (!sameTokenList(markdownEmphasisShape(source), markdownEmphasisShape(out))) {
-    logDebug({ type:'translation-structure-warning', warning:'markdown-emphasis-shape' });
-  }
-  if (!sameTokenList(quoteDelimiterShape(source), quoteDelimiterShape(out))) {
-    logDebug({ type:'translation-structure-warning', warning:'quote-delimiter-shape' });
   }
   return out;
 }
@@ -546,40 +527,6 @@ function protectTranslationFormat(text = '', options = {}) {
 
       const htmlLocks = locks.filter(([, , kind]) => kind !== 'paragraph');
       const paragraphLocks = locks.filter(([, , kind]) => kind === 'paragraph');
-      const sourceParagraphTokens = paragraphLocks.map(([token]) => token);
-      const resultParagraphTokens = paragraphBreakTokens(restored);
-      if (sourceParagraphTokens.length && !sameTokenList(sourceParagraphTokens, resultParagraphTokens)) {
-        // Keep the non-empty translation visible even when the model merges or moves paragraphs.
-        logDebug({
-          type:'translation-structure-warning',
-          warning:'paragraph-break-token',
-          expectedTokens:sourceParagraphTokens.length,
-          receivedTokens:resultParagraphTokens.length,
-        });
-      }
-
-      const sourceHtmlTokens = htmlLocks.map(([token]) => token);
-      const resultHtmlTokens = protectedFormatTokens(restored);
-      if (sourceHtmlTokens.length && !sameTokenList(sourceHtmlTokens, resultHtmlTokens)) {
-        // Plain HTML-only messages can still use the existing local skeleton repair. For mixed
-        // Markdown/paragraph cases, preserve the returned text rather than rejecting it.
-        if (!paragraphLocks.length && !annotated.anchors.length) {
-          restored = rebuildProtectedFormatSkeleton(out, restored);
-          logDebug({
-            type: 'translation-structure-warning',
-            warning: 'protected-format-token-rebuilt',
-            expectedTokens: sourceHtmlTokens.length,
-            receivedTokens: resultHtmlTokens.length,
-          });
-        } else {
-          logDebug({
-            type:'translation-structure-warning',
-            warning:'protected-format-token-mismatch',
-            expectedTokens:sourceHtmlTokens.length,
-            receivedTokens:resultHtmlTokens.length,
-          });
-        }
-      }
 
       for (const [token, raw] of paragraphLocks) {
         const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -599,76 +546,6 @@ function stripProtectedFormatTokenVariants(value = '') {
     '',
   );
 }
-
-function preferredTextBoundary(text = '', target = 0, minimum = 0) {
-  const source = String(text || '');
-  if (target <= minimum) return minimum;
-  if (target >= source.length) return source.length;
-  const radius = Math.min(320, Math.max(80, Math.floor(source.length * 0.08)));
-  const from = Math.max(minimum + 1, target - radius);
-  const to = Math.min(source.length - 1, target + radius);
-  const candidates = [];
-  for (let i = from; i <= to; i++) {
-    const prev = source[i - 1] || '';
-    const next = source[i] || '';
-    let rank = 99;
-    if (prev === '\n' && next === '\n') rank = 0;
-    else if (prev === '\n') rank = 1;
-    else if (/[.!?。！？…]/.test(prev) && /\s/.test(next)) rank = 2;
-    else if (/[,;:，；：]/.test(prev) && /\s/.test(next)) rank = 3;
-    else if (/\s/.test(prev) || /\s/.test(next)) rank = 4;
-    if (rank < 99) candidates.push({ i, rank, distance: Math.abs(i - target) });
-  }
-  candidates.sort((a, b) => a.rank - b.rank || a.distance - b.distance);
-  return candidates[0]?.i ?? Math.max(minimum, Math.min(source.length, target));
-}
-
-function splitTranslatedTextByWeights(value = '', weights = []) {
-  const text = String(value || '');
-  if (!weights.length) return [];
-  if (weights.length === 1) return [text];
-  const positive = weights.map(x => Math.max(1, Number(x) || 1));
-  const totalWeight = positive.reduce((sum, x) => sum + x, 0);
-  const out = [];
-  let cursor = 0;
-  let cumulative = 0;
-  for (let i = 0; i < positive.length - 1; i++) {
-    cumulative += positive[i];
-    const target = Math.round(text.length * (cumulative / totalWeight));
-    const cut = preferredTextBoundary(text, target, cursor);
-    out.push(text.slice(cursor, cut));
-    cursor = cut;
-  }
-  out.push(text.slice(cursor));
-  return out;
-}
-
-function rebuildProtectedFormatSkeleton(sourceProtected = '', translatedValue = '') {
-  const source = String(sourceProtected || '');
-  const parts = source.split(/(⟪PDH_\d{4}⟫)/g);
-  const textSlotIndexes = [];
-  const weights = [];
-  for (let i = 0; i < parts.length; i += 2) {
-    const slot = String(parts[i] || '');
-    if (!slot.trim()) continue;
-    textSlotIndexes.push(i);
-    weights.push(Math.max(1, slot.trim().length));
-  }
-  if (!textSlotIndexes.length) return source;
-
-  const translatedPlain = stripProtectedFormatTokenVariants(translatedValue).trim();
-  if (!translatedPlain) return source;
-  const chunks = splitTranslatedTextByWeights(translatedPlain, weights);
-  const rebuilt = [...parts];
-  textSlotIndexes.forEach((partIndex, idx) => {
-    const originalSlot = String(parts[partIndex] || '');
-    const leading = originalSlot.match(/^\s*/)?.[0] || '';
-    const trailing = originalSlot.match(/\s*$/)?.[0] || '';
-    rebuilt[partIndex] = `${leading}${String(chunks[idx] || '').trim()}${trailing}`;
-  });
-  return rebuilt.join('');
-}
-
 
 function isFullSeparateMode(kind) {
   return kind === 'full' && (settings.bilingualStyle || 'side_sentence') === 'separate';
@@ -1439,56 +1316,6 @@ function extractAIText(res) {
   for (const c of candidates) if (typeof c === 'string' && c.trim()) return c;
   return '';
 }
-function collectExactTokens(value = '', regex) {
-  const out = [];
-  const source = String(value || '');
-  regex.lastIndex = 0;
-  let match;
-  while ((match = regex.exec(source))) out.push(match[0]);
-  return out.sort();
-}
-function sameTokenList(a = [], b = []) {
-  return a.length === b.length && a.every((value, index) => value === b[index]);
-}
-function containsTokenMultiset(container = [], required = []) {
-  const counts = new Map();
-  for (const value of container) counts.set(value, (counts.get(value) || 0) + 1);
-  for (const value of required) {
-    const left = counts.get(value) || 0;
-    if (left < 1) return false;
-    counts.set(value, left - 1);
-  }
-  return true;
-}
-function htmlTagShape(value = '') {
-  const out = [];
-  const source = String(value || '');
-  const regex = /<\s*(\/?)\s*([A-Za-z][\w:-]*)\b[^>]*?(\/?)\s*>/g;
-  let match;
-  while ((match = regex.exec(source))) {
-    const name = String(match[2] || '').toLowerCase();
-    if (name === 'source_text' || name === 'source_entry') continue;
-    out.push(`${match[1] ? '/' : ''}${name}${match[3] ? '/' : ''}`);
-  }
-  return out;
-}
-function protectedAttributeTokens(value = '') {
-  const out = [];
-  const source = String(value || '');
-  const regex = /\b(id|class|href|src|data-[\w:-]+)\s*=\s*(["'])(.*?)\2/gi;
-  let match;
-  while ((match = regex.exec(source))) out.push(`${String(match[1] || '').toLowerCase()}=${String(match[3] || '')}`);
-  return out.filter(Boolean).sort();
-}
-function codeFenceShape(value = '') {
-  const out = [];
-  for (const line of String(value || '').replace(/\r\n/g, '\n').split('\n')) {
-    const match = line.match(/^\s*(`{3,}|~{3,})([^`]*)$/);
-    if (!match) continue;
-    out.push(`${match[1][0]}${match[1].length}:${String(match[2] || '').trim()}`);
-  }
-  return out;
-}
 function protectedFormatTokens(value = '') {
   return String(value || '').match(/⟪PDH_\d{4}⟫/g) || [];
 }
@@ -1510,41 +1337,6 @@ function normalizeParagraphBreakTokenVariants(value = '', sourceText = '') {
     },
   );
 }
-function markdownEmphasisShape(value = '') {
-  const lines = String(value || '').replace(/\r\n/g, '\n').split('\n');
-  const out = [];
-  let fence = '';
-  for (const rawLine of lines) {
-    const fenceMatch = rawLine.match(/^\s*(`{3,}|~{3,})/);
-    if (fenceMatch) {
-      const marker = fenceMatch[1][0];
-      if (!fence) fence = marker;
-      else if (fence === marker) fence = '';
-      continue;
-    }
-    if (fence) continue;
-    if (/^\s*(?:\*\s*){3,}$/.test(rawLine)) continue;
-
-    const line = String(rawLine || '')
-      .replace(/`[^`]*`/g, match => ' '.repeat(match.length))
-      .replace(/<[^>]*>/g, match => ' '.repeat(match.length));
-    const bullet = line.match(/^\s*\*\s+/);
-    const bulletIndex = bullet ? bullet[0].indexOf('*') : -1;
-
-    for (let i = 0; i < line.length;) {
-      if (line[i] !== '*') { i += 1; continue; }
-      let slashCount = 0;
-      for (let j = i - 1; j >= 0 && line[j] === '\\'; j--) slashCount += 1;
-      if (slashCount % 2 === 1) { i += 1; continue; }
-      let j = i + 1;
-      while (line[j] === '*') j += 1;
-      const run = j - i;
-      if (!(i === bulletIndex && run === 1)) out.push(`*${run}`);
-      i = j;
-    }
-  }
-  return out;
-}
 function normalizeProtectedFormatTokenVariants(value = '', sourceText = '') {
   const sourceTokens = protectedFormatTokens(sourceText);
   if (!sourceTokens.length) return String(value || '');
@@ -1559,62 +1351,6 @@ function normalizeProtectedFormatTokenVariants(value = '', sourceText = '') {
       return `${leading}${token}${trailing}`;
     },
   );
-}
-function languageCounts(value = '') {
-  const text = String(value || '').replace(/<[^>]+>/g, ' ');
-  return {
-    ko: (text.match(/[가-힣]/g) || []).length,
-    en: (text.match(/[A-Za-z]/g) || []).length,
-  };
-}
-function looksLikeReversedBilingual(sourceText = '', resultText = '', kind = '') {
-  if (String(kind || '') !== 'full' || (settings.bilingualStyle || 'side_sentence') === 'separate') return false;
-  const sourceCounts = languageCounts(sourceText);
-  if (sourceCounts.en < 4 || sourceCounts.en <= sourceCounts.ko) return false;
-  const result = String(resultText || '');
-  const firstBracket = result.match(/\[([^\]\n]{1,800})\]/);
-  if (!firstBracket) return false;
-  const before = result.slice(0, firstBracket.index).replace(/⟪PDH_\d{4}⟫/g, ' ');
-  const beforeCounts = languageCounts(before);
-  const bracketCounts = languageCounts(firstBracket[1]);
-  return beforeCounts.ko >= 2 && beforeCounts.ko > beforeCounts.en && bracketCounts.en >= 3 && bracketCounts.en > bracketCounts.ko;
-}
-function translationStructureIssues(sourceText = '', resultText = '', meta = {}) {
-  const source = String(sourceText || '');
-  const result = String(resultText || '');
-  if (!source.trim() || !result.trim()) return result.trim() ? [] : ['empty'];
-  const issues = [];
-  const sourceFences = codeFenceShape(source);
-  const resultFences = codeFenceShape(result);
-  if (!sameTokenList(sourceFences, resultFences)) issues.push('code-fence-shape');
-
-  const sourceMacros = collectExactTokens(source, /\{\{[\s\S]*?\}\}|<(?:user|char)>/gi);
-  const resultMacros = collectExactTokens(result, /\{\{[\s\S]*?\}\}|<(?:user|char)>/gi);
-  if (!containsTokenMultiset(resultMacros, sourceMacros)) issues.push('macro-or-placeholder');
-
-  const sourceUrls = collectExactTokens(source, /https?:\/\/[^\s<>"')\]]+/gi);
-  const resultUrls = collectExactTokens(result, /https?:\/\/[^\s<>"')\]]+/gi);
-  if (!containsTokenMultiset(resultUrls, sourceUrls)) issues.push('url');
-
-  const sourceProtected = protectedFormatTokens(source);
-  if (sourceProtected.length && !sameTokenList(sourceProtected, protectedFormatTokens(result))) issues.push('protected-format-token');
-
-  const sourceParagraphs = paragraphBreakTokens(source);
-  if (sourceParagraphs.length && !sameTokenList(sourceParagraphs, paragraphBreakTokens(result))) issues.push('paragraph-break-token');
-
-  const sourceEmphasis = markdownEmphasisShape(source);
-  if (!sameTokenList(sourceEmphasis, markdownEmphasisShape(result))) issues.push('markdown-emphasis-shape');
-
-  if (looksLikeStructuralHtml(source)) {
-    const sourceTags = htmlTagShape(source);
-    const resultTags = htmlTagShape(result);
-    if (!sameTokenList(sourceTags, resultTags)) issues.push('html-tag-shape');
-    const sourceAttrs = protectedAttributeTokens(source);
-    const resultAttrs = protectedAttributeTokens(result);
-    if (!containsTokenMultiset(resultAttrs, sourceAttrs)) issues.push('html-attributes');
-  }
-  if (looksLikeReversedBilingual(source, result, meta?.kind || '')) issues.push('bilingual-direction');
-  return issues;
 }
 async function callAI(prompt, maxTokens = MAX_TOKENS, meta = {}) {
   if (!requireProfile()) return '';
@@ -1634,10 +1370,6 @@ async function callAI(prompt, maxTokens = MAX_TOKENS, meta = {}) {
     const normalized = meta?.validateStructure
       ? normalizeParagraphBreakTokenVariants(normalizedHtmlTokens, meta?.sourceText || '')
       : normalizedHtmlTokens;
-    const issues = meta?.validateStructure
-      ? translationStructureIssues(meta?.sourceText || '', normalized, { kind: meta?.kind || '' })
-      : (normalized.trim() ? [] : ['empty']);
-
     // Keep debug logs safe: record lengths/status only, never prompt or translated content.
     logDebug({
       type:'ai',
@@ -1645,28 +1377,17 @@ async function callAI(prompt, maxTokens = MAX_TOKENS, meta = {}) {
       promptLength:requestPrompt.length,
       rawLength:String(text || '').length,
       resultLength:normalized.length,
-      structureIssues:issues.join(','),
+      status:normalized.trim() ? 'ok' : 'empty',
     });
 
-    if (normalized.trim()) {
-      // Format checks are diagnostic only. Never discard or hide a non-empty translation because
-      // paragraph, Markdown, quote, HTML, or bilingual structure differs from the source.
-      if (issues.length) {
-        logDebug({
-          type:'translation-structure-warning',
-          warning:issues.join(','),
-          resultLength:normalized.length,
-        });
-      }
-      return normalized;
-    }
+    if (normalized.trim()) return normalized;
 
     const error = new Error('empty response');
-    logDebug({ type:'error', error:error.message, promptLength:requestPrompt.length, structureIssues:issues.join(',') });
+    logDebug({ type:'error', error:error.message, promptLength:requestPrompt.length });
     toast(`요청 실패: ${error.message}`, 'error');
     return '';
   } catch (e) {
-    logDebug({ type:'error', error:e?.message || String(e), promptLength:requestPrompt.length, structureIssues:'' });
+    logDebug({ type:'error', error:e?.message || String(e), promptLength:requestPrompt.length });
     toast(`요청 실패: ${e?.message || e || '알 수 없는 오류'}`, 'error');
     return '';
   }
