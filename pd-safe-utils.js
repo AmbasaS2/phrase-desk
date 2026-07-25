@@ -150,68 +150,27 @@ function stripTranslationWrapper(value = '') {
   return text;
 }
 
-function quoteLanguageProfile(value = '') {
-  const text = String(value || '');
-  return {
-    target: (text.match(/[가-힣ぁ-んァ-ヶ一-龥]/g) || []).length,
-    latin: (text.match(/[A-Za-z]/g) || []).length,
-  };
-}
-
-function cleanQuoteLanguagePiece(value = '') {
-  return stripTranslationWrapper(String(value || ''))
-    .replace(/[ \t]{2,}/g, ' ')
-    .replace(/\s+([,.;!?…])/g, '$1')
-    .trim();
-}
-
 function mergeQuoteTranslation(content = '', outsideTranslation = '') {
-  const blocks = [];
-  let outside = '';
+  const translations = [];
+  let source = '';
   let cursor = 0;
   const text = String(content || '');
   for (let i = 0; i < text.length; i++) {
     if (text[i] !== '[') continue;
     const block = readSquareBlock(text, i);
     if (!block) continue;
-    outside += text.slice(cursor, i) + ' ';
-    blocks.push(cleanQuoteLanguagePiece(block.body));
+    const body = stripTranslationWrapper(block.body);
+    if (!TARGET_TEXT_RE.test(body)) continue;
+    source += text.slice(cursor, i);
+    translations.push(body);
     cursor = block.end;
     i = block.end - 1;
   }
-  outside += text.slice(cursor);
-  outside = cleanQuoteLanguagePiece(outside);
-
-  const outsideProfile = quoteLanguageProfile(outside);
-  const targetBlocks = blocks.filter(x => {
-    const p = quoteLanguageProfile(x);
-    return p.target > 0 && p.target >= p.latin;
-  });
-  const latinBlocks = blocks.filter(x => {
-    const p = quoteLanguageProfile(x);
-    return p.latin > 0 && p.latin > p.target;
-  });
-  const detached = cleanQuoteLanguagePiece(outsideTranslation);
-  if (detached && quoteLanguageProfile(detached).target > 0) targetBlocks.push(detached);
-
-  let source = '';
-  let translated = '';
-  if (outsideProfile.latin > 0 && outsideProfile.latin >= outsideProfile.target) {
-    source = outside;
-    translated = targetBlocks.join(' ');
-  } else if (outsideProfile.target > 0 && latinBlocks.length) {
-    source = latinBlocks.join(' ');
-    translated = [outside, ...targetBlocks].filter(Boolean).join(' ');
-  } else {
-    const allLatin = [outsideProfile.latin > outsideProfile.target ? outside : '', ...latinBlocks].filter(Boolean);
-    const allTarget = [outsideProfile.target >= outsideProfile.latin ? outside : '', ...targetBlocks].filter(Boolean);
-    source = allLatin.join(' ');
-    translated = allTarget.join(' ');
-  }
-
-  source = cleanQuoteLanguagePiece(source);
-  translated = cleanQuoteLanguagePiece(translated);
-  if (!translated || !LATIN_TEXT_RE.test(source) || !TARGET_TEXT_RE.test(translated)) return null;
+  source += text.slice(cursor);
+  if (outsideTranslation) translations.push(stripTranslationWrapper(outsideTranslation));
+  source = source.replace(/[ \t]{2,}/g, ' ').replace(/\s+([,.;!?])/g, '$1').trim();
+  const translated = translations.filter(Boolean).join(' ').trim();
+  if (!translated || !LATIN_TEXT_RE.test(source)) return null;
   return `${source} [${translated}]`;
 }
 
@@ -229,7 +188,7 @@ function findClosingQuote(text = '', start = 0, close = '"') {
 // both a dialogue quote and a Korean/Japanese/Chinese bracket are present.
 export function normalizeBilingualQuotes(value = '') {
   const text = String(value || '');
-  if (!text || !LATIN_TEXT_RE.test(text) || !TARGET_TEXT_RE.test(text) || !/["“「『]/.test(text) || !/\[[^\]\n]*\]/.test(text)) return text;
+  if (!text || !LATIN_TEXT_RE.test(text) || !TARGET_TEXT_RE.test(text) || !/["“「『]/.test(text) || !/\[[^\]\n]*[가-힣ぁ-んァ-ヶ一-龥]/.test(text)) return text;
 
   const quotePairs = { '"': '"', '“': '”', '「': '」', '『': '』' };
   let out = '';
