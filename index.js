@@ -1885,6 +1885,21 @@ function safeTranslationPostprocess(value = '', original = '', kind = '') {
   return out;
 }
 
+// Chat translation uses the source text exactly as written. It performs only wrapper/preamble
+// cleanup and deterministic bilingual-quote normalization; it never reconstructs Markdown,
+// code fences, paragraph breaks, quotation marks, emphasis, or HTML from the original.
+function safeChatTranslationPostprocess(value = '', original = '', kind = '') {
+  const received = String(value || '');
+  let out = cleanTranslationArtifacts(received, original, { detectFailure: false });
+  if (!out.trim() && received.trim()) out = received.replace(/\r\n/g, '\n').trim();
+  out = normalizeDisplayFenceLanguageTags(out);
+  const mode = String(kind || '');
+  if (mode === 'full' || mode === 'dialogue' || mode.includes(':full') || mode.includes(':dialogue')) {
+    out = normalizeDialogueBilingualQuotePairs(out);
+  }
+  return out;
+}
+
 
 function shouldDecorateBilingualTranslation(kind = settings.chatMode || 'full') {
   // Accept both plain chat modes and cache keys such as google:dialogue:v1 / google:full:side_sentence:v8:v1.
@@ -2262,9 +2277,7 @@ function buildPrompt(text, kind, meta = {}) {
     '',
     'Formatting and punctuation preservation',
     '- Preserve all original punctuation and formatting exactly as written. Do not replace, remove, or convert quotation marks, asterisks, dashes, brackets, or other symbols.',
-    '- Protected tokens such as ⟪PDH_0001⟫ are immutable HTML/custom-tag delimiters. Copy each token exactly once, in the same order and position around the translated text; never translate, replace, omit, merge, or move one.',
     '- Text enclosed in asterisks must remain enclosed in the same asterisks and must never be changed into quotation marks or another wrapper.',
-    '- Paragraph markers such as ⟪PDP_0001⟫ represent exact original blank-line separators. Keep every marker exactly once, in the same order, on its own line; never translate, remove, duplicate, merge, or move one.',
     '- Markdown emphasis marks such as *...*, **...**, and ***...*** remain visible in the source. Preserve every opening and closing asterisk run exactly; do not turn it into quotation marks or attach it to a neighboring paragraph.',
     '- Text wrapped in asterisks remains wrapped in the same asterisk run around the corresponding translated or bilingual content. Never replace that wrapper with quotation marks, and never add asterisks around source text that was not emphasized.',
     '- A standalone italicized inner-thought paragraph may use source text followed by one Korean bracket inside the same original asterisks, but ordinary unmarked narration must never be converted into italicized thought.',
@@ -3295,27 +3308,24 @@ async function translateMessagePayload(payload, forceRetranslate = false, option
     if (settings.translationEngine === 'google') {
       // Google simple translation is not prompt-driven. Translate the original text directly.
       result = await callGoogleTranslationEngine(original, kind);
-      result = safeTranslationPostprocess(result, original, kind);
+      result = safeChatTranslationPostprocess(result, original, kind);
     } else {
       const separateParts = isFullSeparateMode(kind) ? splitTrailingInfoBlockForSeparate(original) : null;
       const sourceForPrompt = separateParts ? separateParts.body : original;
       // 완전분리 모드는 AI에게 RP 본문만 보내고, 원문 전체는 하단에 그대로 다시 붙입니다.
-      // HTML/custom-tag 잠금은 모든 모드에서 적용하고, 표시/저장 전에 반드시 원래 마크업으로 복원합니다.
-      const protectedSource = protectTranslationFormat(sourceForPrompt, { anchorInlineFormat:true, kind });
+      // 채팅 본문은 숨은 표식으로 치환하지 않고 원문 그대로 전달합니다.
       const promptMeta = { targetIndex: payload?.idx, targetMsg: payload?.msg, freshRetranslation: !!forceRetranslate };
-      const basePrompt = buildPrompt(protectedSource.text, kind, promptMeta);
-      let rawResult = await callAI(basePrompt, MAX_TOKENS, { sourceText: protectedSource.text, kind, validateStructure: true, retryOnFailure: true, allowAnchoredFormatRepair: protectedSource.hasAnchors });
-      let restoredResult = protectedSource.restore(rawResult);
-      restoredResult = safeTranslationPostprocess(restoredResult, original, kind);
+      const basePrompt = buildPrompt(sourceForPrompt, kind, promptMeta);
+      const rawResult = await callAI(basePrompt, MAX_TOKENS);
+      let restoredResult = safeChatTranslationPostprocess(rawResult, original, kind);
       const inventedKinship = unsupportedInventedKinshipTerms(restoredResult, sourceForPrompt, promptMeta);
       if (inventedKinship.length) {
         // Do not silently send a second translation request. Keep the first result and leave
         // retranslation under explicit user control.
         logDebug({ type:'translation-warning', warning:'unsupported-invented-kinship', count:inventedKinship.length });
       }
-      if (!separateParts && kind === 'full') restoredResult = normalizeFencedInfoBlocksInText(restoredResult);
-      result = separateParts ? finalizeSeparateBilingualResult(restoredResult, separateParts.body, separateParts.info, original) : normalizeInfoBlockBilingualResult(restoredResult, original, kind);
-      result = safeTranslationPostprocess(result, original, kind);
+      result = separateParts ? finalizeSeparateBilingualResult(restoredResult, separateParts.body, separateParts.info, original) : restoredResult;
+      result = safeChatTranslationPostprocess(result, original, kind);
     }
     await translateSceneBoardForPayload(payload, forceRetranslate);
   } catch (e) {
