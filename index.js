@@ -2617,10 +2617,12 @@ function inputEnglishResultIssues(result = '') {
   return [...new Set(issues)];
 }
 async function translateInputToEnglish(source = '') {
-  const protectedSource = protectTranslationFormat(String(source || '').trim());
+  // Input translation sends the user's text as-is. Do not insert PDP/PDH or other
+  // internal format markers into text that may be shown or sent to a translator.
+  const inputSource = String(source || '').trim();
   const run = async (strict = false) => {
-    const raw = await callTranslationEngine(buildInputTranslationPrompt(protectedSource.text, strict), 3000, { kind:'input-en', sourceText: protectedSource.text });
-    return normalizeInputEnglishResult(protectedSource.restore(raw), source);
+    const raw = await callTranslationEngine(buildInputTranslationPrompt(inputSource, strict), 3000, { kind:'input-en', sourceText: inputSource });
+    return normalizeInputEnglishResult(raw, source);
   };
   const result = await run(false);
   const issues = inputEnglishResultIssues(result);
