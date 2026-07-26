@@ -1469,7 +1469,7 @@ async function translateViaGoogleSimple(text = '', target = 'ko') {
   if (!source.trim()) return '';
   const out = [];
   const startedAt = Date.now();
-  for (const part of splitGoogleChunks(source, 1200)) {
+  for (const part of splitGoogleChunks(source, 4500)) {
     const chunk = String(part?.text || '');
     const separator = String(part?.separator || '');
     if (!chunk.trim()) { out.push(chunk + separator); continue; }
@@ -1534,6 +1534,65 @@ function insertBracketIntoQuotedSegment(segment = '', korean = '') {
   const trailing = s.match(/\s*$/)?.[0] || '';
   return `${leading}${open}${body} [${ko}]${close}${punct}${trailing}`;
 }
+function googleWholeBilingualFallback(source = '', korean = '') {
+  const src = String(source || '').replace(/\r\n/g, '\n').trimEnd();
+  const ko = String(korean || '').replace(/\r\n/g, '\n').trim();
+  if (!src) return ko;
+  if (!ko) return src;
+  return `${src}\n\n[${ko}]`;
+}
+function alignedTextUnits(source = '', korean = '', splitter) {
+  const sourceParts = splitter(String(source || '').replace(/\r\n/g, '\n'));
+  const koreanParts = splitter(String(korean || '').replace(/\r\n/g, '\n'));
+  const sourceUnits = sourceParts.filter(x => !x.sep && String(x.text || '').trim());
+  const koreanUnits = koreanParts.filter(x => !x.sep && String(x.text || '').trim());
+  if (!sourceUnits.length || sourceUnits.length !== koreanUnits.length) return null;
+  return { sourceParts, koreanUnits };
+}
+function pairGoogleUnits(source = '', korean = '', splitter, formatter) {
+  const aligned = alignedTextUnits(source, korean, splitter);
+  if (!aligned) return '';
+  let unitIndex = 0;
+  return aligned.sourceParts.map(part => {
+    if (part.sep || !String(part.text || '').trim()) return part.text;
+    const ko = aligned.koreanUnits[unitIndex++]?.text || '';
+    return formatter(part.text, ko);
+  }).join('');
+}
+function orderedQuotationSpans(text = '') {
+  const source = String(text || '').replace(/\r\n/g, '\n');
+  if (!source) return [];
+  return collectQuotationSpans(source, sourceStructureMask(source))
+    .filter(span => span && span.end > span.start)
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+}
+function buildGoogleDialogueFromWholeTranslation(source = '', korean = '') {
+  const src = String(source || '').replace(/\r\n/g, '\n');
+  const ko = String(korean || '').replace(/\r\n/g, '\n');
+  const sourceQuotes = orderedQuotationSpans(src);
+  const koreanQuotes = orderedQuotationSpans(ko);
+  if (!sourceQuotes.length || sourceQuotes.length !== koreanQuotes.length) return '';
+
+  const replacements = [];
+  for (let i = 0; i < sourceQuotes.length; i++) {
+    const sourceQuote = sourceQuotes[i];
+    const koreanQuote = koreanQuotes[i];
+    const translatedBody = String(koreanQuote.body || '').trim();
+    if (!translatedBody) return '';
+    const originalBody = String(sourceQuote.body || '').replace(/\s+$/, '');
+    replacements.push({
+      start: koreanQuote.start,
+      end: koreanQuote.end,
+      text: `${sourceQuote.open}${originalBody} [${translatedBody}]${sourceQuote.close}`,
+    });
+  }
+
+  let out = ko;
+  for (const item of replacements.sort((a, b) => b.start - a.start)) {
+    out = out.slice(0, item.start) + item.text + out.slice(item.end);
+  }
+  return out;
+}
 async function buildGoogleFullBilingual(text = '') {
   const source = String(text || '').replace(/\r\n/g, '\n');
   const style = settings.bilingualStyle || 'side_sentence';
@@ -1543,62 +1602,61 @@ async function buildGoogleFullBilingual(text = '') {
     const ko = await translateViaGoogleSimple(parts.body || source, 'ko');
     return finalizeSeparateBilingualResult(ko, parts.body || source, parts.info || '', source);
   }
+
+  // Translate the complete message once (or in a few large length-limit chunks),
+  // then align display units locally. A display-alignment miss never discards translation.
+  const ko = await translateViaGoogleSimple(source, 'ko');
+  if (!ko.trim()) return '';
+
   if (style === 'by_paragraph') {
-    const parts = splitTextWithSeparators(source, /\n{2,}/g);
-    const out = [];
-    for (const part of parts) {
-      if (part.sep || !part.text.trim()) { out.push(part.text); continue; }
-      const ko = await translateViaGoogleSimple(part.text, 'ko');
-      out.push(`${part.text.trimEnd()}\n[${ko.trim()}]`);
-    }
-    return out.join('');
+    const paired = pairGoogleUnits(
+      source,
+      ko,
+      value => splitTextWithSeparators(value, /\n{2,}/g),
+      (original, translated) => `${original.trimEnd()}\n[${String(translated || '').trim()}]${original.match(/\s*$/)?.[0] || ''}`,
+    );
+    return paired || googleWholeBilingualFallback(source, ko);
   }
   if (style === 'by_line') {
-    const lines = source.split(/(\n)/);
-    const out = [];
-    for (const line of lines) {
-      if (line === '\n' || !line.trim()) { out.push(line); continue; }
-      const ko = await translateViaGoogleSimple(line, 'ko');
-      out.push(`${line.trimEnd()}\n[${ko.trim()}]`);
+    const paired = pairGoogleUnits(
+      source,
+      ko,
+      value => splitTextWithSeparators(value, /\n/g),
+      (original, translated) => `${original.trimEnd()}\n[${String(translated || '').trim()}]${original.match(/\s*$/)?.[0] || ''}`,
+    );
+    return paired || googleWholeBilingualFallback(source, ko);
+  }
+
+  const sourceSegments = splitSentencesLight(source);
+  const koreanSegments = splitSentencesLight(ko);
+  const sourceMeaningful = sourceSegments.filter(x => String(x || '').trim() && !/^\n+$/.test(x));
+  const koreanMeaningful = koreanSegments.filter(x => String(x || '').trim() && !/^\n+$/.test(x));
+  if (!sourceMeaningful.length || sourceMeaningful.length !== koreanMeaningful.length) {
+    return googleWholeBilingualFallback(source, ko);
+  }
+
+  let index = 0;
+  return sourceSegments.map(seg => {
+    if (!String(seg || '').trim() || /^\n+$/.test(seg)) return seg;
+    const translated = koreanMeaningful[index++] || '';
+    if (style === 'below_sentence') {
+      return `${seg.trimEnd()}\n[${String(translated).trim()}]${seg.match(/\s*$/)?.[0] || ''}`;
     }
-    return out.join('');
-  }
-  const segments = style === 'below_sentence' ? splitSentencesLight(source) : splitSentencesLight(source);
-  const out = [];
-  for (const seg of segments) {
-    if (!seg.trim() || /^\n+$/.test(seg)) { out.push(seg); continue; }
-    const ko = await translateViaGoogleSimple(seg, 'ko');
-    if (style === 'below_sentence') out.push(`${seg.trimEnd()}\n[${ko.trim()}]${seg.match(/\s*$/)?.[0] || ''}`);
-    else out.push(insertBracketIntoQuotedSegment(seg, ko));
-  }
-  return out.join('');
-}
-function splitDialogueSegments(text = '') {
-  const source = String(text || '').replace(/\r\n/g, '\n');
-  const re = /(["“「『])([\s\S]*?)(["”」』])/g;
-  const parts = [];
-  let last = 0;
-  let m;
-  while ((m = re.exec(source))) {
-    if (m.index > last) parts.push({ type:'narration', text: source.slice(last, m.index) });
-    parts.push({ type:'dialogue', open:m[1], text:m[2], close:m[3] });
-    last = m.index + m[0].length;
-  }
-  if (last < source.length) parts.push({ type:'narration', text: source.slice(last) });
-  return parts;
+    return insertBracketIntoQuotedSegment(seg, translated);
+  }).join('');
 }
 async function buildGoogleDialogueBilingual(text = '') {
   const source = String(text || '').replace(/\r\n/g, '\n');
-  const parts = splitDialogueSegments(source);
-  if (!parts.some(p => p.type === 'dialogue')) return translateViaGoogleSimple(source, 'ko');
-  const out = [];
-  for (const part of parts) {
-    if (!part.text.trim()) { out.push(part.type === 'dialogue' ? `${part.open}${part.text}${part.close}` : part.text); continue; }
-    const ko = await translateViaGoogleSimple(part.text, 'ko');
-    if (part.type === 'dialogue') out.push(`${part.open}${part.text.trimEnd()} [${ko.trim()}]${part.close}`);
-    else out.push(ko.trim());
-  }
-  return out.join('');
+  if (!source.trim()) return '';
+
+  // Google sees the whole passage, so dialogue keeps its surrounding context.
+  // Straight and curly quotation marks are equivalent for matching, while the
+  // displayed bilingual quote always reuses the exact opening/closing marks
+  // from the source. If quote alignment is unclear, return the full Korean
+  // translation rather than guessing, hiding, or discarding it.
+  const ko = await translateViaGoogleSimple(source, 'ko');
+  if (!ko.trim()) return '';
+  return buildGoogleDialogueFromWholeTranslation(source, ko) || ko;
 }
 async function callGoogleTranslationEngine(sourceText = '', kind = settings.chatMode || 'full') {
   const source = String(sourceText || '');
