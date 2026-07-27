@@ -3678,9 +3678,52 @@ async function translateRenderedChatFromSlash(namedArgs = {}, unnamedArgs = '') 
   toast(msg, failed ? 'warn' : 'success');
   return `Phrase Desk: ${msg}`;
 }
+function lastMessagePayloadForSlash() {
+  const live = window.SillyTavern?.getContext?.() || ctx || {};
+  const chat = Array.isArray(live?.chat) ? live.chat : (Array.isArray(ctx?.chat) ? ctx.chat : []);
+  const lastIndex = chat.length - 1;
+  if (lastIndex >= 0) {
+    const payload = messagePayloadFromChatIndex(lastIndex);
+    if (payload) return payload;
+  }
+  try {
+    const lastRendered = $('#chat .mes, #chat_container .mes').filter(function(){
+      return !$(this).closest('.pd-popover,.pd-modal,.pd-modal-backdrop,.pd-menu,#extensions_settings,#extensions_settings2').length;
+    }).last()[0];
+    if (lastRendered) return messagePayloadFromTarget(lastRendered);
+  } catch {}
+  return null;
+}
+async function translateLastMessageFromSlash() {
+  if (messageBusy) {
+    toast('이미 메시지 번역을 처리 중입니다.', 'warn');
+    return 'Phrase Desk: message translation is already running.';
+  }
+  if (!requireTranslationReady()) {
+    return 'Phrase Desk: translation engine is not ready.';
+  }
+  const payload = lastMessagePayloadForSlash();
+  if (!payload) {
+    toast('번역할 마지막 메시지를 찾지 못했습니다.', 'warn');
+    return 'Phrase Desk: no last message found.';
+  }
+  if (payload.mes) ensureMessageTranslateButton(payload.mes);
+  const data = variantForPayload(payload, false);
+  const preferredKey = translationCacheKey(settings.chatMode || 'full');
+  const hasCachedTranslation = !!pickCachedMessageTranslation(data?.state, preferredKey).text;
+  await translateMessagePayload(payload, hasCachedTranslation, { auto:false, silent:false });
+  return `Phrase Desk: last message ${hasCachedTranslation ? 'retranslated' : 'translated'}.`;
+}
+
 function registerPhraseDeskSlashCommands() {
   if (pdGlobalState.slashCommandsRegistered) return;
   try {
+    SlashCommandParser.addCommandObject(SlashCommand.fromProps({
+      name: 'pd-translate-last',
+      callback: translateLastMessageFromSlash,
+      returns: 'Phrase Desk last message translation status',
+      helpString: '<div>마지막 메시지를 번역합니다. 현재 엔진·모드의 번역 캐시가 있으면 보존된 원문에서 새로 재번역합니다.</div>',
+    }));
     SlashCommandParser.addCommandObject(SlashCommand.fromProps({
       name: 'pd-translate-all',
       callback: translateRenderedChatFromSlash,
