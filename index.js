@@ -42,6 +42,7 @@ const defaults = {
   quizHistory: [],
   practiceHistory: [],
   characterPrompts: {},
+  characterPromptStoreVersion: 1,
   globalPrompt: '',
   lastCharacterPrompt: '',
   fontSize: 13,
@@ -59,7 +60,8 @@ settings.quizHistory = Array.isArray(settings.quizHistory) ? settings.quizHistor
 settings.practiceHistory = Array.isArray(settings.practiceHistory) ? settings.practiceHistory : [];
 settings.hiddenWrongNotes = Array.isArray(settings.hiddenWrongNotes) ? settings.hiddenWrongNotes : [];
 settings.recentPracticeNoteIds = Array.isArray(settings.recentPracticeNoteIds) ? settings.recentPracticeNoteIds : [];
-settings.characterPrompts = settings.characterPrompts && typeof settings.characterPrompts === 'object' ? settings.characterPrompts : {};
+settings.characterPrompts = settings.characterPrompts && typeof settings.characterPrompts === 'object' && !Array.isArray(settings.characterPrompts) ? settings.characterPrompts : {};
+settings.characterPromptStoreVersion = Number(settings.characterPromptStoreVersion || 1);
 settings.globalPrompt = typeof settings.globalPrompt === 'string' ? settings.globalPrompt : '';
 settings.lastCharacterPrompt = typeof settings.lastCharacterPrompt === 'string' ? settings.lastCharacterPrompt : '';
 const pdDebug = createMemoryDebugLogger();
@@ -84,6 +86,9 @@ function translationEngineKey() { return settings.translationEngine === 'google'
 let inputSession = null;
 let inputBusy = false;
 let saveTimer = null;
+const dirtyCharacterPromptNames = new Set();
+let characterPromptStoreMigrationPending = false;
+let characterPromptStoreHydrated = false;
 let chatCacheSaveTimer = null;
 let selectionPayload = null;
 let lastQuickAnchor = null;
@@ -107,7 +112,30 @@ function saveSettings(now = false) {
   clearTimeout(saveTimer);
   const run = () => {
     try {
-      extension_settings[EXT_NAME] = safeExtensionSettingsSnapshot(settings);
+      const currentRoot = extension_settings[EXT_NAME] && typeof extension_settings[EXT_NAME] === 'object'
+        ? extension_settings[EXT_NAME]
+        : {};
+      const snapshot = safeExtensionSettingsSnapshot(settings);
+      const persistedPrompts = currentRoot.characterPrompts && typeof currentRoot.characterPrompts === 'object' && !Array.isArray(currentRoot.characterPrompts)
+        ? Object.assign({}, currentRoot.characterPrompts)
+        : {};
+
+      if (characterPromptStoreMigrationPending) {
+        snapshot.characterPrompts = Object.assign({}, settings.characterPrompts || {});
+      } else {
+        for (const name of dirtyCharacterPromptNames) {
+          const value = String(settings.characterPrompts?.[name] ?? '');
+          if (value) persistedPrompts[name] = value;
+          else delete persistedPrompts[name];
+        }
+        snapshot.characterPrompts = persistedPrompts;
+      }
+
+      settings.characterPrompts = Object.assign({}, snapshot.characterPrompts || {});
+      Object.assign(currentRoot, snapshot);
+      extension_settings[EXT_NAME] = currentRoot;
+      dirtyCharacterPromptNames.clear();
+      characterPromptStoreMigrationPending = false;
       if (now && typeof ctx?.saveSettings === 'function') ctx.saveSettings();
       else ctx?.saveSettingsDebounced?.();
     } catch (e) { console.error('[Phrase Desk] save failed', e); }
@@ -1155,30 +1183,63 @@ function setCachedMessageStore(payload, store) {
   payload.msg.extra.phraseDesk = cloned;
 }
 function globalPrompt() { return String(settings.globalPrompt || ''); }
+function promptNameFromStoredKey(key = '') {
+  const raw = String(key || '');
+  if (!raw) return '';
+  let match = raw.match(/^char:[^:]*:(.+)$/);
+  if (match) return cleanName(match[1]);
+  match = raw.match(/^avatar:[^:]*:(.+)$/);
+  if (match) return cleanName(match[1]);
+  match = raw.match(/^name:(.+)$/);
+  if (match) return cleanName(match[1]);
+  return cleanName(raw);
+}
+function hydrateCharacterPromptStoreOnce() {
+  if (characterPromptStoreHydrated) return;
+  characterPromptStoreHydrated = true;
+  const liveRoot = extension_settings[EXT_NAME] && typeof extension_settings[EXT_NAME] === 'object'
+    ? extension_settings[EXT_NAME]
+    : {};
+  const liveStore = liveRoot.characterPrompts && typeof liveRoot.characterPrompts === 'object' && !Array.isArray(liveRoot.characterPrompts)
+    ? liveRoot.characterPrompts
+    : settings.characterPrompts;
+  settings.characterPrompts = Object.assign({}, liveStore || {});
+  settings.characterPromptStoreVersion = Number(liveRoot.characterPromptStoreVersion || settings.characterPromptStoreVersion || 1);
+
+  if (settings.characterPromptStoreVersion >= 2) return;
+  const byName = {};
+  for (const [storedKey, storedValue] of Object.entries(settings.characterPrompts || {})) {
+    const name = promptNameFromStoredKey(storedKey);
+    const value = String(storedValue || '');
+    if (!name || !value || Object.hasOwn(byName, name)) continue;
+    byName[name] = value;
+  }
+  settings.characterPrompts = byName;
+  settings.characterPromptStoreVersion = 2;
+  if (Object.keys(liveStore || {}).length) {
+    characterPromptStoreMigrationPending = true;
+    saveSettings(true);
+  }
+}
 function currentCharPromptKey() {
-  const live = liveContext();
-  const id = live.characterId ?? ctx?.characterId;
-  const chars = live.characters || ctx?.characters || [];
-  const charObj = (id !== undefined && id !== null && id !== '') ? (chars?.[id] || {}) : {};
   const name = currentChar();
-  const avatar = charObj.avatar || charObj.data?.avatar || charObj.filename || charObj.file_name || charObj.name;
-  if (id !== undefined && id !== null && id !== '' && name && name !== '현재 캐릭터') return `char:${id}:${name}`;
-  if (avatar && name && name !== '현재 캐릭터') return `avatar:${avatar}:${name}`;
-  if (name && name !== '현재 캐릭터') return `name:${name}`;
-  return '';
+  return name && name !== '현재 캐릭터' ? name : '';
 }
 function currentPrompt() {
   const key = currentCharPromptKey();
   if (!key) return '';
-  // 캐릭터 전용 프롬프트는 정확히 현재 캐릭터 key에 저장된 값만 표시/적용합니다.
-  // 마지막 백업값이나 다른 캐릭터 이름 fallback은 다른 캐릭터로 번지는 원인이므로 사용하지 않습니다.
   return String(settings.characterPrompts?.[key] ?? '');
 }
 function setCurrentPrompt(value) {
-  const v = String(value || '');
   const key = currentCharPromptKey();
-  if (!key) return;
-  settings.characterPrompts[key] = v;
+  if (!key) return false;
+  const next = String(value || '');
+  const previous = String(settings.characterPrompts?.[key] ?? '');
+  if (next === previous) return false;
+  if (next) settings.characterPrompts[key] = next;
+  else delete settings.characterPrompts[key];
+  dirtyCharacterPromptNames.add(key);
+  return true;
 }
 let activeCharacterPromptKey = '';
 function refreshCharacterPromptField(force = false) {
@@ -2510,7 +2571,7 @@ function setupSettingsPanel() {
   updateTranslationEngineControl();
   activeCharacterPromptKey = currentCharPromptKey();
   $('#pd-global-prompt').on('input', function(){ settings.globalPrompt = $(this).val(); saveSettings(); }).on('change blur', function(){ settings.globalPrompt = $(this).val(); saveSettings(true); });
-  $('#pd-char-prompt').on('focus', function(){ refreshCharacterPromptField(); }).on('input', function(){ setCurrentPrompt($(this).val()); saveSettings(); }).on('change blur', function(){ setCurrentPrompt($(this).val()); saveSettings(true); });
+  $('#pd-char-prompt').on('focus', function(){ refreshCharacterPromptField(); }).on('input', function(){ if (setCurrentPrompt($(this).val())) saveSettings(); }).on('change blur', function(){ const key = currentCharPromptKey(); if (key && dirtyCharacterPromptNames.has(key)) saveSettings(true); });
   $('#pd-clear-chat-cache').on('click', clearCurrentChatTranslationCache);
   $('#pd-open-debug').on('click', () => { $('#pd-debug-panel').toggle(); $('#pd-debug-output').val(debugText()); });
   $('#pd-copy-debug').on('click', (e) => { e.preventDefault(); e.stopPropagation(); copyDebugText(); });
@@ -5186,7 +5247,7 @@ function setupMessageRenderHooks() {
     boundEvents.add(eventName);
     try {
       const handler = (...args) => {
-        refreshCharacterPromptField();
+        if (key === 'CHAT_CHANGED') refreshCharacterPromptField(true);
         // The render hooks are also the late-arrival fallback: if the chat DOM was
         // not present during the bounded startup window, attach the same single
         // observer as soon as SillyTavern actually renders or switches a chat.
@@ -5924,6 +5985,7 @@ function boot(){
   pdGlobalState.bootedAt = Date.now();
   pdGlobalState.version = PD_VERSION;
 
+  try{ hydrateCharacterPromptStoreOnce(); }catch(e){ console.error('[Phrase Desk] character prompt store failed',e); }
   try{ scheduleMarkdownInfoHighlightAliases(); }catch{}
   try{ document.documentElement.style.setProperty('--pd-user-font-size', `${settings.fontSize}px`); }catch{}
   try{ applyBilingualBlurClass(); }catch{}
