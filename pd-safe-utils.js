@@ -5,6 +5,293 @@ const FORMAT_TOKEN_RE = /(?:⟦\s*PD_FMT_[0-9a-z]+\s*⟧|\[\[?\s*PD_FMT_[0-9a-z]
 const TARGET_TEXT_RE = /[가-힣ぁ-んァ-ヶ一-龥]/;
 const LATIN_TEXT_RE = /[A-Za-z]/;
 
+function compactWhitespace(value = '') {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function stableTextHash(value = '') {
+  const text = String(value || '');
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24);
+  }
+  return (h >>> 0).toString(36);
+}
+
+function plainRecord(value) {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function unwrapBilingualSelection(value = '') {
+  let text = compactWhitespace(value);
+  let changed = false;
+  for (let pass = 0; pass < 4 && text.length >= 2; pass++) {
+    const emphasis = text.match(/^(\*{1,3}|_{1,3})([\s\S]+)\1$/);
+    if (emphasis && compactWhitespace(emphasis[2])) {
+      text = compactWhitespace(emphasis[2]);
+      changed = true;
+      continue;
+    }
+    const pairs = [['"', '"'], ["'", "'"], ['“', '”'], ['‘', '’']];
+    const pair = pairs.find(([open, close]) => text.startsWith(open) && text.endsWith(close));
+    if (!pair) break;
+    const inner = compactWhitespace(text.slice(pair[0].length, -pair[1].length));
+    if (!inner) break;
+    text = inner;
+    changed = true;
+  }
+  return { text, changed };
+}
+
+// Selection-only parser. It preserves the legacy optional-space bracket behavior while
+// requiring a terminal Korean bracket pair and Latin text before it.
+export function splitBilingualSelection(value = '') {
+  const original = compactWhitespace(value);
+  const unwrapped = unwrapBilingualSelection(original).text;
+  const match = unwrapped.match(/^(.+?)\s*[\[（(]([^\]\)）\r\n]{1,220})[\]）)]$/);
+  const english = compactWhitespace(match?.[1] || '');
+  const korean = compactWhitespace(match?.[2] || '');
+  if (!match || !LATIN_TEXT_RE.test(english) || !/[가-힣]/.test(korean)) {
+    return { text: original, meaning: '' };
+  }
+  return { text: english, meaning: korean };
+}
+
+export function contextTranslationId(context = {}) {
+  const identity = `${compactWhitespace(context?.source || '').toLowerCase()}::${compactWhitespace(context?.context || '').toLowerCase()}`;
+  return `ctx_${stableTextHash(identity)}`;
+}
+
+export function pendingContextTranslations(contexts = []) {
+  const valid = Array.isArray(contexts) ? contexts.filter(x => plainRecord(x) && compactWhitespace(x.context || '')) : [];
+  const pending = valid
+    .filter(x => !compactWhitespace(x.contextKo || x.context_ko || ''))
+    .map(x => ({ id: contextTranslationId(x), context: String(x.context || ''), source: String(x.source || '') }));
+  const primaryId = valid.length ? contextTranslationId(valid[0]) : '';
+  return {
+    primary: pending.find(x => x.id === primaryId) || null,
+    additional: pending.filter(x => x.id !== primaryId),
+  };
+}
+
+export function applyMappedContextTranslations(contexts = [], results = []) {
+  if (!Array.isArray(contexts) || !Array.isArray(results)) return 0;
+  const targets = new Map(contexts.filter(plainRecord).map(context => [contextTranslationId(context), context]));
+  let applied = 0;
+  for (const result of results) {
+    if (!plainRecord(result)) continue;
+    const target = targets.get(String(result.id || ''));
+    const translated = compactWhitespace(result.context_ko || result.contextKo || '');
+    if (!target || !translated || compactWhitespace(target.contextKo || target.context_ko || '')) continue;
+    target.contextKo = translated;
+    applied += 1;
+  }
+  return applied;
+}
+
+export function replacePrimaryContextPreservingRest(contexts = [], replacement = null) {
+  const existing = Array.isArray(contexts) ? contexts : [];
+  const remaining = existing.slice(1);
+  return plainRecord(replacement) ? [replacement, ...remaining] : remaining;
+}
+
+function normalizeStringArray(value) {
+  if (value === undefined || value === null) return [];
+  const input = Array.isArray(value) ? value : (typeof value === 'string' ? [value] : []);
+  if (!Array.isArray(value) && typeof value !== 'string') throw new Error('invalid string array');
+  if (input.some(x => typeof x !== 'string' && typeof x !== 'number')) throw new Error('invalid string array item');
+  return Array.from(new Set(input
+    .map(x => String(x).trim())
+    .filter(Boolean)));
+}
+
+function normalizeImportedContext(value) {
+  if (!plainRecord(value)) return null;
+  if (Object.hasOwn(value, 'context') && typeof value.context !== 'string') return null;
+  if (Object.hasOwn(value, 'contextKo') && typeof value.contextKo !== 'string') return null;
+  if (Object.hasOwn(value, 'context_ko') && typeof value.context_ko !== 'string') return null;
+  if (Object.hasOwn(value, 'source') && typeof value.source !== 'string') return null;
+  const context = typeof value.context === 'string' ? value.context : '';
+  const contextKo = typeof value.contextKo === 'string'
+    ? value.contextKo
+    : (typeof value.context_ko === 'string' ? value.context_ko : '');
+  if (!compactWhitespace(context) && !compactWhitespace(contextKo)) return null;
+  return {
+    ...value,
+    context,
+    contextKo,
+    source: typeof value.source === 'string' ? value.source : '',
+  };
+}
+
+function normalizeImportedNote(value, makeId) {
+  if (!plainRecord(value)) return null;
+  if (Object.hasOwn(value, 'id') && !['string', 'number'].includes(typeof value.id)) return null;
+  if (Object.hasOwn(value, 'text') && typeof value.text !== 'string') return null;
+  if (Object.hasOwn(value, 'expression') && typeof value.expression !== 'string') return null;
+  if (Object.hasOwn(value, 'meaning') && typeof value.meaning !== 'string') return null;
+  if (Object.hasOwn(value, 'meaningKo') && typeof value.meaningKo !== 'string') return null;
+  if (Object.hasOwn(value, 'contexts') && !Array.isArray(value.contexts)) return null;
+  const rawText = typeof value.text === 'string' && compactWhitespace(value.text) ? value.text : value.expression;
+  const text = String(rawText ?? '').trim();
+  if (!compactWhitespace(text)) return null;
+  const rawMeaning = typeof value.meaning === 'string' && compactWhitespace(value.meaning) ? value.meaning : value.meaningKo;
+  const meaning = String(rawMeaning ?? '').trim();
+  const contexts = Array.isArray(value.contexts) ? value.contexts.map(normalizeImportedContext) : [];
+  if (contexts.some(x => !x)) return null;
+  const status = ['new', 'learning', 'hard', 'known'].includes(value.status) ? value.status : 'new';
+  return {
+    ...value,
+    id: String(value.id ?? '').trim() || makeId('note'),
+    text,
+    expression: text,
+    meaning,
+    meaningKo: meaning,
+    tags: normalizeStringArray(value.tags),
+    sources: normalizeStringArray(value.sources),
+    contexts: contexts.slice(0, 12),
+    source: typeof value.source === 'string' ? value.source : '',
+    status,
+    favorite: !!value.favorite,
+  };
+}
+
+function normalizeImportedHistory(value, makeId, prefix) {
+  if (!plainRecord(value)) return null;
+  if (Object.hasOwn(value, 'id') && !['string', 'number'].includes(typeof value.id)) return null;
+  if (Object.hasOwn(value, 'results') && !Array.isArray(value.results)) return null;
+  const out = { ...value, id: String(value.id ?? '').trim() || makeId(prefix) };
+  if (Object.hasOwn(value, 'results')) {
+    if (value.results.some(x => !plainRecord(x))) return null;
+    out.results = value.results.map(x => ({ ...x }));
+  }
+  return out;
+}
+
+// Parse and stage imported learning data before callers replace live settings. Unknown
+// fields on valid records are retained; any malformed supported record rejects the import.
+export function normalizePhraseDeskImportPayload(payload, makeId = (prefix = 'item') => `${prefix}_${Date.now()}`) {
+  if (!plainRecord(payload)) throw new Error('invalid import root');
+  const data = {};
+  let recognized = 0;
+  const requireArray = (key) => {
+    if (!Object.hasOwn(payload, key)) return null;
+    recognized += 1;
+    if (!Array.isArray(payload[key])) throw new Error(`invalid ${key}`);
+    return payload[key];
+  };
+
+  const notebook = requireArray('notebook');
+  if (notebook) {
+    data.notebook = notebook.map(x => normalizeImportedNote(x, makeId));
+    if (data.notebook.some(x => !x)) throw new Error('invalid notebook item');
+  }
+  const quizHistory = requireArray('quizHistory');
+  if (quizHistory) {
+    data.quizHistory = quizHistory.map(x => normalizeImportedHistory(x, makeId, 'quiz'));
+    if (data.quizHistory.some(x => !x)) throw new Error('invalid quizHistory item');
+    data.quizHistory = data.quizHistory.slice(0, 20);
+  }
+  const practiceHistory = requireArray('practiceHistory');
+  if (practiceHistory) {
+    data.practiceHistory = practiceHistory.map(x => normalizeImportedHistory(x, makeId, 'practice'));
+    if (data.practiceHistory.some(x => !x)) throw new Error('invalid practiceHistory item');
+    data.practiceHistory = data.practiceHistory.slice(0, 60);
+  }
+  const hiddenWrongNotes = requireArray('hiddenWrongNotes');
+  if (hiddenWrongNotes) data.hiddenWrongNotes = normalizeStringArray(hiddenWrongNotes);
+  const recentPracticeNoteIds = requireArray('recentPracticeNoteIds');
+  if (recentPracticeNoteIds) data.recentPracticeNoteIds = normalizeStringArray(recentPracticeNoteIds);
+  if (!recognized) throw new Error('no supported import fields');
+  return { data };
+}
+
+export function applySettingsPatchAtomically(target, patch, commit, rollback) {
+  if (!plainRecord(target) || !plainRecord(patch)) throw new Error('invalid settings patch');
+  const keys = Object.keys(patch);
+  const previous = Object.fromEntries(keys.map(key => [key, target[key]]));
+  try {
+    keys.forEach(key => { target[key] = patch[key]; });
+    commit?.();
+  } catch (error) {
+    keys.forEach(key => { target[key] = previous[key]; });
+    try { rollback?.(); } catch {}
+    throw error;
+  }
+  return keys;
+}
+
+export async function applySettingsPatchAtomicallyAsync(target, patch, commit, rollback) {
+  if (!plainRecord(target) || !plainRecord(patch)) throw new Error('invalid settings patch');
+  const keys = Object.keys(patch);
+  const previous = Object.fromEntries(keys.map(key => [key, target[key]]));
+  try {
+    keys.forEach(key => { target[key] = patch[key]; });
+    await commit?.();
+  } catch (error) {
+    keys.forEach(key => { target[key] = previous[key]; });
+    try { await rollback?.(); } catch {}
+    throw error;
+  }
+  return keys;
+}
+
+export function phraseDeskCacheMatchesSource(extra = {}, canonicalSource = '', hashText = stableTextHash) {
+  if (!plainRecord(extra) || !compactWhitespace(canonicalSource) || typeof hashText !== 'function') return false;
+  const hashSource = value => String(hashText(String(value || '').replace(/\r\n/g, '\n')) || '');
+  const sourceHash = hashSource(canonicalSource);
+  if (!sourceHash) return false;
+  const root = plainRecord(extra.phraseDesk) ? extra.phraseDesk : {};
+  const active = plainRecord(root.variants?.[root.activeKey]) ? root.variants[root.activeKey] : null;
+  const hashes = new Set();
+  const add = (storedHash, source) => {
+    if (storedHash) hashes.add(String(storedHash));
+    if (typeof source === 'string' && source.trim()) hashes.add(hashSource(source));
+  };
+  add(active?.originalHash, active?.original);
+  add(root.originalHash, root.original);
+  add('', extra.original_mes);
+  add('', extra.phraseDeskOriginal);
+  return hashes.has(sourceHash);
+}
+
+export function isLorebookEntryInSelectedRoot(entry, root, entrySelector = '.world_entry', rootSelector = '#world_popup,#WorldInfo,#world_info') {
+  return !!(
+    root?.matches?.(rootSelector) && entry?.nodeType === 1 && entry.matches?.(entrySelector) &&
+    root.contains?.(entry)
+  );
+}
+
+function isVisibleConnectedLorebookRoot(root) {
+  if (!root) return false;
+  if (typeof root.isConnected === 'boolean' && !root.isConnected) return false;
+  if (root.hidden === true) return false;
+  try {
+    if (typeof root.checkVisibility === 'function' && !root.checkVisibility()) return false;
+  } catch {}
+  try {
+    const style = root.ownerDocument?.defaultView?.getComputedStyle?.(root);
+    if (style && (
+      style.display === 'none' ||
+      style.visibility === 'hidden' ||
+      style.visibility === 'collapse' ||
+      style.opacity === '0'
+    )) return false;
+  } catch {}
+  try {
+    if (typeof root.getClientRects === 'function' && root.getClientRects().length === 0) return false;
+  } catch {}
+  return true;
+}
+
+export function selectLorebookShell(roots = [], entrySelector = '.world_entry') {
+  const candidates = Array.from(new Set((Array.isArray(roots) ? roots : []).filter(Boolean)));
+  const containsEntry = root => !!root?.querySelector?.(entrySelector);
+  const visible = candidates.filter(isVisibleConnectedLorebookRoot);
+  return visible.find(containsEntry) || visible[0] || candidates.find(containsEntry) || candidates[0] || null;
+}
+
 export function safeExtensionSettingsSnapshot(settings = {}) {
   const out = Object.assign({}, settings || {});
   delete out.debugLogs;

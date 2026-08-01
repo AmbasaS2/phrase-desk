@@ -4,7 +4,24 @@ import { getRequestHeaders } from '../../../../script.js';
 import { SlashCommand } from '../../../../scripts/slash-commands/SlashCommand.js';
 import { ARGUMENT_TYPE, SlashCommandNamedArgument } from '../../../../scripts/slash-commands/SlashCommandArgument.js';
 import { SlashCommandParser } from '../../../../scripts/slash-commands/SlashCommandParser.js';
-import { safeExtensionSettingsSnapshot, createMemoryDebugLogger, cleanContextForPrompt, cleanTranslationArtifacts, normalizeBilingualQuotes, normalizeSceneBoardArtifacts, buildSceneBoardPrompt } from './pd-safe-utils.js';
+import {
+  safeExtensionSettingsSnapshot,
+  createMemoryDebugLogger,
+  cleanContextForPrompt,
+  cleanTranslationArtifacts,
+  normalizeBilingualQuotes,
+  normalizeSceneBoardArtifacts,
+  buildSceneBoardPrompt,
+  splitBilingualSelection,
+  pendingContextTranslations,
+  applyMappedContextTranslations,
+  replacePrimaryContextPreservingRest,
+  normalizePhraseDeskImportPayload,
+  applySettingsPatchAtomicallyAsync,
+  phraseDeskCacheMatchesSource,
+  isLorebookEntryInSelectedRoot,
+  selectLorebookShell,
+} from './pd-safe-utils.js';
 
 const EXT_NAME = "phrase-desk";
 const DISPLAY_NAME = "🔤 Phrase Desk";
@@ -12,7 +29,7 @@ const IS_BETA = false;
 const SHOW_DEBUG = true;
 const MAX_TOKENS = 8000;
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.3.9";
+const PD_VERSION = "1.3.11";
 const PD_GLOBAL_KEY = "__PHRASE_DESK_GLOBAL_STATE__";
 const pdGlobalState = globalThis[PD_GLOBAL_KEY] && typeof globalThis[PD_GLOBAL_KEY] === 'object'
   ? globalThis[PD_GLOBAL_KEY]
@@ -141,6 +158,40 @@ function saveSettings(now = false) {
     } catch (e) { console.error('[Phrase Desk] save failed', e); }
   };
   if (now) run(); else saveTimer = setTimeout(run, 700);
+}
+
+async function saveSettingsStrictForImport() {
+  clearTimeout(saveTimer);
+  const previousRoot = extension_settings[EXT_NAME];
+  const currentRoot = previousRoot && typeof previousRoot === 'object' ? previousRoot : {};
+  const snapshot = safeExtensionSettingsSnapshot(settings);
+  const persistedPrompts = currentRoot.characterPrompts && typeof currentRoot.characterPrompts === 'object' && !Array.isArray(currentRoot.characterPrompts)
+    ? Object.assign({}, currentRoot.characterPrompts)
+    : {};
+
+  if (characterPromptStoreMigrationPending) {
+    snapshot.characterPrompts = Object.assign({}, settings.characterPrompts || {});
+  } else {
+    for (const name of dirtyCharacterPromptNames) {
+      const value = String(settings.characterPrompts?.[name] ?? '');
+      if (value) persistedPrompts[name] = value;
+      else delete persistedPrompts[name];
+    }
+    snapshot.characterPrompts = persistedPrompts;
+  }
+
+  extension_settings[EXT_NAME] = Object.assign({}, currentRoot, snapshot);
+  try {
+    if (typeof ctx?.saveSettings === 'function') await ctx.saveSettings();
+    else if (typeof ctx?.saveSettingsDebounced === 'function') await ctx.saveSettingsDebounced();
+  } catch (error) {
+    extension_settings[EXT_NAME] = previousRoot;
+    throw error;
+  }
+
+  settings.characterPrompts = Object.assign({}, snapshot.characterPrompts || {});
+  dirtyCharacterPromptNames.clear();
+  characterPromptStoreMigrationPending = false;
 }
 function esc(v = '') { return String(v).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function plain(v = '') { const d = document.createElement('div'); d.innerHTML = String(v || ''); return d.textContent || d.innerText || ''; }
@@ -1266,10 +1317,7 @@ function sentenceForPhrase(text, phrase) {
   return norm((parts.find(s => s.toLowerCase().includes(lowPhrase)) || parts[0] || '').slice(0, 320));
 }
 function splitBilingual(text='') {
-  const s = norm(text);
-  const m = s.match(/^(.*?)[\s]*[\[（(]([^\]\)）]{1,220})[\]）)]\s*$/);
-  if (m && /[A-Za-z]/.test(m[1]) && /[가-힣]/.test(m[2])) return { text: norm(m[1].replace(/^['"]|['"]$/g,'')), meaning: norm(m[2]) };
-  return { text: s, meaning: '' };
+  return splitBilingualSelection(text);
 }
 function toast(msg, tone='info', opts={}) {
   const message = String(msg || '');
@@ -3907,8 +3955,9 @@ function noteContextKey(ctx = {}) {
   // contextKo must not be part of the identity, otherwise AI correction creates duplicate contexts.
   return norm(`${cleanName(ctx.source || '') || ''}::${ctx.context || ''}`).toLowerCase();
 }
-function noteContextEntry(context = '', contextKo = '', source = '', time = Date.now()) {
+function noteContextEntry(context = '', contextKo = '', source = '', time = Date.now(), extra = null) {
   return {
+    ...(extra && typeof extra === 'object' && !Array.isArray(extra) ? extra : {}),
     context: String(context || ''),
     contextKo: String(contextKo || ''),
     source: cleanName(source || '') || '',
@@ -3932,7 +3981,7 @@ function normalizeNoteContexts(note) {
   const input = Array.isArray(note.contexts) ? note.contexts : [];
   const result = [];
   const upsert = (raw = {}, preferFront = false) => {
-    const entry = noteContextEntry(raw.context || '', raw.contextKo || raw.context_ko || '', raw.source || '', raw.time || Date.now());
+    const entry = noteContextEntry(raw.context || '', raw.contextKo || raw.context_ko || '', raw.source || '', raw.time || Date.now(), raw);
     if (!norm(entry.context) && !norm(entry.contextKo)) return;
     const key = noteContextKey(entry);
     const idx = result.findIndex(c => noteContextKey(c) === key);
@@ -3962,8 +4011,10 @@ function normalizeNoteContexts(note) {
 }
 function replacePrimaryNoteContext(note, context = '', contextKo = '', source = '') {
   if (!note) return;
-  const entry = noteContextEntry(context, contextKo, source || note.source || '', Date.now());
-  note.contexts = (norm(entry.context) || norm(entry.contextKo)) ? [entry] : [];
+  const existing = normalizeNoteContexts(note).map(item => ({ ...item }));
+  const previousPrimary = existing[0] || null;
+  const entry = noteContextEntry(context, contextKo, source || note.source || '', Date.now(), previousPrimary);
+  note.contexts = replacePrimaryContextPreservingRest(existing, (norm(entry.context) || norm(entry.contextKo)) ? entry : null);
   note.contextEditedAt = Date.now();
   syncPrimaryContextFields(note);
 }
@@ -3973,7 +4024,7 @@ function setNoteContextTranslation(note, contextKo = '') {
   if (!contexts.length) return;
   const primaryKey = noteContextKey({ context: note.context || contexts[0].context || '', source: note.source || contexts[0].source || '' });
   const target = contexts.find(c => noteContextKey(c) === primaryKey) || contexts[0];
-  target.contextKo = String(contextKo || '');
+  if (!norm(target.contextKo || target.context_ko || '')) target.contextKo = String(contextKo || '');
   note.contexts = contexts;
   syncPrimaryContextFields(note);
 }
@@ -4411,8 +4462,10 @@ ${esc(n.vocabulary)}`:''}</pre></details>`:''}</div>`;
 }
 function missingFields(n) {
   const missing = [];
+  const contextPlan = pendingContextTranslations(normalizeNoteContexts(n));
   if (!norm(n.meaning)) missing.push('meaning_ko');
-  if (n.context && !norm(n.contextKo)) missing.push('context_ko');
+  if (contextPlan.primary) missing.push('context_ko');
+  if (contextPlan.additional.length) missing.push('contexts_ko');
   if (!Array.isArray(n.tags) || !n.tags.filter(Boolean).length) missing.push('tags');
   if (!norm(n.explanation)) missing.push('explanation_ko');
   if (!norm(n.alternatives)) missing.push('alternatives_en_ko');
@@ -4423,7 +4476,9 @@ function missingFields(n) {
 function compactNoteForAI(n) {
   const missing = missingFields(n);
   const item = { id:n.id, text:n.text, missing };
+  const contextPlan = pendingContextTranslations(normalizeNoteContexts(n));
   if (n.context) item.context = n.context;
+  if (contextPlan.additional.length) item.contexts = contextPlan.additional;
   if (n.meaning) item.current_meaning_ko = n.meaning;
   if ((n.tags || []).length) item.current_tags = n.tags;
   return item;
@@ -4450,6 +4505,7 @@ async function enrichNotes(){
     'meaning_ko: one short natural Korean meaning.',
     'tags: 1-4 short Korean labels when requested. Use concrete labels such as situation, emotion, grammar pattern, idiom type, or register. Avoid vague tags like 영어표현, 유용함, 자연스러움.',
     'context_ko: natural Korean translation of the given context only when context_ko is requested and context exists.',
+    'contexts_ko: translate every item in the given contexts array. Return an array of objects with the exact same id and one context_ko value. Do not omit or rename ids.',
     'explanation_ko: 1-2 brief Korean lines about nuance or usage.',
     'alternatives_en_ko: 1-3 alternative English expressions with Korean meanings, or "-" if not useful.',
     'grammar_ko: the relevant grammar pattern or sentence structure if useful, or "-" if the item is just a word/name or has no useful grammar point.',
@@ -4457,7 +4513,7 @@ async function enrichNotes(){
     '',
     'Return format:',
     'Return JSON array only. Do not add labels, markdown, commentary, or explanations outside JSON.',
-    'Each object must include id and may include meaning_ko, tags, context_ko, explanation_ko, alternatives_en_ko, grammar_ko, vocabulary_ko only when that field is listed in missing.',
+    'Each object must include id and may include meaning_ko, tags, context_ko, contexts_ko, explanation_ko, alternatives_en_ko, grammar_ko, vocabulary_ko only when that field is listed in missing.',
     '',
     'Items JSON:',
     JSON.stringify(targets.map(compactNoteForAI))
@@ -4466,7 +4522,7 @@ async function enrichNotes(){
   if(!out){ closeModals(); return; }
   try{
     const arr=JSON.parse(String(out).trim().replace(/^```(?:json)?\s*/i,'').replace(/```$/,'').trim());
-    const fieldLabels={meaning_ko:'뜻', tags:'태그', context_ko:'문맥 번역', explanation_ko:'설명', alternatives_en_ko:'다른 표현', grammar_ko:'문법', vocabulary_ko:'단어'};
+    const fieldLabels={meaning_ko:'뜻', tags:'태그', context_ko:'문맥 번역', contexts_ko:'추가 문맥 번역', explanation_ko:'설명', alternatives_en_ko:'다른 표현', grammar_ko:'문법', vocabulary_ko:'단어'};
     const filled=[];
     (Array.isArray(arr)?arr:[]).forEach(x=>{
       const n=settings.notebook.find(y=>y.id===x.id);
@@ -4476,6 +4532,14 @@ async function enrichNotes(){
       if(missing.includes('meaning_ko') && x.meaning_ko){ n.meaning=x.meaning_ko; done.push(fieldLabels.meaning_ko); }
       if(missing.includes('tags') && Array.isArray(x.tags) && x.tags.filter(Boolean).length){ n.tags=Array.from(new Set([...(n.tags||[]),...((x.tags||[]).filter(Boolean))])); done.push(fieldLabels.tags); }
       if(missing.includes('context_ko') && x.context_ko){ setNoteContextTranslation(n, x.context_ko); done.push(fieldLabels.context_ko); }
+      if(missing.includes('contexts_ko') && Array.isArray(x.contexts_ko)){
+        const contexts = normalizeNoteContexts(n);
+        if (applyMappedContextTranslations(contexts, x.contexts_ko)) {
+          n.contexts = contexts;
+          syncPrimaryContextFields(n);
+          done.push(fieldLabels.contexts_ko);
+        }
+      }
       if(missing.includes('explanation_ko') && x.explanation_ko){ n.explanation=x.explanation_ko; done.push(fieldLabels.explanation_ko); }
       if(missing.includes('alternatives_en_ko') && x.alternatives_en_ko){ n.alternatives=x.alternatives_en_ko; done.push(fieldLabels.alternatives_en_ko); }
       if(missing.includes('grammar_ko') && x.grammar_ko){ n.grammar=x.grammar_ko; done.push(fieldLabels.grammar_ko); }
@@ -4594,6 +4658,41 @@ async function openRepeatFinder(){
 
   } finally { endAiTask('repeat'); }
 }
+async function applyImportedLearningData(payload) {
+  const normalized = normalizePhraseDeskImportPayload(payload, (prefix) => uid(prefix));
+  const staged = { ...normalized.data };
+  if (Array.isArray(staged.notebook)) {
+    staged.notebook = staged.notebook.map(note => {
+      const clone = {
+        ...note,
+        contexts: Array.isArray(note.contexts) ? note.contexts.map(context => ({ ...context })) : [],
+        tags: Array.isArray(note.tags) ? note.tags.slice() : [],
+        sources: Array.isArray(note.sources) ? note.sources.slice() : [],
+      };
+      normalizeNoteContexts(clone);
+      return clone;
+    });
+  }
+  const previousRoot = extension_settings[EXT_NAME];
+  let importPersisted = false;
+  await applySettingsPatchAtomicallyAsync(
+    settings,
+    staged,
+    async () => {
+      await saveSettingsStrictForImport();
+      importPersisted = true;
+      renderNotebook();
+      updateSavedCount();
+    },
+    async () => {
+      extension_settings[EXT_NAME] = previousRoot;
+      if (importPersisted) {
+        try { await saveSettingsStrictForImport(); } catch { extension_settings[EXT_NAME] = previousRoot; }
+      }
+      try { renderNotebook(); updateSavedCount(); } catch {}
+    },
+  );
+}
 function openManageModal(){
   const fontOptions = [11,12,13,14,15,16,17,18].map(v=>`<option value="${v}">${v}</option>`).join('');
   const countOptions = [5,10,15,20,30].map(v=>`<option value="${v}">${v}개</option>`).join('');
@@ -4612,7 +4711,7 @@ function openManageModal(){
   $('#pd-export').on('click',()=>{const blob=new Blob([JSON.stringify({notebook:settings.notebook,quizHistory:settings.quizHistory,practiceHistory:settings.practiceHistory,hiddenWrongNotes:settings.hiddenWrongNotes,recentPracticeNoteIds:settings.recentPracticeNoteIds},null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='phrase-desk-notes.json'; a.click(); URL.revokeObjectURL(a.href); toast('내보내기를 시작했습니다.','success');});
   $('#pd-import').on('click',()=>$('#pd-import-file').trigger('click'));
   $('#pd-reset-all').on('click', resetLearningData);
-  $('#pd-import-file').on('change',function(){const file=this.files?.[0]; if(!file)return; const r=new FileReader(); r.onload=()=>{try{const d=JSON.parse(r.result); if(Array.isArray(d.notebook)) settings.notebook=d.notebook; if(Array.isArray(d.quizHistory)) settings.quizHistory=d.quizHistory; if(Array.isArray(d.practiceHistory)) settings.practiceHistory=d.practiceHistory; if(Array.isArray(d.hiddenWrongNotes)) settings.hiddenWrongNotes=d.hiddenWrongNotes; if(Array.isArray(d.recentPracticeNoteIds)) settings.recentPracticeNoteIds=d.recentPracticeNoteIds; saveSettings(true); renderNotebook(); updateSavedCount(); toast('가져왔습니다.','success');}catch(e){toast('가져오기에 실패했습니다.','error');}}; r.readAsText(file);});
+  $('#pd-import-file').on('change',function(){const file=this.files?.[0]; if(!file)return; const r=new FileReader(); const fail=(e)=>{logDebug({type:'learning-import-error',error:e?.message||String(e||'file read failed')});toast('가져오기에 실패했습니다. 기존 데이터는 유지됩니다.','error');}; r.onload=async()=>{try{const d=JSON.parse(String(r.result || '')); await applyImportedLearningData(d); toast('가져왔습니다.','success');}catch(e){fail(e);}}; r.onerror=()=>fail(r.error||new Error('file read failed')); r.readAsText(file);});
 }
 function difficultyLabel(v=settings.quizDifficulty) {
   return v === 'very_easy' ? '초보' : v === 'easy' ? '쉬움' : v === 'hard' ? '어려움' : v === 'expert' ? '고수' : '기본';
@@ -5202,6 +5301,13 @@ function maybeAutoTranslateRenderedMessage(roleHint, args = []) {
 
 
 
+function canonicalMessageSourceAfterUpdate(msg) {
+  if (!msg) return '';
+  const messageText = messageSourceText(typeof msg.mes === 'string' ? msg.mes : '', null);
+  if (norm(messageText) && !pdIsKnownTranslationText(msg, messageText)) return messageText;
+  return pdCurrentRawMessageSource(msg);
+}
+
 function clearPhraseDeskTranslationAfterMessageUpdate(payload, args = []) {
   let msg = payload?.msg || null;
   let idx = messageIndexForPayload(payload);
@@ -5222,6 +5328,8 @@ function clearPhraseDeskTranslationAfterMessageUpdate(payload, args = []) {
     msg.extra.phraseDeskSwipeTranslations || msg.extra.phraseDeskSwipeId !== undefined
   );
   if (!hadPhraseDeskTranslation) return false;
+  const canonicalSource = canonicalMessageSourceAfterUpdate(msg);
+  if (phraseDeskCacheMatchesSource(msg.extra, canonicalSource, hash)) return false;
   delete msg.extra.phraseDesk;
   delete msg.extra.display_text;
   delete msg.extra.original_mes;
@@ -5422,8 +5530,17 @@ async function translateLorebookSource(source = '') {
 
 
 const PD_LOREBOOK_CHROME_SELECTOR = '.pd-lore-header-tools,.pd-lore-translate-btn,.pd-lore-temp-box';
-const PD_LOREBOOK_ROOT_SELECTOR = '#world_popup';
+const PD_LOREBOOK_ROOT_SELECTOR = '#world_popup,#WorldInfo,#world_info';
 const PD_LOREBOOK_ENTRY_SELECTOR = '.world_entry';
+let pdLorebookSelectedRoot = null;
+
+function findLorebookShell() {
+  return selectLorebookShell([
+    document.getElementById('world_popup'),
+    document.getElementById('WorldInfo'),
+    document.getElementById('world_info'),
+  ], PD_LOREBOOK_ENTRY_SELECTOR);
+}
 
 function cleanLorebookText(value = '') {
   const lines = String(value || '')
@@ -5729,7 +5846,7 @@ function makeLorebookTranslateTools(entry) {
   return tools;
 }
 function isRenderedLorebookEntry(entry) {
-  return !!(entry?.nodeType === 1 && entry.matches?.(PD_LOREBOOK_ENTRY_SELECTOR) && entry.closest?.(PD_LOREBOOK_ROOT_SELECTOR));
+  return isLorebookEntryInSelectedRoot(entry, pdLorebookSelectedRoot, PD_LOREBOOK_ENTRY_SELECTOR, PD_LOREBOOK_ROOT_SELECTOR);
 }
 function ensureLorebookHeaderTranslateButton(entry) {
   try {
@@ -5834,22 +5951,28 @@ function setupLorebookLocalObserver() {
   // Local only: no document click handler, no polling, no attribute observer.
   // Existing entries are hydrated once; afterwards only newly added lorebook nodes are handled.
   try {
-    (window.__pdLorebookObservers || []).forEach(mo => { try { mo.disconnect(); } catch {} });
+    const legacyObservers = Array.isArray(window.__pdLorebookObservers) ? window.__pdLorebookObservers : [];
+    const previousObservers = new Set([window.__pdLorebookObserver, ...legacyObservers].filter(Boolean));
+    previousObservers.forEach(mo => { try { mo.disconnect(); } catch {} });
+    window.__pdLorebookObserver = null;
     window.__pdLorebookObservers = [];
+    pdLorebookSelectedRoot = null;
     try { document.removeEventListener('click', window.__pdLorebookClickCapture || (()=>{}), true); } catch {}
     try { document.removeEventListener('click', window.__pdLorebookClickBubbled || (()=>{}), false); } catch {}
     window.__pdLorebookClickCapture = null;
     window.__pdLorebookClickBubbled = null;
 
-    const shell = document.getElementById('world_popup') || document.getElementById('WorldInfo') || document.getElementById('world_info');
+    const shell = findLorebookShell();
     if (!shell) return;
+    pdLorebookSelectedRoot = shell;
     shell.querySelectorAll?.(PD_LOREBOOK_ENTRY_SELECTOR).forEach(ensureLorebookHeaderTranslateButton);
 
     const observer = new MutationObserver(records => {
       records.forEach(record => record.addedNodes.forEach(hydrateLorebookEntriesFromNode));
     });
     observer.observe(shell, { childList: true, subtree: true });
-    window.__pdLorebookObservers.push(observer);
+    window.__pdLorebookObserver = observer;
+    window.__pdLorebookObservers = [observer];
   } catch (e) {
     logDebug({ type:'lorebook-observer-setup-error', error:e?.message || String(e) });
   }
