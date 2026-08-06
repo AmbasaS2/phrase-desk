@@ -256,41 +256,11 @@ export function phraseDeskCacheMatchesSource(extra = {}, canonicalSource = '', h
   return hashes.has(sourceHash);
 }
 
-export function isLorebookEntryInSelectedRoot(entry, root, entrySelector = '.world_entry', rootSelector = '#world_popup,#WorldInfo,#world_info') {
-  return !!(
-    root?.matches?.(rootSelector) && entry?.nodeType === 1 && entry.matches?.(entrySelector) &&
-    root.contains?.(entry)
-  );
-}
 
-function isVisibleConnectedLorebookRoot(root) {
-  if (!root) return false;
-  if (typeof root.isConnected === 'boolean' && !root.isConnected) return false;
-  if (root.hidden === true) return false;
-  try {
-    if (typeof root.checkVisibility === 'function' && !root.checkVisibility()) return false;
-  } catch {}
-  try {
-    const style = root.ownerDocument?.defaultView?.getComputedStyle?.(root);
-    if (style && (
-      style.display === 'none' ||
-      style.visibility === 'hidden' ||
-      style.visibility === 'collapse' ||
-      style.opacity === '0'
-    )) return false;
-  } catch {}
-  try {
-    if (typeof root.getClientRects === 'function' && root.getClientRects().length === 0) return false;
-  } catch {}
-  return true;
-}
 
-export function selectLorebookShell(roots = [], entrySelector = '.world_entry') {
-  const candidates = Array.from(new Set((Array.isArray(roots) ? roots : []).filter(Boolean)));
-  const containsEntry = root => !!root?.querySelector?.(entrySelector);
-  const visible = candidates.filter(isVisibleConnectedLorebookRoot);
-  return visible.find(containsEntry) || visible[0] || candidates.find(containsEntry) || candidates[0] || null;
-}
+
+
+
 
 export function safeExtensionSettingsSnapshot(settings = {}) {
   const out = Object.assign({}, settings || {});
