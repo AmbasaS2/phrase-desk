@@ -27,7 +27,7 @@ const IS_BETA = false;
 const SHOW_DEBUG = true;
 const MAX_TOKENS = 8000;
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.3.12";
+const PD_VERSION = "1.3.13";
 const PD_GLOBAL_KEY = "__PHRASE_DESK_GLOBAL_STATE__";
 const pdGlobalState = globalThis[PD_GLOBAL_KEY] && typeof globalThis[PD_GLOBAL_KEY] === 'object'
   ? globalThis[PD_GLOBAL_KEY]
@@ -216,7 +216,7 @@ function readableFromHtmlish(value = '') {
 function looksLikeStructuralHtml(value = '') {
   const raw = String(value || '');
   if (!/[<][a-zA-Z!/]/.test(raw)) return false;
-  if (/<(?:div|span|section|article|aside|details|summary|table|thead|tbody|tr|td|th|ul|ol|li|img|picture|svg|style|script|pre|code|small|memo|info_panel|status_box|character_card|chat_box|scene_board)\b/i.test(raw)) return true;
+  if (/<(?:div|span|section|article|aside|details|summary|table|thead|tbody|tr|td|th|ul|ol|li|img|picture|svg|style|script|pre|code|small|memo|infoblock|info_panel|status_box|character_card|chat_box|scene_board)\b/i.test(raw)) return true;
   const tagCount = (raw.match(/<\/?[A-Za-z][^>]*>/g) || []).length;
   return tagCount >= 4;
 }
@@ -1102,7 +1102,9 @@ async function callAI(prompt, maxTokens = MAX_TOKENS, meta = {}) {
       tokenBudget,
     );
     const text = extractAIText(res);
-    const cleaned = cleanTranslationArtifacts(String(text || ''), '');
+    // Let the cleaner distinguish a model-added outer fence from one that was
+    // already part of the source. This preserves fenced panels and code blocks.
+    const cleaned = cleanTranslationArtifacts(String(text || ''), String(meta?.sourceText || ''));
     const normalized = cleaned;
     // Keep debug logs safe: record lengths/status only, never prompt or translated content.
     logDebug({
@@ -3028,7 +3030,7 @@ async function translateMessagePayload(payload, forceRetranslate = false, option
       // 채팅 본문은 숨은 표식으로 치환하지 않고 원문 그대로 전달합니다.
       const promptMeta = { targetIndex: payload?.idx, targetMsg: payload?.msg, freshRetranslation: !!forceRetranslate };
       const basePrompt = buildPrompt(sourceForPrompt, kind, promptMeta);
-      const rawResult = await callAI(basePrompt, MAX_TOKENS);
+      const rawResult = await callAI(basePrompt, MAX_TOKENS, { sourceText: sourceForPrompt });
       let restoredResult = safeChatTranslationPostprocess(rawResult, original, kind);
       const inventedKinship = unsupportedInventedKinshipTerms(restoredResult, sourceForPrompt, promptMeta);
       if (inventedKinship.length) {
