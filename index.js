@@ -27,7 +27,7 @@ const IS_BETA = false;
 const SHOW_DEBUG = true;
 const MAX_TOKENS = 8000;
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.3.13";
+const PD_VERSION = "1.3.14";
 const PD_GLOBAL_KEY = "__PHRASE_DESK_GLOBAL_STATE__";
 const pdGlobalState = globalThis[PD_GLOBAL_KEY] && typeof globalThis[PD_GLOBAL_KEY] === 'object'
   ? globalThis[PD_GLOBAL_KEY]
@@ -1270,7 +1270,7 @@ function insertBracketIntoQuotedSegment(segment = '', korean = '') {
   const trailing = s.match(/\s*$/)?.[0] || '';
   return `${leading}${open}${body} [${ko}]${close}${punct}${trailing}`;
 }
-function googleWholeBilingualFallback(source = '', korean = '') {
+function wholeBilingualFallback(source = '', korean = '') {
   const src = String(source || '').replace(/\r\n/g, '\n').trimEnd();
   const ko = String(korean || '').replace(/\r\n/g, '\n').trim();
   if (!src) return ko;
@@ -1302,7 +1302,7 @@ function orderedQuotationSpans(text = '') {
     .filter(span => span && span.end > span.start)
     .sort((a, b) => a.start - b.start || a.end - b.end);
 }
-function buildGoogleDialogueFromWholeTranslation(source = '', korean = '') {
+function buildDialogueBilingualFromWholeTranslation(source = '', korean = '') {
   const src = String(source || '').replace(/\r\n/g, '\n');
   const ko = String(korean || '').replace(/\r\n/g, '\n');
   const sourceQuotes = orderedQuotationSpans(src);
@@ -1351,7 +1351,7 @@ async function buildGoogleFullBilingual(text = '') {
       value => splitTextWithSeparators(value, /\n{2,}/g),
       (original, translated) => `${original.trimEnd()}\n[${String(translated || '').trim()}]${original.match(/\s*$/)?.[0] || ''}`,
     );
-    return paired || googleWholeBilingualFallback(source, ko);
+    return paired || wholeBilingualFallback(source, ko);
   }
   if (style === 'by_line') {
     const paired = pairGoogleUnits(
@@ -1360,7 +1360,7 @@ async function buildGoogleFullBilingual(text = '') {
       value => splitTextWithSeparators(value, /\n/g),
       (original, translated) => `${original.trimEnd()}\n[${String(translated || '').trim()}]${original.match(/\s*$/)?.[0] || ''}`,
     );
-    return paired || googleWholeBilingualFallback(source, ko);
+    return paired || wholeBilingualFallback(source, ko);
   }
 
   const sourceSegments = splitSentencesLight(source);
@@ -1368,7 +1368,7 @@ async function buildGoogleFullBilingual(text = '') {
   const sourceMeaningful = sourceSegments.filter(x => String(x || '').trim() && !/^\n+$/.test(x));
   const koreanMeaningful = koreanSegments.filter(x => String(x || '').trim() && !/^\n+$/.test(x));
   if (!sourceMeaningful.length || sourceMeaningful.length !== koreanMeaningful.length) {
-    return googleWholeBilingualFallback(source, ko);
+    return wholeBilingualFallback(source, ko);
   }
 
   let index = 0;
@@ -1392,7 +1392,37 @@ async function buildGoogleDialogueBilingual(text = '') {
   // translation rather than guessing, hiding, or discarding it.
   const ko = await translateViaGoogleSimple(source, 'ko');
   if (!ko.trim()) return '';
-  return buildGoogleDialogueFromWholeTranslation(source, ko) || ko;
+  return buildDialogueBilingualFromWholeTranslation(source, ko) || ko;
+}
+
+async function buildProfileDialogueBilingual(text = '', meta = {}) {
+  const source = String(text || '').replace(/\r\n/g, '\n');
+  if (!source.trim()) return '';
+
+  // Profile-backed models translate one coherent Korean passage first. Phrase Desk then
+  // rebuilds the bilingual dialogue locally from the preserved source quotations. This
+  // keeps narration/speech tags out of dialogue brackets and lets the model focus on
+  // Korean quality instead of simultaneously translating and typesetting bilingual text.
+  const prompt = buildPrompt(source, 'ko', { ...(meta || {}), dialogueRebuild: true });
+  const raw = await callAI(prompt, MAX_TOKENS, { sourceText: source, kind: 'ko' });
+  const korean = safeChatTranslationPostprocess(raw, source, 'ko');
+  if (!korean.trim()) return '';
+
+  const rebuilt = buildDialogueBilingualFromWholeTranslation(source, korean);
+  if (rebuilt) return safeChatTranslationPostprocess(rebuilt, source, 'dialogue');
+
+  // Alignment should normally succeed because the Korean-only prompt preserves quotation
+  // spans. If a provider still merges/splits quotes, keep all source and translated content
+  // visible rather than guessing at quote ownership or issuing a hidden second AI request.
+  logDebug({
+    type: 'dialogue-rebuild-warning',
+    reason: 'quote-alignment-mismatch',
+    sourceQuotes: orderedQuotationSpans(source).length,
+    koreanQuotes: orderedQuotationSpans(korean).length,
+    sourceLength: source.length,
+    resultLength: korean.length,
+  });
+  return wholeBilingualFallback(source, korean);
 }
 async function callGoogleTranslationEngine(sourceText = '', kind = settings.chatMode || 'full') {
   const source = String(sourceText || '');
@@ -1946,7 +1976,11 @@ function schedulePhraseDeskRenderDecoration(payload, reason = 'render') {
 
 function translationCacheKey(kind) {
   let base = '';
-  if (kind !== 'full') base = kind;
+  if (kind === 'dialogue') {
+    // Profile dialogue v2 translates one Korean passage first and rebuilds bilingual quotes locally.
+    // Keep it separate from legacy one-shot bilingual caches so old malformed results are never reused.
+    base = settings.translationEngine === 'google' ? 'dialogue' : 'dialogue:v2';
+  } else if (kind !== 'full') base = kind;
   else {
     const style = settings.bilingualStyle || 'side_sentence';
     // separated mode renders the lower original from the live source; bump the key so old broken caches are not reused.
@@ -1956,8 +1990,13 @@ function translationCacheKey(kind) {
 }
 function translationKeyMatchesEngine(key = '', preferredKey = '') {
   const k = String(key || '');
-  const wantsGoogle = String(preferredKey || '').startsWith('google:');
-  return wantsGoogle ? k.startsWith('google:') : !k.startsWith('google:');
+  const preferred = String(preferredKey || '');
+  const wantsGoogle = preferred.startsWith('google:');
+  if (wantsGoogle && !k.startsWith('google:')) return false;
+  if (!wantsGoogle && k.startsWith('google:')) return false;
+  // Dialogue v2 is intentionally not backward-compatible with legacy direct-bilingual caches.
+  if (preferred === 'dialogue:v2') return k === 'dialogue:v2';
+  return true;
 }
 function pickCachedMessageTranslation(state, preferredKey = '') {
   const translations = state?.translations && typeof state.translations === 'object' ? state.translations : {};
@@ -1977,6 +2016,17 @@ function pickCachedMessageTranslation(state, preferredKey = '') {
 }
 function shouldShowCachedMessageTranslation(root, key, state) {
   return !!(state && (state.showing || (root?.activeKey && root.activeKey === key)));
+}
+
+function finalKoreanRenderingGuide() {
+  return [
+    'Final Korean rendering pass',
+    '- Build the Korean around the natural action, feeling, and relationship rather than one-to-one English word matching. Use the line a native Korean speaker or novelist would actually choose in that moment.',
+    '- Treat short replies by conversational function and established register. Examples: “I really do.” → “응. 그래.” / “진심이야.” rather than “그렇다.”; affectionate exasperation → “진짜 못 말린다.” rather than a literal “불가능하다.”',
+    '- Recast English modifier+noun combinations into idiomatic Korean clauses or collocations. Examples: “their shared relief” → “둘 다 안도했다”; “the steady rhythm of his breathing” → “고르게 이어지는 숨결”; “years from now” → “몇 년 뒤에도.”',
+    '- Preserve concrete scene anchors while naturalizing: the same person, body part, owner, direction, contact, action, sequence, negation, and cause must remain unchanged. Do not move an action to a nearby body part; e.g. waist → 허리, hip → 골반/엉덩이, nape → 목덜미.',
+    '- Prefer standard fluent Korean forms such as “네가” and natural Hangul-based wording. If a phrase would otherwise remain untranslated, mixed-script, Chinese-script, or mechanically English-shaped, express the same meaning with the closest natural Korean equivalent.',
+  ];
 }
 
 function buildPrompt(text, kind, meta = {}) {
@@ -2089,7 +2139,14 @@ function buildPrompt(text, kind, meta = {}) {
   const sourceSpeaker = cleanName(meta?.targetMsg?.name || (meta?.targetMsg?.is_user ? (ctx?.name1 || 'User') : currentChar()));
   if (sourceSpeaker) lines.push('', 'Primary source speaker / perspective:', sourceSpeaker);
 
-  if (kind === 'ko') lines.push(
+  if (kind === 'ko' && meta?.dialogueRebuild) lines.push(
+    '',
+    'Mode: Korean-only translation for deterministic dialogue reconstruction',
+    '- Translate narration, speech tags, inner thought, and every quoted utterance fully into Korean.',
+    '- Preserve the exact number, order, and boundaries of quotation spans. Each source quotation must remain one quotation in the Korean result so Phrase Desk can rebuild the bilingual dialogue locally.',
+    '- Preserve paragraph breaks and source order. Return Korean only: do not retain source-language copies or add bilingual translation brackets.',
+  );
+  else if (kind === 'ko') lines.push(
     '',
     'Mode: Korean only',
     'Translate the complete source into natural Korean only. Do not retain source-language copies or add bilingual brackets unless they are literal source content.',
@@ -2102,6 +2159,7 @@ function buildPrompt(text, kind, meta = {}) {
     '',
     ...dialogueBilingualRules({ narrationMode: 'translated' }),
   );
+  lines.push('', ...finalKoreanRenderingGuide());
   lines.push('', '<source_text>', String(text || ''), '</source_text>');
   return lines.join('\n');
 }
@@ -3029,9 +3087,14 @@ async function translateMessagePayload(payload, forceRetranslate = false, option
       // 완전분리 모드는 AI에게 RP 본문만 보내고, 원문 전체는 하단에 그대로 다시 붙입니다.
       // 채팅 본문은 숨은 표식으로 치환하지 않고 원문 그대로 전달합니다.
       const promptMeta = { targetIndex: payload?.idx, targetMsg: payload?.msg, freshRetranslation: !!forceRetranslate };
-      const basePrompt = buildPrompt(sourceForPrompt, kind, promptMeta);
-      const rawResult = await callAI(basePrompt, MAX_TOKENS, { sourceText: sourceForPrompt });
-      let restoredResult = safeChatTranslationPostprocess(rawResult, original, kind);
+      let restoredResult = '';
+      if (kind === 'dialogue') {
+        restoredResult = await buildProfileDialogueBilingual(sourceForPrompt, promptMeta);
+      } else {
+        const basePrompt = buildPrompt(sourceForPrompt, kind, promptMeta);
+        const rawResult = await callAI(basePrompt, MAX_TOKENS, { sourceText: sourceForPrompt });
+        restoredResult = safeChatTranslationPostprocess(rawResult, original, kind);
+      }
       const inventedKinship = unsupportedInventedKinshipTerms(restoredResult, sourceForPrompt, promptMeta);
       if (inventedKinship.length) {
         // Do not silently send a second translation request. Keep the first result and leave
