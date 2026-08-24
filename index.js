@@ -27,7 +27,7 @@ const IS_BETA = false;
 const SHOW_DEBUG = true;
 const MAX_TOKENS = 8000;
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.3.14";
+const PD_VERSION = "1.3.15";
 const PD_GLOBAL_KEY = "__PHRASE_DESK_GLOBAL_STATE__";
 const pdGlobalState = globalThis[PD_GLOBAL_KEY] && typeof globalThis[PD_GLOBAL_KEY] === 'object'
   ? globalThis[PD_GLOBAL_KEY]
@@ -1551,7 +1551,7 @@ function dialogueBilingualRules({ narrationMode = 'full' } = {}) {
     'Treat straight double quotes, curly double quotes, 「」, and 『』 as dialogue boundaries.',
     'Preserve the exact number, order, pairing, and boundaries of all original dialogue quotation spans. Never merge spans, split one span, move a quotation mark, or move text across a quotation boundary.',
     'Within each original quotation span, retain the complete source utterance and place exactly one adjacent Korean square-bracket block containing only that span\'s own translation immediately before its original closing quotation mark.',
-    'Narration, action, inner thought, and speech tags between quotation spans must remain outside those spans and must never be included, copied, or translated inside any dialogue square brackets.',
+    'Narration, action, inner thought, speech tags, and status/information blocks before, between, or after quotation spans must remain outside those spans and in their exact original positions. Square-bracketed status or metadata lines such as [Date: ...], [Location: ...], and [Weather: ...] are structural blocks, not bilingual translation brackets; preserve their line order, translate their human-readable labels and values once, and never move a trailing block to the beginning or into a quotation.',
     'The order inside every quotation is always source-language utterance first, then one Korean bracket. Never put Korean first with the source language inside brackets, and never interleave alternating source and translation fragments.',
     'When a quotation contains several sentences, combine their Korean into that single final bracket.',
     'Example: “Hi. I am here. [안녕. 나 여기 있어.]”',
