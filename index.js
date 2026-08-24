@@ -27,7 +27,7 @@ const IS_BETA = false;
 const SHOW_DEBUG = true;
 const MAX_TOKENS = 8000;
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.3.13";
+const PD_VERSION = "1.3.14";
 const PD_GLOBAL_KEY = "__PHRASE_DESK_GLOBAL_STATE__";
 const pdGlobalState = globalThis[PD_GLOBAL_KEY] && typeof globalThis[PD_GLOBAL_KEY] === 'object'
   ? globalThis[PD_GLOBAL_KEY]
@@ -1549,7 +1549,9 @@ function dialogueBilingualRules({ narrationMode = 'full' } = {}) {
     'Dialogue formatting:',
     narrationRule,
     'Treat straight double quotes, curly double quotes, 「」, and 『』 as dialogue boundaries.',
-    'Within one quotation span, retain the complete source utterance and place exactly one Korean square-bracket translation immediately before that quotation closes.',
+    'Preserve the exact number, order, pairing, and boundaries of all original dialogue quotation spans. Never merge spans, split one span, move a quotation mark, or move text across a quotation boundary.',
+    'Within each original quotation span, retain the complete source utterance and place exactly one adjacent Korean square-bracket block containing only that span\'s own translation immediately before its original closing quotation mark.',
+    'Narration, action, inner thought, and speech tags between quotation spans must remain outside those spans and must never be included, copied, or translated inside any dialogue square brackets.',
     'The order inside every quotation is always source-language utterance first, then one Korean bracket. Never put Korean first with the source language inside brackets, and never interleave alternating source and translation fragments.',
     'When a quotation contains several sentences, combine their Korean into that single final bracket.',
     'Example: “Hi. I am here. [안녕. 나 여기 있어.]”',
@@ -2079,7 +2081,6 @@ function buildPrompt(text, kind, meta = {}) {
   );
 
   const gp = globalPrompt().trim();
-  if (gp) lines.push('', 'Global terminology or tone preferences:', gp);
   const cp = currentPrompt().trim();
   if (cp) lines.push('', 'Current-character terminology, pronouns, and voice preferences:', cp);
   const voiceRef = currentCharacterVoiceReference();
@@ -2102,6 +2103,7 @@ function buildPrompt(text, kind, meta = {}) {
     '',
     ...dialogueBilingualRules({ narrationMode: 'translated' }),
   );
+  if (gp) lines.push('', 'Additional mandatory translation rules:', gp);
   lines.push('', '<source_text>', String(text || ''), '</source_text>');
   return lines.join('\n');
 }
