@@ -27,7 +27,7 @@ const IS_BETA = false;
 const SHOW_DEBUG = true;
 const MAX_TOKENS = 8000;
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.3.15";
+const PD_VERSION = "1.3.17";
 const PD_GLOBAL_KEY = "__PHRASE_DESK_GLOBAL_STATE__";
 const pdGlobalState = globalThis[PD_GLOBAL_KEY] && typeof globalThis[PD_GLOBAL_KEY] === 'object'
   ? globalThis[PD_GLOBAL_KEY]
@@ -3480,7 +3480,7 @@ function openQuickMenu(anchor) {
   lastQuickAnchor = anchor;
   const p = getSelectionPayload();
   const rect = anchor?.getBoundingClientRect?.() || {left: window.innerWidth-250, top: window.innerHeight-120, bottom: window.innerHeight-80};
-  const menu = $(`<div class="pd-menu"><button data-act="open">Phrase Desk 열기</button><button data-act="save" ${p?'':'disabled'}>표현 저장</button><button data-act="repeat">반복 표현 찾기 (최근 10개)</button><button data-act="quiz">AI 쪽지 시험</button><button data-act="practice">AI 영어 답변 연습</button><button data-act="history">이전 학습지</button></div>`).appendTo('body');
+  const menu = $(`<div class="pd-menu"><button data-act="open">Phrase Desk 열기</button><button data-act="save" ${p?'':'disabled'}>표현 저장</button><button data-act="repeat">반복 표현 찾기 (최근 10개)</button><button data-act="quiz">쪽지 시험</button><button data-act="practice">AI 영어 답변 연습</button><button data-act="history">이전 학습지</button></div>`).appendTo('body');
   const w = 226, h = 238;
   menu.css({ left: Math.min(window.innerWidth - w - 10, Math.max(10, rect.left - w + rect.width)), top: Math.min(window.innerHeight - h - 10, Math.max(10, rect.top - h - 8)) });
   menu.find('[data-act="open"]').on('click',()=>{ $('.pd-menu').remove(); openNotebook(); });
@@ -3699,7 +3699,7 @@ async function clearCurrentChatTranslationCache(){
 
 
 function resetLearningData() {
-  if (!confirm('수집한 어휘, AI 쪽지 시험 기록, 오답노트, AI 영어 답변 연습 기록, 학습 달력 기록이 모두 초기화됩니다. 번역 설정과 번역 캐시는 유지됩니다. 진행할까요?')) return;
+  if (!confirm('수집한 어휘, 쪽지 시험 기록, 오답노트, AI 영어 답변 연습 기록, 학습 달력 기록이 모두 초기화됩니다. 번역 설정과 번역 캐시는 유지됩니다. 진행할까요?')) return;
   settings.notebook = [];
   settings.quizHistory = [];
   settings.practiceHistory = [];
@@ -3763,7 +3763,7 @@ function openStudyCalendar(monthDate = new Date()) {
   }
   const totalQuiz = Object.values(counts).reduce((a,c)=>a+(c.quiz||0),0);
   const totalPractice = Object.values(counts).reduce((a,c)=>a+(c.practice||0),0);
-  showModal(`<button class="pd-x" data-close-modal>×</button><h3>학습 달력</h3><div class="pd-cal-head"><button id="pd-cal-prev" class="pd-lite-btn">이전 달</button><b>${y}. ${String(m+1).padStart(2,'0')}</b><button id="pd-cal-next" class="pd-lite-btn">다음 달</button></div><div class="pd-cal-summary">AI 쪽지 시험 ${totalQuiz}회 · AI 영어 답변 연습 ${totalPractice}회</div><div class="pd-cal-week"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div><div class="pd-cal-grid">${cells.join('')}</div>`);
+  showModal(`<button class="pd-x" data-close-modal>×</button><h3>학습 달력</h3><div class="pd-cal-head"><button id="pd-cal-prev" class="pd-lite-btn">이전 달</button><b>${y}. ${String(m+1).padStart(2,'0')}</b><button id="pd-cal-next" class="pd-lite-btn">다음 달</button></div><div class="pd-cal-summary">쪽지 시험 ${totalQuiz}회 · AI 영어 답변 연습 ${totalPractice}회</div><div class="pd-cal-week"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div><div class="pd-cal-grid">${cells.join('')}</div>`);
   $('#pd-cal-prev').on('click', () => openStudyCalendar(new Date(y, m - 1, 1)));
   $('#pd-cal-next').on('click', () => openStudyCalendar(new Date(y, m + 1, 1)));
 }
@@ -3922,7 +3922,7 @@ function openEditNoteModal(id) {
 
 function openNotebook() {
   $('.pd-popover').remove();
-  const html=`<div class="pd-popover" role="dialog"><div class="pd-head"><div class="pd-titlebox"><div class="pd-title-line"><b>Phrase Desk</b><button id="pd-study-calendar" class="pd-title-calendar" title="학습 달력" aria-label="학습 달력">📅</button></div><span>Collect, review, remember.</span></div><div class="pd-head-actions"><button id="pd-gear" title="설정">⚙</button><button data-close-pop title="닫기">×</button></div></div><div class="pd-body"><aside class="pd-filterbar"><button data-filter="all" class="on" title="전체">All</button><button data-filter="new" title="새 표현">○</button><button data-filter="learning" title="외우는 중">◐</button><button data-filter="hard" title="어려움">◆</button><button data-filter="known" title="외움">●</button><button data-filter="starred" title="즐겨찾기">★</button></aside><main><div class="pd-actions"><button id="pd-add-direct">어휘 직접 추가</button><button id="pd-ai-fill">AI 어휘 교정</button><button id="pd-repeat-find">반복 표현 찾기</button><button id="pd-quiz">AI 쪽지 시험</button><button id="pd-writing-practice">AI 영어 답변 연습</button><button id="pd-quiz-history">이전 학습지</button></div><input id="pd-search" placeholder="Search phrases, meaning, tags"><div id="pd-list"></div></main></div></div>`;
+  const html=`<div class="pd-popover" role="dialog"><div class="pd-head"><div class="pd-titlebox"><div class="pd-title-line"><b>Phrase Desk</b><button id="pd-study-calendar" class="pd-title-calendar" title="학습 달력" aria-label="학습 달력">📅</button></div><span>Collect, review, remember.</span></div><div class="pd-head-actions"><button id="pd-gear" title="설정">⚙</button><button data-close-pop title="닫기">×</button></div></div><div class="pd-body"><aside class="pd-filterbar"><button data-filter="all" class="on" title="전체">All</button><button data-filter="new" title="새 표현">○</button><button data-filter="learning" title="외우는 중">◐</button><button data-filter="hard" title="어려움">◆</button><button data-filter="known" title="외움">●</button><button data-filter="starred" title="즐겨찾기">★</button></aside><main><div class="pd-actions"><button id="pd-add-direct">어휘 직접 추가</button><button id="pd-ai-fill">AI 어휘 교정</button><button id="pd-repeat-find">반복 표현 찾기</button><button id="pd-quiz">쪽지 시험</button><button id="pd-writing-practice">AI 영어 답변 연습</button><button id="pd-quiz-history">이전 학습지</button></div><input id="pd-search" placeholder="Search phrases, meaning, tags"><div id="pd-list"></div></main></div></div>`;
   $('body').append(html);
   bindPhraseDeskViewportPlacement();
   placePhraseDeskPopover();
@@ -4113,6 +4113,123 @@ async function enrichNotes(){
   } finally { endAiTask('enrich'); }
 }
 
+function repeatDifficultyProfile(value = 'normal') {
+  const profiles = {
+    very_easy: {
+      label: '초보',
+      promptName: 'absolute beginner',
+      band: 'A1–A2',
+      summary: '뜻이 바로 보이는 짧은 일상 표현 중심',
+      examples: ['right now', 'a little bit', 'have to'],
+      preferredTokens: '2–3',
+      positive: ['right now', 'a little bit', 'have to'],
+      negative: ['take it for granted', 'to put it mildly'],
+      selection: 'Prefer transparent everyday chunks, basic auxiliaries, and simple high-frequency collocations. Exclude figurative idioms, slang, sarcasm, ellipsis, and culture-dependent wording.',
+    },
+    easy: {
+      label: '쉬움',
+      promptName: 'easy beginner',
+      band: 'A2–B1',
+      summary: '흔한 연어와 기초 구동사·전치사 표현 중심',
+      examples: ['look after', 'as soon as', 'be afraid of'],
+      preferredTokens: '2–4',
+      positive: ['look after', 'as soon as', 'be afraid of'],
+      negative: ['not so much X as Y', 'to put it mildly'],
+      selection: 'Prefer common phrasal verbs, everyday collocations, and short reusable sentence patterns. Exclude subtle sarcasm, literary ellipsis, rare slang, and strongly culture-dependent idioms.',
+    },
+    normal: {
+      label: '기본',
+      promptName: 'intermediate',
+      band: 'B1–B2',
+      summary: '재사용하기 좋은 문장틀과 일상 구동사 중심',
+      examples: ['end up -ing', 'It turns out that', 'be used to -ing'],
+      preferredTokens: '2–5',
+      positive: ['end up -ing', 'It turns out that', 'be used to -ing'],
+      negative: ['right now', 'to put it mildly'],
+      selection: 'Prefer reusable sentence frames, practical phrasal verbs, non-trivial collocations, and common idioms. Skip extremely transparent beginner chunks unless they clearly recur or define the character voice; skip highly culture-dependent advanced phrasing.',
+    },
+    hard: {
+      label: '어려움',
+      promptName: 'upper-intermediate to advanced',
+      band: 'B2–C1',
+      summary: '비직역 관용구와 복합 문장틀·격식 차이 중심',
+      examples: ['take it for granted', "couldn't help but", 'be bound to'],
+      preferredTokens: '3–6',
+      positive: ['take it for granted', "couldn't help but", 'be bound to'],
+      negative: ['right now', 'a little bit', 'have to'],
+      selection: 'Prefer non-literal idioms, nuanced collocations, complex grammar chunks, and register-sensitive wording. Exclude transparent beginner chunks unless they recur and are central to the character voice.',
+    },
+    expert: {
+      label: '고수',
+      promptName: 'expert',
+      band: 'C1+',
+      summary: '생략·빈정거림·문화적 뉘앙스와 고급 문장틀 중심',
+      examples: ['to put it mildly', 'not so much X as Y', "as if that weren't enough"],
+      preferredTokens: '3–7',
+      positive: ['to put it mildly', 'not so much X as Y', "as if that weren't enough"],
+      negative: ['right now', 'look after', 'have to'],
+      selection: 'Prefer subtle register shifts, sarcasm, ellipsis, culturally loaded idioms, and advanced rhetorical sentence frames. Exclude plain transparent expressions unless their contextual use carries unusual voice or pragmatic nuance.',
+    },
+  };
+  return profiles[value] || profiles.normal;
+}
+function repeatDifficultyPrompt(value = 'normal') {
+  const p = repeatDifficultyProfile(value);
+  return [
+    `Target learning band (heuristic, not a verified CEFR assessment): ${p.promptName}, approximately ${p.band}.`,
+    `Preferred candidate length for this band: ${p.preferredTokens} whitespace-separated tokens. The absolute allowed range remains 2 to 7 tokens.`,
+    p.selection,
+    `Positive complexity examples: ${p.positive.join(' | ')}.`,
+    `Negative examples for this band: ${p.negative.join(' | ')}.`,
+    'Examples describe the target complexity only. Never output an example unless that wording occurs in the logs or its stated pattern is clearly instantiated there.',
+  ].join('\n');
+}
+function repeatDifficultyHelpHtml(value = 'normal') {
+  const p = repeatDifficultyProfile(value);
+  return `<small id="pd-repeat-difficulty-help" class="pd-muted-line" aria-live="polite" style="display:block;margin-top:6px;line-height:1.45;white-space:normal;overflow-wrap:anywhere"><b>${esc(p.label)} · ${esc(p.band)}</b> — ${esc(p.summary)}<br>예: ${p.examples.map(esc).join(' · ')}<br>AI가 추정하는 학습 수준입니다.</small>`;
+}
+function repeatCandidateKey(value = '') {
+  return norm(value)
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[‘’]/g, "'")
+    .replace(/^[\s"'“”.,!?;:()[\]{}]+|[\s"'“”.,!?;:()[\]{}]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+function repeatCandidateTokenCount(value = '') {
+  return norm(value).split(/\s+/).filter(Boolean).length;
+}
+function uniqueValidRepeatCandidates(candidates = []) {
+  const seen = new Set();
+  return (Array.isArray(candidates) ? candidates : []).filter(candidate => {
+    const text = norm(candidate?.text || '');
+    const key = repeatCandidateKey(text);
+    const count = repeatCandidateTokenCount(text);
+    if (!key || !/[A-Za-z]/.test(text) || count < 2 || count > 7 || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+function repeatSearchText(value = '') {
+  return norm(value)
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[‘’]/g, "'")
+    .replace(/[^a-z0-9'\-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+function repeatOccurrenceCount(expression = '', sourceItems = []) {
+  const needle = repeatSearchText(expression);
+  if (!needle) return 0;
+  const wrappedNeedle = ` ${needle} `;
+  return (Array.isArray(sourceItems) ? sourceItems : []).reduce((count, item) => {
+    const haystack = ` ${repeatSearchText(item?.text || '')} `;
+    return count + (haystack.includes(wrappedNeedle) ? 1 : 0);
+  }, 0);
+}
+
 async function openRepeatFinder(){
   if (!beginAiTask('repeat', '')) return;
   keepPhraseDeskOpen(30000);
@@ -4121,31 +4238,28 @@ async function openRepeatFinder(){
   const items=chat.map(m=>({source:noteSource(null,m), text:norm(stripCode(messageStudySourceTextFromMsg(m)))})).filter(x=>x.text);
   if (!items.length) return toast('최근 캐릭터 메시지를 찾지 못했습니다.', 'warn');
   const repeatDifficulty = settings.repeatDifficulty || 'normal';
-  const repeatGuide = repeatDifficulty === 'very_easy'
-    ? 'Difficulty: absolute beginner. Prefer middle-school/basic everyday English chunks, short useful phrases, simple collocations, and easy sentence patterns. Do not return obscure idioms or slang. Still avoid useless standalone names or pronouns.'
-    : repeatDifficulty === 'easy'
-      ? 'Difficulty: easy beginner. Include very useful simple chunks, common collocations, short sentence patterns, and everyday expressions if they have clear learning value. Avoid useless standalone words and names.'
-      : repeatDifficulty === 'hard'
-        ? 'Difficulty: hard. Prefer nuanced idioms, phrasal verbs, collocations, grammar chunks, and repeated voice habits. Skip very obvious beginner chunks unless they are central to the character voice.'
-        : repeatDifficulty === 'expert'
-          ? 'Difficulty: expert. Include advanced idioms, slang, sarcasm, ellipsis, subtle register shifts, character voice habits, and culturally loaded phrasing when clearly present. Explain nuance in Korean.'
-          : 'Difficulty: normal. Balance common practical chunks with idioms, collocations, phrasal verbs, and sentence patterns.';
-  showModal(`<button class="pd-x" data-close-modal>×</button><h3>반복 표현 찾기</h3><p class="pd-muted-line">최근 캐릭터 메시지 10개에서 영어 학습 표현을 찾는 중입니다. (난이도: ${esc(difficultyLabel(repeatDifficulty))})</p><div class="pd-loading">AI가 표현 후보를 고르고 있습니다…</div>`);
+  const repeatProfile = repeatDifficultyProfile(repeatDifficulty);
+  const repeatGuide = repeatDifficultyPrompt(repeatDifficulty);
+  showModal(`<button class="pd-x" data-close-modal>×</button><h3>반복 표현 찾기</h3><p class="pd-muted-line">최근 캐릭터 메시지 10개에서 반복되었거나 한 번만 나와도 학습 가치가 있는 영어 표현을 찾는 중입니다. (AI 추정 수준: ${esc(repeatProfile.label)} · ${esc(repeatProfile.band)})</p><div class="pd-loading">AI가 표현 후보를 고르고 있습니다…</div>`);
   const prompt = [
     'Phrase Desk expression search task:',
     'You find useful English chunks from recent character messages.',
     '',
     'Rules:',
-    'From the recent assistant/character messages below, extract up to 10 useful recurring or study-worthy English grammar phrases, collocations, phrasal verbs, sentence patterns, idioms, repeated voice habits, or short chunks.',
+    'From the recent assistant/character messages below, extract up to 10 useful English grammar phrases, collocations, phrasal verbs, sentence patterns, idioms, voice habits, or short chunks.',
+    'A candidate may qualify in one of two honest ways:',
+    '1. repeated: the exact or near-identical chunk occurs in at least two different input messages.',
+    '2. study_worthy: it occurs once but has clear learning value for the selected level.',
+    'Prioritize repeated candidates. A once-seen study_worthy item is allowed, but never call it repeated; reason_ko must plainly say that it appeared once and why it is still useful.',
     repeatGuide,
     '',
     'Return format:',
-    'Return JSON only with this schema: {"items":[{"text":"English phrase or pattern","meaning_ko":"short Korean meaning","context":"one source sentence from the logs","context_ko":"natural Korean translation of the context","reason_ko":"why this is useful","tags":["short Korean tag"],"explanation_ko":"brief nuance or usage explanation","alternatives_en_ko":"1-3 alternative expressions with Korean meanings","grammar_ko":"brief grammar point if relevant","vocabulary_ko":"key words if relevant","source":"character name if clear"}]}',
+    'Return JSON only with this schema: {"items":[{"text":"English phrase or pattern","basis":"repeated or study_worthy","meaning_ko":"short Korean meaning","context":"one source sentence from the logs","context_ko":"natural Korean translation of the context","reason_ko":"why this is useful; if basis is study_worthy, say it appeared once","tags":["short Korean tag"],"explanation_ko":"brief nuance or usage explanation","alternatives_en_ko":"1-3 alternative expressions with Korean meanings","grammar_ko":"brief grammar point if relevant","vocabulary_ko":"key words if relevant","source":"character name if clear"}]}',
     'Do not add markdown, labels, commentary, or text outside JSON.',
     '',
     'Hard rules:',
     '- Do NOT return character names, proper nouns, pronouns, or standalone single words like remus, around, voice, that, could not.',
-    '- Prefer 2 to 7 word chunks, phrase patterns, grammar patterns, idioms, repeated sentence frames, or collocations.',
+    '- Every text value MUST contain 2 to 7 whitespace-separated tokens. Never return a one-token item or an item longer than 7 tokens.',
     '- Do not invent content outside the logs.',
     '- If the text contains Korean translations in brackets, ignore the Korean and extract from the English only.',
     '- Tags must be short Korean labels and only if clearly relevant. Use British/American tags only when certain.',
@@ -4176,12 +4290,20 @@ async function openRepeatFinder(){
     grammar:textBlock(x.grammar_ko || x.grammar || ''),
     vocabulary:textBlock(x.vocabulary_ko || x.vocabulary || ''),
     aiEnriched:true
-  })).filter(x=>x.text && /[A-Za-z]/.test(x.text) && x.text.split(/\s+/).length >= 2).slice(0,10);
+  }));
+  arr = uniqueValidRepeatCandidates(arr).slice(0,10).map(x => {
+    const occurrenceCount = repeatOccurrenceCount(x.text, items);
+    return {
+      ...x,
+      _occurrenceCount: occurrenceCount,
+      _repeatBasis: occurrenceCount >= 2 ? 'repeated' : 'study_worthy',
+    };
+  });
   if (!arr.length) {
     showModal(`<button class="pd-x" data-close-modal>×</button><h3>반복 표현 찾기</h3><p>저장할 만한 반복/문법 표현을 찾지 못했습니다.</p>`);
     return;
   }
-  showModal(`<button class="pd-x" data-close-modal>×</button><h3>반복 표현 찾기</h3><p class="pd-muted-line">최근 캐릭터 메시지 10개에서 고른 영어 학습 표현입니다. 행을 눌러 선택할 수 있습니다.</p><div class="pd-repeat-list">${arr.map((x,i)=>`<label class="pd-row pd-repeat-row"><input type="checkbox" value="${i}"><span><b>${esc(x.text)}</b>${x.meaning?`<em>${esc(x.meaning)}</em>`:''}${x.context?`<small>${esc(x.context)}</small>`:''}</span></label>`).join('')}</div><button id="pd-save-repeats" class="pd-primary">선택 저장</button>`);
+  showModal(`<button class="pd-x" data-close-modal>×</button><h3>반복 표현 찾기</h3><p class="pd-muted-line">최근 캐릭터 메시지 10개에서 고른 영어 학습 표현입니다. ‘반복’은 같은 표현이 서로 다른 메시지에서 2회 이상 확인된 경우입니다.</p><div class="pd-repeat-list">${arr.map((x,i)=>`<label class="pd-row pd-repeat-row"><input type="checkbox" value="${i}"><span><b>${esc(x.text)}</b>${x.meaning?`<em>${esc(x.meaning)}</em>`:''}<small>${x._repeatBasis === 'repeated' ? `반복 ${x._occurrenceCount}회` : '학습 추천'}${x.context?` · ${esc(x.context)}`:''}</small></span></label>`).join('')}</div><button id="pd-save-repeats" class="pd-primary">선택 저장</button>`);
   window.__pdRepeatCandidates = arr;
   $('.pd-repeat-row').off('click.phraseDeskRepeat').on('click.phraseDeskRepeat', function(e){
     if ($(e.target).closest('button,#pd-save-repeats').length) return;
@@ -4199,7 +4321,12 @@ async function openRepeatFinder(){
     e.preventDefault();
     const chosen = $('.pd-repeat-row input[type="checkbox"]').filter(function(){ return this.checked; }).map(function(){ return Number(this.value); }).get();
     let saved = 0;
-    chosen.forEach(i => { const x=window.__pdRepeatCandidates?.[i]; if(x && addNote(x)) saved++; });
+    chosen.forEach(i => {
+      const x=window.__pdRepeatCandidates?.[i];
+      if (!x) return;
+      const { _occurrenceCount, _repeatBasis, ...note } = x;
+      if (addNote(note)) saved++;
+    });
     closeModals(); renderNotebook(); updateSavedCount(); toast(saved ? `${saved}개 표현을 저장했습니다.` : '선택된 표현이 없습니다.', saved ? 'success' : 'warn');
   });
 
@@ -4243,7 +4370,7 @@ async function applyImportedLearningData(payload) {
 function openManageModal(){
   const fontOptions = [11,12,13,14,15,16,17,18].map(v=>`<option value="${v}">${v}</option>`).join('');
   const countOptions = [5,10,15,20,30].map(v=>`<option value="${v}">${v}개</option>`).join('');
-  showModal(`<button class="pd-x" data-close-modal>×</button><h3>Phrase Desk 설정</h3><div class="pd-manage-grid"><label>앱 글씨 크기(px)<select id="pd-font" class="pd-control">${fontOptions}</select></label><label>반복 표현 난이도<select id="pd-repeat-difficulty" class="pd-control"><option value="very_easy">초보</option><option value="easy">쉬움</option><option value="normal">기본</option><option value="hard">어려움</option><option value="expert">고수</option></select></label><label>AI 쪽지 시험 난이도<select id="pd-quiz-difficulty" class="pd-control"><option value="very_easy">초보</option><option value="easy">쉬움</option><option value="normal">기본</option><option value="hard">어려움</option><option value="expert">고수</option></select></label><label>AI 쪽지 시험 개수<select id="pd-quiz-count" class="pd-control">${countOptions}</select></label></div><div class="pd-manage-buttons"><button id="pd-export" class="pd-lite-btn">노트 내보내기</button><button id="pd-import" class="pd-lite-btn">노트 가져오기</button><button id="pd-reset-all" class="pd-lite-btn pd-danger-btn">Phrase Desk 초기화</button></div><input id="pd-import-file" type="file" accept=".json" style="display:none">`);
+  showModal(`<button class="pd-x" data-close-modal>×</button><h3>Phrase Desk 설정</h3><div class="pd-manage-grid"><label>앱 글씨 크기(px)<select id="pd-font" class="pd-control">${fontOptions}</select></label><label>수집할 영어 수준<select id="pd-repeat-difficulty" class="pd-control"><option value="very_easy">초보</option><option value="easy">쉬움</option><option value="normal">기본</option><option value="hard">어려움</option><option value="expert">고수</option></select>${repeatDifficultyHelpHtml(settings.repeatDifficulty || 'normal')}</label><label>쪽지 시험 단계<select id="pd-quiz-difficulty" class="pd-control"><option value="very_easy">초보</option><option value="easy">쉬움</option><option value="normal">기본</option><option value="hard">어려움</option><option value="expert">고수</option></select><small id="pd-quiz-stage-help" class="pd-muted-line" aria-live="polite" style="display:block;margin-top:6px;line-height:1.45;white-space:normal;overflow-wrap:anywhere"></small></label><label>쪽지 시험 개수<select id="pd-quiz-count" class="pd-control">${countOptions}</select></label></div><div class="pd-manage-buttons"><button id="pd-export" class="pd-lite-btn">노트 내보내기</button><button id="pd-import" class="pd-lite-btn">노트 가져오기</button><button id="pd-reset-all" class="pd-lite-btn pd-danger-btn">Phrase Desk 초기화</button></div><input id="pd-import-file" type="file" accept=".json" style="display:none">`);
   $('#pd-font').val(String(settings.fontSize || 13)).on('change',function(){
     const v=Math.max(11, Math.min(18, Number(this.value)||13));
     settings.fontSize=v;
@@ -4252,9 +4379,16 @@ function openManageModal(){
     renderNotebook();
     toast('앱 글씨 크기를 저장했습니다.','success');
   });
-  $('#pd-repeat-difficulty').val(settings.repeatDifficulty || 'normal').on('change',function(){ settings.repeatDifficulty=this.value; saveSettings(true); toast('반복 표현 난이도를 저장했습니다.','success'); });
-  $('#pd-quiz-difficulty').val(settings.quizDifficulty || 'normal').on('change',function(){ settings.quizDifficulty=this.value; saveSettings(true); toast('AI 쪽지 시험 난이도를 저장했습니다.','success'); });
-  $('#pd-quiz-count').val(String(settings.quizCount || 10)).on('change',function(){ settings.quizCount=Number(this.value)||10; saveSettings(true); toast('AI 쪽지 시험 개수를 저장했습니다.','success'); });
+  $('#pd-repeat-difficulty').val(settings.repeatDifficulty || 'normal').on('change',function(){
+    settings.repeatDifficulty=this.value;
+    $('#pd-repeat-difficulty-help').replaceWith(repeatDifficultyHelpHtml(this.value));
+    saveSettings(true);
+    toast('수집할 영어 수준을 저장했습니다.','success');
+  });
+  const updateQuizStageHelp = () => $('#pd-quiz-stage-help').text(quizStageHelp($('#pd-quiz-difficulty').val() || settings.quizDifficulty));
+  $('#pd-quiz-difficulty').val(settings.quizDifficulty || 'normal').on('change',function(){ settings.quizDifficulty=this.value; updateQuizStageHelp(); saveSettings(true); toast('쪽지 시험 단계를 저장했습니다.','success'); });
+  updateQuizStageHelp();
+  $('#pd-quiz-count').val(String(settings.quizCount || 10)).on('change',function(){ settings.quizCount=Number(this.value)||10; saveSettings(true); toast('쪽지 시험 개수를 저장했습니다.','success'); });
   $('#pd-export').on('click',()=>{const blob=new Blob([JSON.stringify({notebook:settings.notebook,quizHistory:settings.quizHistory,practiceHistory:settings.practiceHistory,hiddenWrongNotes:settings.hiddenWrongNotes,recentPracticeNoteIds:settings.recentPracticeNoteIds},null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='phrase-desk-notes.json'; a.click(); URL.revokeObjectURL(a.href); toast('내보내기를 시작했습니다.','success');});
   $('#pd-import').on('click',()=>$('#pd-import-file').trigger('click'));
   $('#pd-reset-all').on('click', resetLearningData);
@@ -4262,6 +4396,17 @@ function openManageModal(){
 }
 function difficultyLabel(v=settings.quizDifficulty) {
   return v === 'very_easy' ? '초보' : v === 'easy' ? '쉬움' : v === 'hard' ? '어려움' : v === 'expert' ? '고수' : '기본';
+}
+function quizStageHelp(v=settings.quizDifficulty) {
+  return v === 'very_easy'
+    ? '영어 표현의 한국어 뜻을 2개 중 고릅니다. 예: wake with a start → 깜짝 놀라 깨다'
+    : v === 'easy'
+      ? '영어 표현과 한국어 뜻을 양방향 3지선다로 풉니다. 예: wake with a start ↔ 깜짝 놀라 깨다'
+      : v === 'hard'
+        ? '저장 문맥 4지선다와 3~6단어 표현 순서 문제입니다. 순서 문제에는 한국어 뜻이 표시됩니다. 예: wake / with / a / start'
+        : v === 'expert'
+          ? '저장 문맥을 보고 푸는 4~8단어 표현 순서 문제만 나옵니다. 한국어 뜻은 표시되지 않습니다. 예: I woke [빈칸].'
+          : '뜻·표현·저장 문맥 빈칸을 4지선다로 풉니다. 예: I woke [빈칸]. → wake with a start';
 }
 function quizCountLabel(v=settings.quizCount) {
   return `${Number(v) || 10}개`;
@@ -4438,59 +4583,83 @@ async function openWritingPractice(){
     showPracticeForm();
   } finally { endAiTask('practice'); }
 }
-function quizPlanFor(count, difficulty) {
-  const plans = {
-    very_easy: [
-      { type:'meaning', answerMode:'choice' },
-      { type:'expression', answerMode:'choice' },
-      { type:'context_blank', answerMode:'choice' },
-      { type:'expression', answerMode:'text' }
-    ],
-    easy: [
-      { type:'meaning', answerMode:'choice' },
-      { type:'expression', answerMode:'choice' },
-      { type:'context_blank', answerMode:'choice' },
-      { type:'expression', answerMode:'text' },
-      { type:'grammar', answerMode:'reorder' },
-      { type:'nuance', answerMode:'choice' }
-    ],
-    normal: [
-      { type:'meaning', answerMode:'choice' },
-      { type:'expression', answerMode:'text' },
-      { type:'context_blank', answerMode:'choice' },
-      { type:'grammar', answerMode:'reorder' },
-      { type:'nuance', answerMode:'choice' },
-      { type:'similar', answerMode:'choice' },
-      { type:'grammar', answerMode:'correction' },
-      { type:'context_blank', answerMode:'text' }
-    ],
-    hard: [
-      { type:'expression', answerMode:'text' },
-      { type:'context_blank', answerMode:'text' },
-      { type:'grammar', answerMode:'correction' },
-      { type:'nuance', answerMode:'choice' },
-      { type:'similar', answerMode:'choice' },
-      { type:'grammar', answerMode:'reorder' },
-      { type:'expression', answerMode:'choice' },
-      { type:'meaning', answerMode:'choice' }
-    ],
-    expert: [
-      { type:'nuance', answerMode:'choice' },
-      { type:'similar', answerMode:'choice' },
-      { type:'context_blank', answerMode:'text' },
-      { type:'grammar', answerMode:'correction' },
-      { type:'expression', answerMode:'text' },
-      { type:'expression', answerMode:'choice' },
-      { type:'grammar', answerMode:'reorder' },
-      { type:'meaning', answerMode:'choice' }
-    ]
+function quizStageRules(difficulty = 'normal') {
+  const rules = {
+    very_easy: {
+      label:'초보',
+      choiceCount:2,
+      reorderMin:0,
+      reorderMax:0,
+      showMeaningHint:true,
+      pattern:[{ type:'meaning', answerMode:'choice' }]
+    },
+    easy: {
+      label:'쉬움',
+      choiceCount:3,
+      reorderMin:0,
+      reorderMax:0,
+      showMeaningHint:true,
+      pattern:[
+        { type:'meaning', answerMode:'choice' },
+        { type:'expression', answerMode:'choice' }
+      ]
+    },
+    normal: {
+      label:'기본',
+      choiceCount:4,
+      reorderMin:0,
+      reorderMax:0,
+      showMeaningHint:true,
+      pattern:[
+        { type:'meaning', answerMode:'choice' },
+        { type:'expression', answerMode:'choice' },
+        { type:'context_blank', answerMode:'choice' }
+      ]
+    },
+    hard: {
+      label:'어려움',
+      choiceCount:4,
+      reorderMin:3,
+      reorderMax:6,
+      showMeaningHint:true,
+      pattern:[
+        { type:'context_blank', answerMode:'choice' },
+        { type:'grammar', answerMode:'reorder' }
+      ]
+    },
+    expert: {
+      label:'고수',
+      choiceCount:4,
+      reorderMin:4,
+      reorderMax:8,
+      showMeaningHint:false,
+      pattern:[{ type:'grammar', answerMode:'reorder' }]
+    }
   };
-  const base = plans[difficulty] || plans.normal;
-  const offset = Math.floor(Math.random() * base.length);
+  return rules[difficulty] || rules.normal;
+}
+function quizQuestionCount(configuredCount, availableCount) {
+  const configured = Math.max(0, Number(configuredCount) || 0);
+  const available = Math.max(0, Number(availableCount) || 0);
+  return Math.min(configured, available);
+}
+function quizPlanFor(count, difficulty) {
+  const stage = ['very_easy','easy','normal','hard','expert'].includes(difficulty) ? difficulty : 'normal';
+  const rules = quizStageRules(stage);
+  const total = Math.max(0, Number(count) || 0);
   const result = [];
-  for (let i = 0; i < count; i++) {
-    const item = base[(i + offset) % base.length];
-    result.push({ slotId:`slot_${i+1}`, type:item.type, answerMode:item.answerMode });
+  for (let i = 0; i < total; i++) {
+    const item = rules.pattern[i % rules.pattern.length];
+    result.push({
+      slotId:`slot_${i+1}`,
+      stage,
+      type:item.type,
+      answerMode:item.answerMode,
+      choiceCount:rules.choiceCount,
+      reorderMin:rules.reorderMin,
+      reorderMax:rules.reorderMax,
+      showMeaningHint:rules.showMeaningHint
+    });
   }
   return result;
 }
@@ -4503,69 +4672,163 @@ function uniqueTextValues(values) {
     return true;
   });
 }
-function shuffledChoices(correct, distractors) {
+function shuffledChoices(correct, distractors, requiredCount = 4) {
+  const count = Math.max(2, Number(requiredCount) || 4);
   const values = uniqueTextValues([correct, ...(distractors || [])]);
-  if (values.length < 4) return null;
-  const choices = shuffled(values.slice(0, 4));
+  if (values.length < count) return null;
+  values.length = count;
+  const choices = shuffled(values);
   return { choices, answerIndex: choices.indexOf(norm(correct)) };
+}
+function shuffledReorderTokens(tokens) {
+  const original = Array.isArray(tokens) ? [...tokens] : [];
+  const mixed = shuffled(original);
+  if (mixed.length > 1 && mixed.every((token, i) => token === original[i])) {
+    const swapIndex = mixed.findIndex((token, i) => i > 0 && token !== mixed[0]);
+    if (swapIndex > 0) [mixed[0], mixed[swapIndex]] = [mixed[swapIndex], mixed[0]];
+  }
+  return mixed;
 }
 function contextWithBlank(note) {
   const context = norm(note?.context || '');
   const target = norm(note?.text || '');
   if (!context || !target) return '';
-  const i = context.toLowerCase().indexOf(target.toLowerCase());
-  if (i < 0) return '';
-  return `${context.slice(0, i)}_____${context.slice(i + target.length)}`;
+  const sourceLower = context.toLowerCase();
+  const targetLower = target.toLowerCase();
+  const isWordChar = ch => !!ch && /[\p{L}\p{N}_'’]/u.test(ch);
+  let cursor = 0;
+  let searchFrom = 0;
+  let out = '';
+  let replaced = 0;
+  while (searchFrom < context.length) {
+    const i = sourceLower.indexOf(targetLower, searchFrom);
+    if (i < 0) break;
+    const leftBlocked = isWordChar(target[0]) && isWordChar(context[i - 1]);
+    const rightBlocked = isWordChar(target[target.length - 1]) && isWordChar(context[i + target.length]);
+    if (leftBlocked || rightBlocked) {
+      searchFrom = i + 1;
+      continue;
+    }
+    out += context.slice(cursor, i) + '[빈칸]';
+    cursor = i + target.length;
+    searchFrom = cursor;
+    replaced += 1;
+  }
+  return replaced ? out + context.slice(cursor) : '';
 }
-function fallbackQuizQuestion(slot, note, referenceNotes) {
+function localQuizQuestion(slot, note, referenceNotes) {
   const otherNotes = (referenceNotes || []).filter(n => n.id !== note.id);
   const target = norm(note.text);
   const meaning = norm(note.meaning);
   const blank = contextWithBlank(note);
   if (slot.answerMode === 'choice') {
-    const isMeaning = slot.type === 'meaning';
-    const correct = isMeaning ? meaning : target;
-    const distractors = isMeaning ? otherNotes.map(n => n.meaning) : otherNotes.map(n => n.text);
-    const choice = shuffledChoices(correct, distractors);
-    if (choice) {
-      const prompt = slot.type === 'context_blank' && blank
-        ? `빈칸에 가장 알맞은 표현을 고르세요.\n${blank}`
-        : isMeaning
-          ? `“${target}”의 뜻으로 가장 알맞은 것을 고르세요.`
-          : `“${meaning}”에 해당하는 표현을 고르세요.`;
-      const fallbackType = slot.type === 'meaning' ? 'meaning' : slot.type === 'context_blank' && blank ? 'context_blank' : 'expression';
-      return { slotId:slot.slotId, id:note.id, type:fallbackType, answerMode:'choice', prompt, choices:choice.choices, answerIndex:choice.answerIndex, explanation:`${target}: ${meaning}`, targetExpression:target };
+    const requiredCount = Math.max(2, Number(slot.choiceCount) || quizStageRules(slot.stage).choiceCount);
+    if (slot.type === 'meaning') {
+      const duplicateText = otherNotes.some(n =>
+        norm(n.text).toLowerCase() === target.toLowerCase()
+        && !sameMeaningSense(n.meaning, meaning)
+      );
+      if (duplicateText) return null;
+      const choice = shuffledChoices(
+        meaning,
+        otherNotes.filter(n => !sameMeaningSense(n.meaning, meaning)).map(n => n.meaning),
+        requiredCount
+      );
+      if (!choice) return null;
+      return { slotId:slot.slotId, stage:slot.stage, id:note.id, type:'meaning', answerMode:'choice', prompt:`저장한 “${target}”의 뜻을 고르세요.`, choices:choice.choices, answerIndex:choice.answerIndex, explanation:norm(note.explanation || `${target}: ${meaning}`), targetExpression:target };
     }
+    if (slot.type === 'expression') {
+      const duplicateMeaning = otherNotes.some(n =>
+        sameMeaningSense(n.meaning, meaning)
+        && norm(n.text).toLowerCase() !== target.toLowerCase()
+      );
+      if (duplicateMeaning) return null;
+      const choice = shuffledChoices(
+        target,
+        otherNotes.filter(n => !sameMeaningSense(n.meaning, meaning)).map(n => n.text),
+        requiredCount
+      );
+      if (!choice) return null;
+      return { slotId:slot.slotId, stage:slot.stage, id:note.id, type:'expression', answerMode:'choice', prompt:`“${meaning}”로 저장한 영어 표현을 고르세요.`, choices:choice.choices, answerIndex:choice.answerIndex, explanation:norm(note.explanation || `${target}: ${meaning}`), targetExpression:target };
+    }
+    if (slot.type === 'context_blank') {
+      if (!blank) return null;
+      const choice = shuffledChoices(
+        target,
+        otherNotes.filter(n => !sameMeaningSense(n.meaning, meaning)).map(n => n.text),
+        requiredCount
+      );
+      if (!choice) return null;
+      return { slotId:slot.slotId, stage:slot.stage, id:note.id, type:'context_blank', answerMode:'choice', prompt:`저장된 원문의 빈칸에 있던 표현을 고르세요.\n${blank}`, choices:choice.choices, answerIndex:choice.answerIndex, explanation:norm(note.explanation || `${target}: ${meaning}`), targetExpression:target };
+    }
+    return null;
   }
   if (slot.answerMode === 'reorder') {
     const tokens = target.split(/\s+/).filter(Boolean);
-    if (tokens.length >= 2) return { slotId:slot.slotId, id:note.id, type:'grammar', answerMode:'reorder', prompt:`단어를 올바른 순서로 배열해 “${meaning}” 표현을 완성하세요.`, tokens:shuffled(tokens), acceptedAnswers:[target], answerText:target, explanation:`정답 표현은 “${target}”입니다.`, targetExpression:target };
+    const rules = quizStageRules(slot.stage);
+    const minTokens = Math.max(2, Number(slot.reorderMin) || rules.reorderMin || 2);
+    const maxTokens = Math.max(minTokens, Number(slot.reorderMax) || rules.reorderMax || minTokens);
+    const requiresStoredContext = slot.stage === 'expert';
+    if (tokens.length < minTokens || tokens.length > maxTokens || new Set(tokens).size < 2 || (requiresStoredContext && !blank)) return null;
+    const showMeaningHint = slot.showMeaningHint !== false;
+    const prompt = requiresStoredContext
+      ? `저장된 원문의 빈칸에 들어갈 표현을 아래 단어로 완성하세요.\n${blank}`
+      : showMeaningHint
+        ? `아래 단어를 올바른 순서로 눌러 “${meaning}” 표현을 완성하세요.`
+        : '아래 단어를 올바른 순서로 눌러 저장한 영어 표현을 완성하세요.';
+    return { slotId:slot.slotId, stage:slot.stage, id:note.id, type:'grammar', answerMode:'reorder', prompt, tokens:shuffledReorderTokens(tokens), acceptedAnswers:[target], answerText:target, explanation:norm(note.explanation || `정답 표현은 “${target}”입니다.`), targetExpression:target };
   }
-  return { slotId:slot.slotId, id:note.id, type:['meaning','expression','context_blank'].includes(slot.type) ? slot.type : 'expression', answerMode:'text', prompt:blank && slot.type === 'context_blank' ? `빈칸에 들어갈 표현을 직접 입력하세요.\n${blank}` : `“${meaning}”에 해당하는 영어 표현을 직접 입력하세요.`, acceptedAnswers:[target], answerText:target, explanation:`정답 표현은 “${target}”입니다.`, targetExpression:target };
+  return null;
 }
-function normalizeQuizQuestion(raw, slot, note, referenceNotes) {
-  const q = raw && typeof raw === 'object' ? raw : null;
-  if (!q || q.slotId !== slot.slotId || q.id !== note.id || q.type !== slot.type || q.answerMode !== slot.answerMode || !norm(q.prompt)) return fallbackQuizQuestion(slot, note, referenceNotes);
-  const common = { slotId:slot.slotId, id:note.id, type:slot.type, answerMode:slot.answerMode, prompt:norm(q.prompt), explanation:norm(q.explanation || note.explanation || `${note.text}: ${note.meaning}`), targetExpression:norm(q.targetExpression || note.text) };
-  if (slot.answerMode === 'choice') {
-    const choices = uniqueTextValues(q.choices);
-    const answerIndex = Number(q.answerIndex);
-    if (choices.length !== 4 || !Number.isInteger(answerIndex) || answerIndex < 0 || answerIndex > 3) return fallbackQuizQuestion(slot, note, referenceNotes);
-    return Object.assign(common, { choices, answerIndex });
-  }
-  if (slot.answerMode === 'text' || slot.answerMode === 'correction') {
-    const acceptedAnswers = uniqueTextValues([...(Array.isArray(q.acceptedAnswers) ? q.acceptedAnswers : []), q.answerText]);
-    if (!acceptedAnswers.length) return fallbackQuizQuestion(slot, note, referenceNotes);
-    return Object.assign(common, { acceptedAnswers, answerText:norm(q.answerText || acceptedAnswers[0]) });
-  }
-  if (slot.answerMode === 'reorder') {
-    const answerText = norm(q.answerText || q.acceptedAnswers?.[0] || note.text);
-    const acceptedAnswers = uniqueTextValues([...(Array.isArray(q.acceptedAnswers) ? q.acceptedAnswers : []), answerText]);
-    const tokens = Array.isArray(q.tokens) ? q.tokens.map(norm).filter(Boolean) : answerText.split(/\s+/).filter(Boolean);
-    if (!answerText || tokens.length < 2) return fallbackQuizQuestion(slot, note, referenceNotes);
-    return Object.assign(common, { tokens:shuffled(tokens), acceptedAnswers, answerText });
-  }
-  return fallbackQuizQuestion(slot, note, referenceNotes);
+function buildQuizQuestions(sourcePool, referenceNotes, count, difficulty) {
+  const notes = Array.from(new Map((sourcePool || []).filter(n => n && norm(n.text) && norm(n.meaning)).map((n, i) => [String(n.id ?? `note_${i}`), n])).values());
+  const plan = quizPlanFor(count, difficulty);
+  const optionSets = plan.map(slot => notes.map((note, noteIndex) => ({
+    noteKey:String(note.id ?? `note_${noteIndex}`),
+    question:localQuizQuestion(slot, note, referenceNotes)
+  })).filter(option => option.question));
+  const noteMatches = new Map();
+  const slotMatches = Array(plan.length).fill(null);
+  const slotOrder = plan.map((_, i) => i).sort((a, b) => optionSets[a].length - optionSets[b].length || a - b);
+  const assign = (slotIndex, seenNotes) => {
+    for (const option of optionSets[slotIndex]) {
+      if (seenNotes.has(option.noteKey)) continue;
+      seenNotes.add(option.noteKey);
+      const occupied = noteMatches.get(option.noteKey);
+      if (!occupied || assign(occupied.slotIndex, seenNotes)) {
+        noteMatches.set(option.noteKey, { slotIndex, question:option.question });
+        slotMatches[slotIndex] = option.question;
+        return true;
+      }
+    }
+    return false;
+  };
+  for (const slotIndex of slotOrder) assign(slotIndex, new Set());
+  const questions = slotMatches.filter(Boolean);
+  const missingTypes = plan.filter((_, i) => !slotMatches[i]).map(slot => slot.type);
+  return {
+    complete:questions.length === plan.length,
+    questions,
+    requested:plan.length,
+    available:questions.length,
+    missingTypes,
+    message:quizStageEligibilityMessage(difficulty, plan.length, questions.length, missingTypes)
+  };
+}
+function quizStageEligibilityMessage(difficulty, requested, available, missingTypes = []) {
+  const stage = quizStageRules(difficulty);
+  const missing = new Set(missingTypes || []);
+  const detail = difficulty === 'very_easy'
+    ? '서로 다른 뜻을 가진 표현이 2개 이상 필요합니다.'
+    : difficulty === 'easy'
+      ? '서로 다른 표현과 뜻이 3개 이상 필요합니다.'
+      : difficulty === 'normal'
+        ? '서로 다른 표현과 뜻이 4개 이상 필요하고, 문맥 문제에는 표현이 들어 있는 저장 원문이 필요합니다.'
+        : difficulty === 'hard'
+          ? '문맥 문제에는 표현이 들어 있는 저장 원문과 서로 다른 선택지 4개, 표현 순서 문제에는 3~6단어 표현이 필요합니다.'
+          : '표현이 들어 있는 저장 원문과 4~8단어 표현이 문제마다 필요합니다.';
+  const missingLabel = [missing.has('context_blank') ? '문맥' : '', missing.has('grammar') ? '표현 순서' : '', missing.has('meaning') ? '뜻' : '', missing.has('expression') ? '표현 회상' : ''].filter(Boolean).join('·');
+  return `${stage.label} 단계 ${requested}문제를 만들 수 없습니다. 현재 조건으로 ${available}/${requested}문제만 만들 수 있습니다. ${detail}${missingLabel ? ` 부족한 유형: ${missingLabel}.` : ''}`;
 }
 function normalizeLearningAnswer(value) {
   return String(value || '')
@@ -4581,127 +4844,82 @@ function exactAnswerMatches(answer, acceptedAnswers) {
   const user = normalizeLearningAnswer(answer);
   return !!user && (acceptedAnswers || []).some(x => normalizeLearningAnswer(x) === user);
 }
+function exactReorderMatches(answer, expected) {
+  return norm(answer) === norm(expected);
+}
 function quizCorrectAnswer(q) {
   if (q.answerMode === 'choice') return q.choices?.[q.answerIndex] || '';
   return q.answerText || q.acceptedAnswers?.[0] || q.targetExpression || '';
 }
-async function openQuiz(options = {}){
-  if (!beginAiTask('quiz', 'AI 쪽지 시험을 출제하고 있습니다.')) return;
-  try {
-    const allNotes = settings.notebook.filter(n => n && norm(n.text) && norm(n.meaning));
-    const requestedIds = Array.isArray(options.focusIds) ? Array.from(new Set(options.focusIds.map(String))) : [];
-    const requestedNotes = requestedIds.map(id => allNotes.find(n => String(n.id) === id)).filter(Boolean);
-    if (!requestedNotes.length && allNotes.length < 3) return toast('뜻이 채워진 표현이 3개 이상 필요합니다.', 'warn');
-    if (requestedIds.length && !requestedNotes.length) return toast('다시 풀 수 있는 오답 표현이 없습니다.', 'warn');
-    const sourcePool = requestedNotes.length ? requestedNotes : allNotes;
-    const count = Math.min(Number(settings.quizCount) || 10, sourcePool.length);
-    const focusNotes = prioritizedNotes(sourcePool, count);
-    const referenceNotes = Array.from(new Map([...focusNotes, ...prioritizedNotes(allNotes.filter(n => !focusNotes.some(f => f.id === n.id)), Math.max(0, 30 - focusNotes.length))].map(n => [n.id, n])).values());
-    const difficulty = settings.quizDifficulty || 'normal';
-    const title = norm(options.title || (requestedNotes.length ? '오답 집중 복습' : 'AI 쪽지 시험'));
-    const plan = quizPlanFor(count, difficulty).map((slot, i) => Object.assign(slot, { noteId:focusNotes[i].id }));
-    showModal(`<button class="pd-x" data-close-modal>×</button><h3>${esc(title)} 준비 중</h3><div class="pd-loading">문제 방식과 복습 우선순위를 반영해 출제 중입니다. (난이도: ${esc(difficultyLabel(difficulty))}, ${esc(quizCountLabel(count))})</div>`);
-    const diffGuide = difficulty === 'very_easy'
-      ? 'Absolute beginner: use very clear wording and clearly unrelated distractors. Keep direct-input answers short.'
-      : difficulty === 'easy'
-        ? 'Easy: use direct meanings and mostly clear distractors, with a small amount of recall and word-order work.'
-        : difficulty === 'hard'
-          ? 'Hard: emphasize context, grammar correction, close meanings, register, and plausible but unambiguously wrong distractors.'
-          : difficulty === 'expert'
-            ? 'Expert: test subtle register, idiom/slang, natural collocation, grammar, and close alternatives. Questions must remain fair and have one defensible answer.'
-            : 'Normal: balance recognition, direct recall, context, word order, nuance, similar-expression distinction, and error correction.';
-    const prompt = [
-      'Phrase Desk mixed quiz task:',
-      'Build a Korean language-learning quiz from the supplied English phrase notes and the exact question plan.',
-      '',
-      'Return JSON only with this schema:',
-      '{"questions":[{"slotId":"slot_1","id":"note id","type":"meaning|expression|context_blank|nuance|similar|grammar","answerMode":"choice|text|reorder|correction","prompt":"Korean instruction plus any English sentence","choices":["..."],"answerIndex":0,"acceptedAnswers":["..."],"answerText":"...","tokens":["..."],"targetExpression":"...","explanation":"brief Korean explanation"}]}',
-      'Omit fields that are not used by that answerMode. Do not add markdown or text outside JSON.',
-      '',
-      'Plan compliance:',
-      'Return exactly one question for every plan slot, in plan order.',
-      'Copy each slotId, noteId, type, and answerMode exactly. Do not substitute another mode.',
-      '',
-      'Type meanings:',
-      'meaning = recognize the Korean meaning of an English expression.',
-      'expression = recall or recognize the English expression from Korean meaning or situation.',
-      'context_blank = complete a natural sentence context.',
-      'nuance = distinguish tone, register, implication, or suitable situation.',
-      'similar = distinguish the target from close alternatives.',
-      'grammar = word order, inflection, collocation, or error correction.',
-      '',
-      'Answer-mode rules:',
-      'choice: exactly 4 unique choices and one answerIndex. Distractors must be plausible at harder levels but clearly wrong in the given prompt.',
-      'text: acceptedAnswers must contain all concise acceptable answers; answerText is the preferred answer.',
-      'reorder: tokens must be shuffled word or phrase chunks; acceptedAnswers and answerText contain the completed expression or sentence.',
-      'correction: prompt must show one incorrect English sentence to fix; acceptedAnswers and answerText contain natural corrected versions.',
-      '',
-      'Content rules:',
-      'Use the focus note for the correct answer. Reference notes may be used only to create distractors or comparisons.',
-      'Use explanation, alternatives, grammar, vocabulary, context, and context translation when useful.',
-      'Do not invent an unsupported special meaning. Avoid ambiguous questions with two defensible correct answers.',
-      diffGuide,
-      '',
-      'Question plan JSON:',
-      JSON.stringify(plan),
-      '',
-      'Focus notes JSON:',
-      JSON.stringify(focusNotes.map(n => ({id:n.id,text:n.text,meaning:n.meaning,context:n.context,contextKo:n.contextKo,explanation:n.explanation,alternatives:n.alternatives,grammar:n.grammar,vocabulary:n.vocabulary,tags:n.tags,status:n.status,quizStats:n.quizStats||{}}))),
-      '',
-      'Reference notes JSON:',
-      JSON.stringify(referenceNotes.map(n => ({id:n.id,text:n.text,meaning:n.meaning,context:n.context,contextKo:n.contextKo,explanation:n.explanation,alternatives:n.alternatives,grammar:n.grammar,vocabulary:n.vocabulary,tags:n.tags}))),
-      '',
-      'Random seed: '+Math.random().toString(36).slice(2)
-    ].join('\n');
-    const out = await callAI(prompt, 6500);
-    if (!out) { closeModals(); return; }
-    let rawQuestions = [];
-    try { rawQuestions = JSON.parse(String(out).trim().replace(/^```(?:json)?\s*/i,'').replace(/```$/,'').trim()).questions || []; }
-    catch(e) { logDebug({type:'quiz-parse-error', error:e?.message||String(e), raw:String(out).slice(0,1500)}); }
-    const bySlot = new Map((Array.isArray(rawQuestions) ? rawQuestions : []).map(q => [q?.slotId, q]));
-    const questions = plan.map((slot, i) => normalizeQuizQuestion(bySlot.get(slot.slotId), slot, focusNotes[i], referenceNotes));
-    renderQuiz(questions, { title });
-  } finally { endAiTask('quiz'); }
+// The regular quiz is intentionally local and deterministic. AI generation/checking
+// belongs to the separately labelled AI answer-practice feature.
+function openQuiz(options = {}){
+  const allNotes = settings.notebook.filter(n => n && norm(n.text) && norm(n.meaning));
+  const requestedIds = Array.isArray(options.focusIds) ? Array.from(new Set(options.focusIds.map(String))) : [];
+  const requestedNotes = requestedIds.map(id => allNotes.find(n => String(n.id) === id)).filter(Boolean);
+  if (!allNotes.length) return toast('뜻이 채워진 표현이 1개 이상 필요합니다.', 'warn');
+  if (requestedIds.length && !requestedNotes.length) return toast('다시 풀 수 있는 오답 표현이 없습니다.', 'warn');
+  const sourcePool = requestedNotes.length ? requestedNotes : allNotes;
+  const configuredCount = Number(settings.quizCount) || 10;
+  const count = quizQuestionCount(configuredCount, sourcePool.length);
+  const difficulty = settings.quizDifficulty || 'normal';
+  const focusNotes = prioritizedNotes(sourcePool, sourcePool.length);
+  const referenceLimit = Math.max(30, count + 4);
+  const referenceNotes = Array.from(new Map([
+    ...focusNotes,
+    ...prioritizedNotes(allNotes.filter(n => !focusNotes.some(f => f.id === n.id)), Math.max(0, referenceLimit - focusNotes.length))
+  ].map(n => [n.id, n])).values());
+  const title = norm(options.title || (requestedNotes.length ? '오답 집중 복습' : '쪽지 시험'));
+  const built = buildQuizQuestions(focusNotes, referenceNotes, count, difficulty);
+  if (!built.complete) return toast(built.message, 'warn');
+  renderQuiz(built.questions, { title, stage:difficulty });
 }
 function renderQuiz(qs, meta = {}){
-  qs = (qs || []).filter(q => q && norm(q.prompt) && ['choice','text','reorder','correction'].includes(q.answerMode));
-  if(!qs.length) return toast('AI 쪽지 시험 문제가 없습니다.','warn');
-  let idx=0, correct=0, result=[], grading=false;
-  const label={meaning:'뜻 이해',expression:'표현 회상',context_blank:'문맥 적용',nuance:'뉘앙스·격식',similar:'유사 표현 구별',grammar:'문법·형태'};
-  const title = norm(meta.title || 'AI 쪽지 시험');
+  qs = (qs || []).filter(q => q && norm(q.prompt) && ['choice','reorder'].includes(q.answerMode));
+  if(!qs.length) return toast('쪽지 시험 문제가 없습니다.','warn');
+  let idx=0, correct=0, result=[], grading=false, reorderPicks=[];
+  const label={meaning:'뜻 이해',expression:'표현 회상',context_blank:'문맥 적용',grammar:'표현 순서'};
+  const title = norm(meta.title || '쪽지 시험');
+  const stage = ['very_easy','easy','normal','hard','expert'].includes(meta.stage) ? meta.stage : settings.quizDifficulty || 'normal';
+  const stageLabel = difficultyLabel(stage);
   const answerArea = q => {
     if (q.answerMode === 'choice') return (q.choices||[]).map((c,i)=>`<button class="pd-choice" data-i="${i}">${esc(c)}</button>`).join('');
-    if (q.answerMode === 'reorder') return `<div class="pd-manage-buttons">${(q.tokens||[]).map((t,i)=>`<button class="pd-lite-btn pd-token" data-token-index="${i}">${esc(t)}</button>`).join('')}</div><textarea id="pd-quiz-answer" rows="2" placeholder="단어 버튼을 누르거나 직접 입력하세요."></textarea><div class="pd-manage-buttons"><button id="pd-quiz-clear" class="pd-lite-btn">지우기</button><button id="pd-quiz-submit" class="pd-primary">정답 확인</button></div>`;
-    const placeholder = q.answerMode === 'correction' ? '고친 영어 문장을 입력하세요.' : '영어 정답을 직접 입력하세요.';
-    return `<textarea id="pd-quiz-answer" rows="2" placeholder="${esc(placeholder)}"></textarea><button id="pd-quiz-submit" class="pd-primary">정답 확인</button>`;
+    return `<p class="pd-muted-line">아래 단어를 모두 눌러 정답 순서를 완성하세요.</p><div class="pd-manage-buttons">${(q.tokens||[]).map((t,i)=>`<button class="pd-lite-btn pd-token" data-token-index="${i}">${esc(t)}</button>`).join('')}</div><textarea id="pd-quiz-answer" rows="2" readonly placeholder="선택한 순서가 여기에 표시됩니다."></textarea><div class="pd-manage-buttons"><button id="pd-quiz-clear" class="pd-lite-btn">처음부터</button><button id="pd-quiz-submit" class="pd-primary" disabled>정답 확인</button></div>`;
   };
   const draw=()=>{
     const q=qs[idx];
     grading=false;
-    showModal(`<button class="pd-x" data-close-modal>×</button><h3>${esc(title)} ${idx+1}/${qs.length}</h3><div class="pd-quiz-type">${esc(label[q.type]||'문제')} · ${q.answerMode === 'choice' ? '고르기' : q.answerMode === 'reorder' ? '문장 배열' : q.answerMode === 'correction' ? '오류 수정' : '직접 입력'}</div><p class="pd-quiz-prompt">${esc(q.prompt)}</p>${answerArea(q)}<div id="pd-quiz-feedback"></div>`);
+    reorderPicks=[];
+    showModal(`<button class="pd-x" data-close-modal>×</button><h3>${esc(title)} ${idx+1}/${qs.length}</h3><div class="pd-quiz-type">${esc(stageLabel)} 단계 · ${esc(label[q.type]||'문제')} · ${q.answerMode === 'choice' ? '고르기' : '순서 맞추기'}</div><p class="pd-quiz-prompt">${esc(q.prompt)}</p>${answerArea(q)}<div id="pd-quiz-feedback"></div>`);
     $('.pd-token').on('click', function(){
       const token = q.tokens?.[Number($(this).data('token-index'))] || '';
+      if (!token || $(this).prop('disabled')) return;
+      reorderPicks.push(token);
       const box = $('#pd-quiz-answer');
-      box.val(norm(`${box.val() || ''} ${token}`));
+      box.val(reorderPicks.join(' '));
       $(this).prop('disabled', true);
+      $('#pd-quiz-submit').prop('disabled', reorderPicks.length !== (q.tokens || []).length);
     });
-    $('#pd-quiz-clear').on('click', () => { $('#pd-quiz-answer').val(''); $('.pd-token').prop('disabled', false); });
+    $('#pd-quiz-clear').on('click', () => { reorderPicks=[]; $('#pd-quiz-answer').val(''); $('.pd-token').prop('disabled', false); $('#pd-quiz-submit').prop('disabled', true); });
     $('.pd-choice').on('click', function(){ submitAnswer(q.choices?.[Number($(this).data('i'))] || '', Number($(this).data('i'))); });
-    $('#pd-quiz-submit').on('click', () => submitAnswer(norm($('#pd-quiz-answer').val()), null));
+    $('#pd-quiz-submit').on('click', () => {
+      if (reorderPicks.length !== (q.tokens || []).length) return toast('모든 단어를 순서대로 눌러주세요.','warn');
+      submitAnswer(reorderPicks.join(' '), null);
+    });
   };
   const submitAnswer = async (picked, choiceIndex) => {
     if (grading) return;
     const q=qs[idx];
-    if (q.answerMode !== 'choice' && !norm(picked)) return toast('정답을 입력해주세요.','warn');
+    if (q.answerMode === 'reorder' && !norm(picked)) return toast('단어 순서를 완성해주세요.','warn');
     grading=true;
     let ok=false, feedback=q.explanation||'', shownAnswer=quizCorrectAnswer(q);
     if (q.answerMode === 'choice') {
       ok=Number(choiceIndex)===Number(q.answerIndex);
     } else {
-      ok=exactAnswerMatches(picked, q.acceptedAnswers || [q.answerText]);
+      ok=exactReorderMatches(picked, q.answerText || q.targetExpression || '');
     }
     if(ok) correct++;
-    result.push({id:q.id, type:q.type, answerMode:q.answerMode, ok, prompt:q.prompt, answer:shownAnswer, picked, explanation:feedback});
+    result.push({id:q.id, stage, type:q.type, answerMode:q.answerMode, ok, prompt:q.prompt, answer:shownAnswer, picked, explanation:feedback});
     updateQuizStats(settings.notebook.find(x=>x.id===q.id), ok);
     saveSettings();
     $('.pd-choice, .pd-token, #pd-quiz-submit, #pd-quiz-clear, #pd-quiz-answer').prop('disabled',true);
@@ -4712,14 +4930,14 @@ function renderQuiz(qs, meta = {}){
     $('#pd-next-q').on('click',()=>{ idx++; if(idx<qs.length) draw(); else finish(); });
   };
   const finish=()=>{
-    settings.quizHistory.unshift({id:uid('quiz'),time:new Date().toLocaleString(),dateKey:dateKey(),title,total:qs.length,correct,results:result});
+    settings.quizHistory.unshift({id:uid('quiz'),time:new Date().toLocaleString(),dateKey:dateKey(),title,stage,total:qs.length,correct,results:result});
     settings.quizHistory=settings.quizHistory.slice(0,20);
     const related = Array.from(new Map(result.map(r=>settings.notebook.find(n=>n.id===r.id)).filter(Boolean).map(n => [n.id, n])).values());
     const known = related.filter(n=>n.status!=='known' && (n.quizStats?.streak||0)>=3);
     const hard = related.filter(n=>n.status!=='hard' && (n.quizStats?.wrong||0)>=2 && Number(n.quizStats?.wrong||0) > Number(n.quizStats?.correct||0));
     saveSettings(true);
     const suggestions = `${known.length?`<h4>'● 외움'으로 바꿀 만한 표현</h4>${known.map(n=>`<button class="pd-suggest" data-id="${esc(n.id)}" data-status="known">'● 외움'으로 변경 · ${esc(n.text)}</button>`).join('')}`:''}${hard.length?`<h4>'◆ 어려움'으로 바꿀 만한 표현</h4>${hard.map(n=>`<button class="pd-suggest" data-id="${esc(n.id)}" data-status="hard">'◆ 어려움'으로 변경 · ${esc(n.text)}</button>`).join('')}`:''}`;
-    showModal(`<button class="pd-x" data-close-modal>×</button><h3>${esc(title)} 결과</h3><p>${correct}/${qs.length} 정답입니다.</p>${suggestions || '<p>이번 학습지에서는 상태를 바꿀 만한 어휘가 없습니다.</p>'}`);
+    showModal(`<button class="pd-x" data-close-modal>×</button><h3>${esc(title)} 결과</h3><p>${esc(stageLabel)} 단계 · ${correct}/${qs.length} 정답입니다.</p>${suggestions || '<p>이번 학습지에서는 상태를 바꿀 만한 어휘가 없습니다.</p>'}`);
     $('.pd-suggest').on('click',function(){ const n=settings.notebook.find(x=>x.id===$(this).data('id')); if(n){n.status=$(this).data('status'); saveSettings(true); renderNotebook(); $(this).prop('disabled',true).text('적용했습니다.');} });
   };
   draw();
@@ -4733,12 +4951,12 @@ function openQuizHistory(){
     ? `<h4>오답노트</h4><button id="pd-review-wrongs" class="pd-primary">오답 표현 다시 풀기 (${wrongIds.length})</button><div class="pd-wrong-list">${wrongs.map(r=>`<div class="pd-history-item bad" data-wrong-key="${esc(r.wrongKey)}"><div class="pd-history-top"><b>${esc(r.prompt||'')}</b><button class="pd-wrong-del" type="button" title="오답노트에서 삭제">삭제</button></div><small>내 답: ${esc(r.picked||'-')}</small><br><small>정답: ${esc(r.answer||'-')}</small><br><small>${esc(r.time||'')}</small></div>`).join('')}</div>`
     : `<h4>오답노트</h4><p class="pd-muted-line">아직 오답노트가 없습니다.</p>`;
   const historyHtml = settings.quizHistory.length
-    ? settings.quizHistory.map(h=>`<details class="pd-row pd-history-record" data-history-id="${esc(h.id)}"><summary><span><b>${esc(h.time)}</b><small>${esc(h.title || 'AI 쪽지 시험')} · ${h.correct}/${h.total}</small></span><button class="pd-history-del" type="button" title="시험 기록 삭제" aria-label="시험 기록 삭제">🗑</button></summary>${(h.results||[]).map(r=>`<div class="pd-history-item ${r.ok?'ok':'bad'}">${r.ok?'○':'×'} ${esc(r.prompt||'')}<br>${r.ok ? `<small>정답: ${esc(r.answer || r.picked || '-')}</small>` : `<small>내 답: ${esc(r.picked||'-')}</small><br><small>정답: ${esc(r.answer||'-')}</small>`}</div>`).join('')}</details>`).join('')
-    : '<p>아직 AI 쪽지 시험 기록이 없습니다.</p>';
+    ? settings.quizHistory.map(h=>`<details class="pd-row pd-history-record" data-history-id="${esc(h.id)}"><summary><span><b>${esc(h.time)}</b><small>${esc(h.title || '쪽지 시험')}${h.stage ? ` · ${esc(difficultyLabel(h.stage))} 단계` : ''} · ${h.correct}/${h.total}</small></span><button class="pd-history-del" type="button" title="시험 기록 삭제" aria-label="시험 기록 삭제">🗑</button></summary>${(h.results||[]).map(r=>`<div class="pd-history-item ${r.ok?'ok':'bad'}">${r.ok?'○':'×'} ${esc(r.prompt||'')}<br>${r.ok ? `<small>정답: ${esc(r.answer || r.picked || '-')}</small>` : `<small>내 답: ${esc(r.picked||'-')}</small><br><small>정답: ${esc(r.answer||'-')}</small>`}</div>`).join('')}</details>`).join('')
+    : '<p>아직 쪽지 시험 기록이 없습니다.</p>';
   const practiceHtml = (settings.practiceHistory || []).length
     ? (settings.practiceHistory || []).slice(0,30).map(p=>`<details class="pd-row pd-practice-record" data-practice-id="${esc(p.id)}"><summary><span><b>${esc(p.time||'')}</b><small>${esc(p.perfect ? '완벽' : p.usedTarget === false ? '목표 표현 미사용' : '교정')}</small></span><button class="pd-practice-del" type="button" title="연습 기록 삭제" aria-label="연습 기록 삭제">🗑</button></summary><div class="pd-history-item ${p.perfect?'ok':'bad'}"><b>${esc(p.target||'')}</b><br><small>${esc(p.char||currentChar())}의 질문: ${esc(p.questionEn||'')}</small><br><small>${esc(p.questionKo||'')}</small><br>${p.perfect ? `<small>답변: ${esc(p.answer || p.corrected || '-')}</small>` : `<small>내 답: ${esc(p.answer||'-')}</small><br><small>교정: ${esc(p.corrected||'-')}</small>`}${p.characterReplyEn ? `<br><small>${esc(p.char||currentChar())}의 답변: ${esc(p.characterReplyEn)} ${p.characterReplyKo ? `[${esc(p.characterReplyKo)}]` : ''}</small>` : ''}</div></details>`).join('')
     : '<p>아직 AI 영어 답변 연습 기록이 없습니다.</p>';
-  showModal(`<button class="pd-x" data-close-modal>×</button><h3>이전 학습지</h3>${wrongHtml}<h4>AI 쪽지 시험 기록</h4>${historyHtml}<h4>AI 영어 답변 연습 기록</h4>${practiceHtml}`);
+  showModal(`<button class="pd-x" data-close-modal>×</button><h3>이전 학습지</h3>${wrongHtml}<h4>쪽지 시험 기록</h4>${historyHtml}<h4>AI 영어 답변 연습 기록</h4>${practiceHtml}`);
   $('#pd-review-wrongs').on('click', () => openQuiz({ focusIds:wrongIds, title:'오답 집중 복습' }));
   $('.pd-wrong-del').on('click', function(e){
     e.preventDefault();
