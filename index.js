@@ -27,7 +27,7 @@ const IS_BETA = false;
 const SHOW_DEBUG = true;
 const MAX_TOKENS = 8000;
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.3.17";
+const PD_VERSION = "1.3.18";
 const PD_GLOBAL_KEY = "__PHRASE_DESK_GLOBAL_STATE__";
 const pdGlobalState = globalThis[PD_GLOBAL_KEY] && typeof globalThis[PD_GLOBAL_KEY] === 'object'
   ? globalThis[PD_GLOBAL_KEY]
@@ -3888,7 +3888,7 @@ function bindPhraseDeskViewportPlacement() {
 }
 
 function openSaveModal(p={}) {
-  showModal(`<button class="pd-x" data-close-modal>×</button><h3>표현 저장</h3><label>표현</label><textarea id="pd-save-text" rows="2">${esc(p.text||'')}</textarea><label>뜻</label><input id="pd-save-meaning" value="${esc(p.meaning||'')}" placeholder="나중에 AI 교정으로 채울 수 있습니다."><label>문맥</label><textarea id="pd-save-context" rows="3">${esc(p.context||'')}</textarea><label>태그 쉼표로 구분</label><input id="pd-save-tags" placeholder="직접 태그를 입력해주세요."><label>메모</label><textarea id="pd-save-memo" rows="3"></textarea><button id="pd-save-note" class="pd-primary">저장</button>`);
+  showModal(`<button class="pd-x" data-close-modal>×</button><h3>표현 저장</h3><label>표현</label><textarea id="pd-save-text" rows="2">${esc(p.text||'')}</textarea><label>뜻</label><input id="pd-save-meaning" value="${esc(p.meaning||'')}" placeholder="나중에 AI 교정으로 채울 수 있습니다."><label>문맥</label><textarea id="pd-save-context" rows="3">${esc(p.context||'')}</textarea><label>태그 쉼표로 구분</label><input id="pd-save-tags" placeholder="직접 태그를 입력해주세요."><label>메모</label><textarea id="pd-save-memo" rows="3"></textarea><div class="pd-submit-actions"><button id="pd-save-note" class="pd-primary">저장</button></div>`);
   $('#pd-save-note').on('click',()=>{ const text=norm($('#pd-save-text').val()); if(!text) return toast('표현을 입력해주세요.','warn'); const tags=($('#pd-save-tags').val()||'').split(',').map(norm).filter(Boolean); addNote({ text, meaning:$('#pd-save-meaning').val(), context:$('#pd-save-context').val(), memo:$('#pd-save-memo').val(), tags, source:p.source||'' }); closeModals(); renderNotebook(); toast('저장했습니다.','success'); });
 }
 
@@ -3896,7 +3896,7 @@ function openEditNoteModal(id) {
   const n = settings.notebook.find(x => x.id === id);
   if (!n) return toast('수정할 표현을 찾지 못했습니다.', 'warn');
   normalizeNoteContexts(n);
-  showModal(`<button class="pd-x" data-close-modal>×</button><h3>어휘 수정</h3><label>표현</label><textarea id="pd-edit-text" rows="2">${esc(n.text||'')}</textarea><label>뜻</label><input id="pd-edit-meaning" value="${esc(n.meaning||'')}" placeholder="나중에 AI 교정으로 채울 수 있습니다."><label>문맥</label><textarea id="pd-edit-context" rows="3">${esc(n.context||'')}</textarea><label>문맥 번역</label><textarea id="pd-edit-context-ko" rows="3">${esc(n.contextKo||'')}</textarea><label>태그 쉼표로 구분</label><input id="pd-edit-tags" value="${esc((n.tags||[]).join(', '))}" placeholder="직접 태그를 입력해주세요."><label>설명</label><textarea id="pd-edit-explanation" rows="3">${esc(n.explanation||'')}</textarea><label>다른 표현</label><textarea id="pd-edit-alternatives" rows="3">${esc(n.alternatives||'')}</textarea><label>문법</label><textarea id="pd-edit-grammar" rows="3">${esc(n.grammar||'')}</textarea><label>단어</label><textarea id="pd-edit-vocabulary" rows="3">${esc(n.vocabulary||'')}</textarea><label>메모</label><textarea id="pd-edit-memo" rows="3">${esc(n.memo||'')}</textarea><button id="pd-update-note" class="pd-primary">수정 완료</button>`);
+  showModal(`<button class="pd-x" data-close-modal>×</button><h3>어휘 수정</h3><label>표현</label><textarea id="pd-edit-text" rows="2">${esc(n.text||'')}</textarea><label>뜻</label><input id="pd-edit-meaning" value="${esc(n.meaning||'')}" placeholder="나중에 AI 교정으로 채울 수 있습니다."><label>문맥</label><textarea id="pd-edit-context" rows="3">${esc(n.context||'')}</textarea><label>문맥 번역</label><textarea id="pd-edit-context-ko" rows="3">${esc(n.contextKo||'')}</textarea><label>태그 쉼표로 구분</label><input id="pd-edit-tags" value="${esc((n.tags||[]).join(', '))}" placeholder="직접 태그를 입력해주세요."><label>설명</label><textarea id="pd-edit-explanation" rows="3">${esc(n.explanation||'')}</textarea><label>다른 표현</label><textarea id="pd-edit-alternatives" rows="3">${esc(n.alternatives||'')}</textarea><label>문법</label><textarea id="pd-edit-grammar" rows="3">${esc(n.grammar||'')}</textarea><label>단어</label><textarea id="pd-edit-vocabulary" rows="3">${esc(n.vocabulary||'')}</textarea><label>메모</label><textarea id="pd-edit-memo" rows="3">${esc(n.memo||'')}</textarea><div class="pd-submit-actions"><button id="pd-update-note" class="pd-primary">수정 완료</button></div>`);
   $('#pd-update-note').on('click', () => {
     const text = norm($('#pd-edit-text').val());
     if (!text) return toast('표현을 입력해주세요.', 'warn');
@@ -4523,7 +4523,7 @@ async function openWritingPractice(){
     q.target = finalNote.text;
 
     const showPracticeForm = (prefill = '') => {
-      showModal(`<button class="pd-x" data-close-modal>×</button><h3>AI 영어 답변 연습</h3><div class="pd-practice-card"><small>반드시 써볼 목표 표현</small><b>${esc(finalNote?.text || q.target || '')}</b>${finalNote?.meaning ? `<em>${esc(finalNote.meaning)}</em>` : ''}</div><div class="pd-practice-question"><small>${esc(char)}의 질문</small><p>${esc(q.questionEn)}</p><span>${esc(q.questionKo || '')}</span></div><label>답변</label><textarea id="pd-practice-answer" rows="4" placeholder="목표 표현을 넣어 영어로 한두 문장 답해보세요.">${esc(prefill)}</textarea><button id="pd-practice-submit" class="pd-primary">답변 교정</button>`);
+      showModal(`<button class="pd-x" data-close-modal>×</button><h3>AI 영어 답변 연습</h3><div class="pd-practice-card"><small>반드시 써볼 목표 표현</small><b>${esc(finalNote?.text || q.target || '')}</b>${finalNote?.meaning ? `<em>${esc(finalNote.meaning)}</em>` : ''}</div><div class="pd-practice-question"><small>${esc(char)}의 질문</small><p>${esc(q.questionEn)}</p><span>${esc(q.questionKo || '')}</span></div><label>답변</label><textarea id="pd-practice-answer" rows="4" placeholder="목표 표현을 넣어 영어로 한두 문장 답해보세요.">${esc(prefill)}</textarea><div class="pd-submit-actions"><button id="pd-practice-submit" class="pd-primary">답변 교정</button></div>`);
       $('#pd-practice-submit').on('click', async () => {
         const answer = norm($('#pd-practice-answer').val());
         if (!answer) return toast('영어 답변을 입력해주세요.', 'warn');

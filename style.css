@@ -217,6 +217,10 @@
   margin: 0 !important;
   padding: 9px 11px !important;
 }
+.pd-modal label.pd-repeat-row {
+  display: flex !important;
+  margin: 0 !important;
+}
 .pd-repeat-row span { display: block !important; min-width: 0 !important; flex: 1 1 auto !important; }
 .pd-repeat-row b { display: block !important; font-size: var(--pd-user-font-size, 13px) !important; line-height: 1.32 !important; color: var(--pd-ink) !important; }
 .pd-repeat-row em { display: block !important; margin-top: 3px !important; font-style: normal !important; color: var(--pd-muted) !important; font-size: calc(var(--pd-user-font-size, 13px) - 1px) !important; }
@@ -225,6 +229,14 @@
 .pd-loading { border:1px solid var(--pd-line) !important; border-radius:14px !important; background:rgba(255,255,255,.34) !important; padding:14px !important; color:var(--pd-muted) !important; }
 .pd-number { max-width: 140px !important; height: 32px !important; padding: 0 10px !important; border:1px solid var(--pd-line) !important; border-radius: 12px !important; background:rgba(255,255,255,.36) !important; }
 .pd-manage-buttons { display:grid !important; grid-template-columns:1fr 1fr !important; gap:8px !important; margin-top:14px !important; }
+.pd-submit-actions {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  margin-top: 10px !important;
+}
+.pd-submit-actions button { width: auto !important; min-width: 0 !important; }
 .pd-lite-btn {
   min-height: 32px !important;
   height: 32px !important;
