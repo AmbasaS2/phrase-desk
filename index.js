@@ -25,7 +25,7 @@ const IS_BETA = false;
 const SHOW_DEBUG = true;
 const MAX_TOKENS = 8000;
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.4.3";
+const PD_VERSION = "1.4.4";
 const PD_GLOBAL_KEY = "__PHRASE_DESK_GLOBAL_STATE__";
 const pdGlobalState = globalThis[PD_GLOBAL_KEY] && typeof globalThis[PD_GLOBAL_KEY] === 'object'
   ? globalThis[PD_GLOBAL_KEY]
@@ -1112,6 +1112,149 @@ function orderedQuotationSpans(text = '') {
     .filter(span => span && span.end > span.start)
     .sort((a, b) => a.start - b.start || a.end - b.end);
 }
+function dialogueAssemblyProtectedMask(value = '') {
+  const source = String(value || '').replace(/\r\n/g, '\n');
+  const mask = sourceStructureMask(source);
+  const mark = (from, to) => {
+    const start = Math.max(0, Number(from) || 0);
+    const end = Math.min(source.length, Math.max(start, Number(to) || 0));
+    for (let index = start; index < end; index++) mask[index] = 1;
+  };
+
+  const protectedTag = /<(pre|code|script|style|textarea|memo|infoblock|info_panel|status_box|character_card|chat_box|scene_board)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
+  let match;
+  while ((match = protectedTag.exec(source))) mark(match.index, match.index + match[0].length);
+
+  const markdownLink = /!?\[[^\]\r\n]*\]\((?:\\.|[^)\r\n])*\)/g;
+  while ((match = markdownLink.exec(source))) mark(match.index, match.index + match[0].length);
+  const markdownReference = /^\s*\[[^\]\r\n]+\]:[^\r\n]*$/gm;
+  while ((match = markdownReference.exec(source))) mark(match.index, match.index + match[0].length);
+  return mask;
+}
+function hasUnprotectedJsonQuoteStructure(value = '', mask = null) {
+  const source = String(value || '').replace(/\r\n/g, '\n');
+  const blocked = mask || dialogueAssemblyProtectedMask(source);
+  let visible = '';
+  for (let index = 0; index < source.length; index++) visible += blocked[index] ? ' ' : source[index];
+  const trimmed = visible.trim();
+  if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === 'object') return true;
+    } catch {}
+  }
+  return /(?:^|[{,\[])\s*"[^"\r\n]+"\s*:/m.test(visible);
+}
+function dialogueMarkerFamilyForSource(value = '') {
+  const source = String(value || '');
+  for (let index = 0; index < 702; index++) {
+    let n = index + 1;
+    let label = '';
+    while (n > 0) {
+      n -= 1;
+      label = String.fromCharCode(65 + (n % 26)) + label;
+      n = Math.floor(n / 26);
+    }
+    const family = `PDQ-${label}`;
+    if (!source.includes(`[[${family}-`) && !source.includes(`[[/${family}-`)) return family;
+  }
+  return `PDQ-${hash(source).toUpperCase()}`;
+}
+function createDialogueAssemblyPlan(value = '') {
+  const source = String(value || '').replace(/\r\n/g, '\n');
+  const structureMask = dialogueAssemblyProtectedMask(source);
+  const spans = collectQuotationSpans(source, structureMask)
+    .filter(span => span && span.end > span.start)
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+  const family = dialogueMarkerFamilyForSource(source);
+  const items = [];
+  let cursor = 0;
+  let promptSource = '';
+
+  if (hasUnprotectedJsonQuoteStructure(source, structureMask)) {
+    return { source, promptSource:source, family, items:[], supported:false };
+  }
+  const boundaries = new Set(spans.flatMap(span => [span.start, span.end - 1]));
+  for (let index = 0; index < source.length; index++) {
+    if (structureMask[index] || isEscapedSourceChar(source, index)) continue;
+    if ('"“”「」『』'.includes(source[index]) && !boundaries.has(index)) {
+      return { source, promptSource:source, family, items:[], supported:false };
+    }
+  }
+
+  for (let index = 0; index < spans.length; index++) {
+    const span = spans[index];
+    // Nested or overlapping quote spans cannot be reconstructed without guessing.
+    if (span.start < cursor) return { source, promptSource:source, family, items:[], supported:false };
+    const id = String(index + 1).padStart(4, '0');
+    const openMarker = `[[${family}-${id}]]`;
+    const closeMarker = `[[/${family}-${id}]]`;
+    promptSource += source.slice(cursor, span.start);
+    promptSource += openMarker + span.body + closeMarker;
+    items.push({
+      id,
+      openMarker,
+      closeMarker,
+      openQuote:span.open,
+      closeQuote:span.close,
+      sourceBody:span.body,
+    });
+    cursor = span.end;
+  }
+  promptSource += source.slice(cursor);
+  return { source, promptSource, family, items, supported:true };
+}
+function stripDialogueAssemblyMarkers(value = '', plan = null) {
+  let out = String(value || '');
+  const items = Array.isArray(plan?.items) ? plan.items : [];
+  for (const item of items) {
+    out = out.split(item.openMarker).join('').split(item.closeMarker).join('');
+  }
+  return out;
+}
+function assembleDialogueBilingualResult(value = '', plan = null) {
+  const received = String(value || '').replace(/\r\n/g, '\n');
+  const fallback = stripDialogueAssemblyMarkers(received, plan);
+  if (!plan?.supported) return { text:fallback, complete:false };
+  const items = Array.isArray(plan.items) ? plan.items : [];
+  if (!items.length) return { text:fallback, complete:true };
+
+  const escaped = String(plan.family || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const observed = received.match(new RegExp(`\\[\\[\\/?${escaped}-\\d{4}\\]\\]`, 'g')) || [];
+  const expected = items.flatMap(item => [item.openMarker, item.closeMarker]);
+  if (observed.length !== expected.length || observed.some((token, index) => token !== expected[index])) {
+    return { text:fallback, complete:false };
+  }
+  let markerRemainder = received;
+  for (const token of expected) {
+    const tokenAt = markerRemainder.indexOf(token);
+    if (tokenAt < 0) return { text:fallback, complete:false };
+    markerRemainder = markerRemainder.slice(0, tokenAt) + markerRemainder.slice(tokenAt + token.length);
+  }
+  if (/\[\[\/?PDQ-/i.test(markerRemainder)) return { text:fallback, complete:false };
+
+  const translations = [];
+  let cursor = 0;
+  for (const item of items) {
+    const openAt = received.indexOf(item.openMarker, cursor);
+    const bodyStart = openAt + item.openMarker.length;
+    const closeAt = openAt >= 0 ? received.indexOf(item.closeMarker, bodyStart) : -1;
+    if (openAt < cursor || closeAt < bodyStart) return { text:fallback, complete:false };
+    const translatedBody = received.slice(bodyStart, closeAt).trim();
+    if (!translatedBody) return { text:fallback, complete:false };
+    translations.push({ item, openAt, closeAt, translatedBody });
+    cursor = closeAt + item.closeMarker.length;
+  }
+
+  let out = received;
+  for (const entry of translations.sort((a, b) => b.openAt - a.openAt)) {
+    const sourceBody = String(entry.item.sourceBody || '');
+    const separator = /\s$/.test(sourceBody) ? '' : ' ';
+    const replacement = `${entry.item.openQuote}${sourceBody}${separator}[${entry.translatedBody}]${entry.item.closeQuote}`;
+    out = out.slice(0, entry.openAt) + replacement + out.slice(entry.closeAt + entry.item.closeMarker.length);
+  }
+  return { text:out, complete:true };
+}
 function buildGoogleDialogueFromWholeTranslation(source = '', korean = '') {
   const src = String(source || '').replace(/\r\n/g, '\n');
   const ko = String(korean || '').replace(/\r\n/g, '\n');
@@ -1358,29 +1501,24 @@ function bilingualStyleInstruction() {
   ];
 }
 
-function dialogueBilingualRules() {
+function dialogueBilingualRules(dialogueSlotCount = 0) {
+  const count = Math.max(0, Number(dialogueSlotCount) || 0);
   return [
-    'Final output contract: Korean narration with source-language dialogue',
-    '- This contract is the complete and controlling output shape for this request. It determines where Korean replaces source text and where source text remains visibly present.',
-    '- NON-DIALOGUE ZONE: Translate narration, action, inner thought, speech tags, and all other prose outside original dialogue quotation spans into Korean only.',
-    '- DIALOGUE EXCEPTION: Treat every original dialogue quotation span as a separate output unit, including short or grammatically incomplete fragments split by narration or a speech tag. Reproduce all source text inside each span verbatim; if it is English, that exact English text must remain visibly present.',
-    '- Add Korean to each source-language dialogue span; never replace the source text inside that span with Korean-only dialogue.',
-    '- Inside every dialogue span, use exactly this order: original opening quote + complete unchanged source text from that single span + one space + exactly one [idiomatic Korean translation of that span only] + original closing quote.',
-    '- Preserve the exact number, order, quote style, pairing, boundaries, punctuation, and emphasis of all original dialogue quotation spans. Reproduce each span exactly once and keep all text within its original quotation boundary.',
-    '- Treat every original opening-quote-to-closing-quote pair as a separate dialogue span, even when two spans belong to the same speaker or are separated only by a speech tag such as she said. Each separate span receives its own Korean bracket immediately before its own closing quote.',
-    '- A speech tag does not join the quoted spans on either side of it. Never carry, merge, or postpone one span\'s Korean translation into a later dialogue span.',
-    '- When one dialogue span contains several sentences, keep its complete source utterance together and use one final Korean bracket for that whole span.',
-    '- Before returning, verify that the original source text from every separate dialogue span is still visibly present before that span\'s own Korean bracket and that no originally non-Korean dialogue span became Korean-only.',
-    '- Keep every paragraph and structural wrapper in source order. Render each status or information block\'s human-readable labels and values in Korean only, exactly once, in its original location. Preserve field order, separators, emojis, fences, and shape; keep only literal placeholders, macros, and executable data keys verbatim.',
-    '- Input example: "There," she said. "Now you\'re damp too. So we match."',
-    '- Required output example: "There, [됐어,]" 그녀가 말했다. "Now you\'re damp too. So we match. [이제 너도 축축하네. 그러니 우린 같은 처지야.]"',
+    'Final output contract: Korean translation with protected dialogue slots',
+    '- Render every human-readable part of the source in Korean exactly once, including narration, action, inner thought, speech tags, status or information blocks, and the text inside every numbered PDQ marker pair.',
+    '- Copy every opening and closing PDQ marker exactly once, unchanged, and in the same numeric order and position. Each marker pair is one independent dialogue span.',
+    `- This source contains exactly ${count} numbered dialogue marker pair${count === 1 ? '' : 's'}.`,
+    '- Inside each marker pair, place only the Korean translation of the source text that was inside that same pair. Keep short fragments and speech-tag-separated pairs independent.',
+    '- Keep paragraph breaks, Markdown, HTML, code fences, structural wrappers, placeholders, macros, keys, separators, emojis, and emphasis in their source order and shape.',
+    '- Input example: [[PDQ-EX-0001]]There,[[/PDQ-EX-0001]] she said. [[PDQ-EX-0002]]Now you are damp too.[[/PDQ-EX-0002]]',
+    '- Required output example: [[PDQ-EX-0001]]됐어,[[/PDQ-EX-0001]] 그녀가 말했다. [[PDQ-EX-0002]]이제 너도 축축하네.[[/PDQ-EX-0002]]',
     '- Return only the transformed text.',
   ];
 }
 
-function selectedOutputContract(kind = 'ko') {
+function selectedOutputContract(kind = 'ko', meta = {}) {
   if (kind === 'full') return bilingualStyleInstruction();
-  if (kind === 'dialogue') return dialogueBilingualRules();
+  if (kind === 'dialogue') return dialogueBilingualRules(meta?.dialogueSlotCount || 0);
   return [
     'Final output contract: Korean only',
     '- This contract is the complete and controlling output shape for this request.',
@@ -1978,7 +2116,7 @@ function buildPrompt(text, kind, meta = {}) {
   if (sourceSpeaker) lines.push('', 'Primary source speaker / perspective:', sourceSpeaker);
 
   if (gp) lines.push('', 'Additional mandatory translation rules:', gp);
-  lines.push('', ...selectedOutputContract(kind));
+  lines.push('', ...selectedOutputContract(kind, meta));
   lines.push('', '<source_text>', String(text || ''), '</source_text>');
   return lines.join('\n');
 }
@@ -2870,13 +3008,25 @@ async function translateMessagePayload(payload, forceRetranslate = false, option
       result = safeChatTranslationPostprocess(result, original, kind);
     } else {
       const separateParts = isFullSeparateMode(kind) ? splitTrailingInfoBlockForSeparate(original) : null;
-      const sourceForPrompt = separateParts ? separateParts.body : original;
+      const dialoguePlan = kind === 'dialogue' ? createDialogueAssemblyPlan(original) : null;
+      const sourceForPrompt = separateParts ? separateParts.body : (dialoguePlan?.promptSource || original);
       // 완전분리 모드는 AI에게 RP 본문만 보내고, 원문 전체는 하단에 그대로 다시 붙입니다.
-      // 채팅 본문은 숨은 표식으로 치환하지 않고 원문 그대로 전달합니다.
-      const promptMeta = { targetIndex: payload?.idx, targetMsg: payload?.msg, freshRetranslation: !!forceRetranslate };
+      // 대사 병기 모드만 원문 따옴표 구간을 번호 표식으로 감싸며, 응답 뒤 원문 대사를 결정적으로 복원합니다.
+      const promptMeta = {
+        targetIndex: payload?.idx,
+        targetMsg: payload?.msg,
+        freshRetranslation: !!forceRetranslate,
+        dialogueSlotCount:dialoguePlan?.items?.length || 0,
+      };
       const basePrompt = buildPrompt(sourceForPrompt, kind, promptMeta);
       const rawResult = await callAI(basePrompt, MAX_TOKENS, { sourceText: sourceForPrompt, preserveNonEmptyResponse: true });
-      let restoredResult = safeChatTranslationPostprocess(rawResult, original, kind);
+      const assembledDialogue = dialoguePlan ? assembleDialogueBilingualResult(rawResult, dialoguePlan) : null;
+      if (assembledDialogue && !assembledDialogue.complete) {
+        // Structural assembly failure never rejects, hides, or retries the first AI response.
+        // Remove only Phrase Desk's internal exact marker tokens before showing that response.
+        logDebug({ type:'dialogue-assembly-fallback', sourceSlots:dialoguePlan.items.length, resultLength:String(rawResult || '').length });
+      }
+      let restoredResult = safeChatTranslationPostprocess(assembledDialogue?.text ?? rawResult, original, kind);
       const inventedKinship = unsupportedInventedKinshipTerms(restoredResult, sourceForPrompt, promptMeta);
       if (inventedKinship.length) {
         // Do not silently send a second translation request. Keep the first result and leave
