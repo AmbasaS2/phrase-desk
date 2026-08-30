@@ -1,4 +1,4 @@
-// Phrase Desk safety helpers v1.1.16
+// Phrase Desk safety helpers v1.1.15
 // Volatile logs and cleanup state stay outside SillyTavern settings/chat saves.
 
 const FORMAT_TOKEN_RE = /(?:⟦\s*PD_FMT_[0-9a-z]+\s*⟧|\[\[?\s*PD_FMT_[0-9a-z]+\s*\]?\]|【\s*PD_FMT_[0-9a-z]+\s*】|\{\{\s*PD_FMT_[0-9a-z]+\s*\}\}|<\s*PD_FMT_[0-9a-z]+\s*>|\bPD_FMT_[0-9a-z]+\b)/gi;
@@ -314,7 +314,21 @@ export function normalizeFenceLanguage(value = '') {
 }
 
 export function cleanOrphanFormatTokens(value = '') {
-  return String(value ?? '');
+  let out = String(value || '');
+  out = out.replace(FORMAT_TOKEN_RE, (m, offset, whole) => {
+    const lineStart = whole.lastIndexOf('\n', offset) + 1;
+    const lineEnd = whole.indexOf('\n', offset);
+    const line = whole.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
+    const infoish = /[🗓📅📍⏰🕰🕒🌬☁🌧🌫☀🌙❄🔥]|\b(?:date|time|location|place|weather|season)\b|(?:날짜|시간|장소|위치|날씨|계절)/i.test(line);
+    return infoish ? ' | ' : '';
+  });
+  out = out
+    .replace(/[ \t]*\|[ \t]*/g, ' | ')
+    .replace(/(?:\s*\|\s*){2,}/g, ' | ')
+    .replace(/^[ \t]*\|[ \t]*/gm, '')
+    .replace(/[ \t]*\|[ \t]*$/gm, '')
+    .replace(/\n{4,}/g, '\n\n\n');
+  return out.trim();
 }
 
 function sourceContainsLine(source = '', line = '') {
@@ -471,9 +485,58 @@ function findClosingQuote(text = '', start = 0, close = '"') {
 // Linear scan: no DOM work, no repeated whole-string masking, and no parser run unless
 // both a dialogue quote and a Korean/Japanese/Chinese bracket are present.
 export function normalizeBilingualQuotes(value = '') {
-  return String(value ?? '');
+  const text = String(value || '');
+  if (!text || !LATIN_TEXT_RE.test(text) || !TARGET_TEXT_RE.test(text) || !/["“「『]/.test(text) || !/\[[^\]\n]*\]/.test(text)) return text;
+
+  const quotePairs = { '"': '"', '“': '”', '「': '」', '『': '』' };
+  let out = '';
+  let i = 0;
+  while (i < text.length) {
+    if (text.startsWith('```', i)) {
+      const end = text.indexOf('```', i + 3);
+      if (end < 0) { out += text.slice(i); break; }
+      out += text.slice(i, end + 3); i = end + 3; continue;
+    }
+    if (text[i] === '`') {
+      const end = text.indexOf('`', i + 1);
+      if (end < 0) { out += text.slice(i); break; }
+      out += text.slice(i, end + 1); i = end + 1; continue;
+    }
+    if (text[i] === '<') {
+      const end = text.indexOf('>', i + 1);
+      if (end < 0) { out += text.slice(i); break; }
+      out += text.slice(i, end + 1); i = end + 1; continue;
+    }
+
+    const close = quotePairs[text[i]];
+    if (!close) { out += text[i++]; continue; }
+    const end = findClosingQuote(text, i + 1, close);
+    if (end < 0) { out += text[i++]; continue; }
+
+    const inside = text.slice(i + 1, end);
+    let cursor = end + 1;
+    while (cursor < text.length && /[ \t]/.test(text[cursor])) cursor++;
+    const outside = readSquareBlock(text, cursor);
+    const outsideBody = outside && TARGET_TEXT_RE.test(outside.body) ? outside.body : '';
+    const merged = mergeQuoteTranslation(inside, outsideBody);
+    if (merged) {
+      out += text[i] + merged + close;
+      i = outsideBody ? outside.end : end + 1;
+    } else {
+      out += text.slice(i, end + 1);
+      i = end + 1;
+    }
+  }
+  return out;
 }
 
 export function cleanTranslationArtifacts(value = '', originalText = '', options = {}) {
-  return String(value ?? '');
+  let out = normalizeFenceLanguage(value);
+  out = unwrapAddedOuterFence(out, originalText);
+  out = removeAddedOutputLabel(out, originalText);
+  out = removeShortPreamble(out, originalText);
+  out = cleanOrphanFormatTokens(out);
+  if (options.detectFailure !== false && originalText && looksLikeTaskFailure(out, originalText)) return '';
+  out = trimClearPromptLeak(out, originalText);
+  return String(out || '').replace(/\r\n/g, '\n').replace(/\n{4,}/g, '\n\n\n').trim();
 }
