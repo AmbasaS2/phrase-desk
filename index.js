@@ -25,7 +25,7 @@ const IS_BETA = false;
 const SHOW_DEBUG = true;
 const MAX_TOKENS = 8000;
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.4.0";
+const PD_VERSION = "1.4.1";
 const PD_GLOBAL_KEY = "__PHRASE_DESK_GLOBAL_STATE__";
 const pdGlobalState = globalThis[PD_GLOBAL_KEY] && typeof globalThis[PD_GLOBAL_KEY] === 'object'
   ? globalThis[PD_GLOBAL_KEY]
@@ -1313,63 +1313,136 @@ function unsupportedInventedKinshipTerms(result = '', source = '', meta = {}) {
 
 function bilingualStyleInstruction() {
   const style = settings.bilingualStyle || 'side_sentence';
-  const shared = [
-    'Preserve real paragraph breaks, quotation marks, Markdown, HTML, code fences, and source order.',
-    'Do not split at visual wrapping. Use only actual source sentence, line, or paragraph boundaries.',
-  ];
   if (style === 'below_sentence') return [
-    'Bilingual layout: sentence pairs on two lines.',
-    'Keep each complete source sentence, then place its Korean translation in square brackets on the next line.',
-    ...shared,
+    'Final output contract: Full bilingual — sentence pairs below',
+    '- This contract is the complete and controlling output shape for this request.',
+    '- For each complete source sentence outside a status or information block, reproduce that source sentence verbatim, then place one square-bracketed Korean translation on the next line.',
+    '- Use actual source sentence boundaries and preserve paragraph breaks, quotation marks, Markdown, HTML, code fences, structural wrappers, and source order.',
+    '- Treat status or information blocks as an exception to the pairing rule: render their human-readable labels and values in Korean only, exactly once, in their original location. Preserve field order, separators, emojis, fences, and shape; keep only literal placeholders, macros, and executable data keys verbatim.',
+    '- Return only the transformed text.',
   ];
   if (style === 'by_line') return [
-    'Bilingual layout: one pair per source line.',
-    'Keep each complete newline-delimited source line, then place its Korean translation in square brackets on the next line.',
-    'Preserve blank lines. A long source line remains one line.',
-    ...shared,
+    'Final output contract: Full bilingual — pairs by line',
+    '- This contract is the complete and controlling output shape for this request.',
+    '- For each nonblank newline-delimited source line outside a status or information block, reproduce that complete source line verbatim, then place one square-bracketed Korean translation on the next line.',
+    '- Preserve every real blank line, keep each long source line as one unit, and preserve quotation marks, Markdown, HTML, code fences, structural wrappers, and source order.',
+    '- Treat status or information blocks as an exception to the pairing rule: render their human-readable labels and values in Korean only, exactly once, in their original location. Preserve field order, separators, emojis, fences, and shape; keep only literal placeholders, macros, and executable data keys verbatim.',
+    '- Return only the transformed text.',
   ];
   if (style === 'by_paragraph') return [
-    'Bilingual layout: one pair per paragraph.',
-    'Keep each complete source paragraph, then place one Korean translation of that paragraph below it in square brackets.',
-    'Do not split a paragraph into sentence pairs.',
-    ...shared,
+    'Final output contract: Full bilingual — pairs by paragraph',
+    '- This contract is the complete and controlling output shape for this request.',
+    '- For each complete source paragraph outside a status or information block, reproduce that paragraph verbatim, then place one square-bracketed Korean translation of the whole paragraph below it.',
+    '- Keep each paragraph as one unit and preserve blank lines, quotation marks, Markdown, HTML, code fences, structural wrappers, and source order.',
+    '- Treat status or information blocks as an exception to the pairing rule: render their human-readable labels and values in Korean only, exactly once, in their original location. Preserve field order, separators, emojis, fences, and shape; keep only literal placeholders, macros, and executable data keys verbatim.',
+    '- Return only the transformed text.',
   ];
   if (style === 'separate') return [
-    'Separated bilingual layout: return only the Korean story section that belongs above the untouched English source.',
-    'Phrase Desk appends the English source and detached info/status block itself; do not repeat them.',
-    'Narration and inner thought become Korean only. Inside quoted dialogue, keep the complete English utterance and add one Korean bracket immediately before the same closing quotation mark.',
-    'Combine multi-sentence dialogue into one Korean bracket per quotation span.',
-    'Do not add labels, divider lines, a second source copy, or trailing metadata.',
-    ...shared,
+    'Final output contract: Full bilingual — separate sections',
+    '- This contract is the complete and controlling output shape for this request.',
+    '- Return only the Korean upper story section; Phrase Desk appends the divider and the complete untouched source section afterward.',
+    '- Render narration, action, inner thought, and speech tags in Korean only.',
+    '- Within each original dialogue quotation span, reproduce the source utterance verbatim and add exactly one square-bracketed Korean translation immediately before its original closing quotation mark.',
+    '- Combine multi-sentence dialogue into that one final bracket and preserve every original quotation style, paragraph break, Markdown marker, HTML element, code fence, structural wrapper, and source order.',
+    '- Render the human-readable labels and values of any status or information block present in this source block in Korean only, exactly once, in its original location. Preserve field order, separators, emojis, fences, and shape; keep only literal placeholders, macros, and executable data keys verbatim.',
+    '- Return the upper story section without a label, divider, repeated source section, or added trailing metadata.',
   ];
   return [
-    'Bilingual layout: sentence pairs on the same line.',
-    'Keep each complete source sentence and add its Korean translation immediately after it in square brackets.',
-    'For quoted dialogue, the Korean bracket belongs inside the same quotation and immediately before its closing mark.',
-    ...shared,
+    'Final output contract: Full bilingual — sentence pairs beside',
+    '- This contract is the complete and controlling output shape for this request.',
+    '- For each complete source sentence outside a status or information block, reproduce that source sentence verbatim and add one square-bracketed Korean translation immediately after it on the same line.',
+    '- When the complete source unit is an original dialogue quotation span, put its Korean bracket inside that same quotation immediately before the original closing quotation mark.',
+    '- Use actual source sentence boundaries and preserve paragraph breaks, quotation marks, Markdown, HTML, code fences, structural wrappers, and source order.',
+    '- Treat status or information blocks as an exception to the pairing rule: render their human-readable labels and values in Korean only, exactly once, in their original location. Preserve field order, separators, emojis, fences, and shape; keep only literal placeholders, macros, and executable data keys verbatim.',
+    '- Return only the transformed text.',
   ];
 }
 
-function dialogueBilingualRules({ narrationMode = 'full' } = {}) {
-  const narrationRule = narrationMode === 'translated'
-    ? 'Translate all narration, inner thought, and speech tags outside quotation marks into Korean only.'
-    : 'Outside quotation marks, follow the selected whole-message bilingual layout.';
+function dialogueBilingualRules() {
   return [
-    'Dialogue formatting:',
-    narrationRule,
-    'Treat straight double quotes, curly double quotes, 「」, and 『』 as dialogue boundaries.',
-    'Preserve the exact number, order, pairing, and boundaries of all original dialogue quotation spans. Never merge spans, split one span, move a quotation mark, or move text across a quotation boundary.',
-    'Within each original quotation span, retain the complete source utterance and place exactly one adjacent Korean square-bracket block containing only that span\'s own translation immediately before its original closing quotation mark.',
-    'Narration, action, inner thought, speech tags, and status/information blocks before, between, or after quotation spans must remain outside those spans and in their exact original positions. Square-bracketed status or metadata lines such as [Date: ...], [Location: ...], and [Weather: ...] are structural blocks, not bilingual translation brackets; preserve their line order, translate their human-readable labels and values once, and never move a trailing block to the beginning or into a quotation.',
-    'The order inside every quotation is always source-language utterance first, then one Korean bracket. Never put Korean first with the source language inside brackets, and never interleave alternating source and translation fragments.',
-    'When a quotation contains several sentences, combine their Korean into that single final bracket.',
-    'Example: “Hi. I am here. [안녕. 나 여기 있어.]”',
-    'Never place the Korean bracket after a closed quotation or create several Korean brackets inside one quotation.',
+    'Final output contract: Dialogue bilingual',
+    '- This contract is the complete and controlling output shape for this request.',
+    '- Render every part outside original dialogue quotation spans in Korean only, including narration, action, inner thought, and speech tags.',
+    '- For each original dialogue quotation span, output: original opening quote + source dialogue verbatim + one square-bracketed idiomatic Korean translation + original closing quote.',
+    '- Reproduce every original dialogue span exactly once, in source order, preserving its original quote style, pairing, boundaries, punctuation, and emphasis.',
+    '- Put exactly one Korean bracket inside that same quotation immediately before its closing mark; combine multi-sentence dialogue into that one bracket.',
+    '- Keep every paragraph and structural wrapper in source order. Render each status or information block\'s human-readable labels and values in Korean only, exactly once, in its original location. Preserve field order, separators, emojis, fences, and shape; keep only literal placeholders, macros, and executable data keys verbatim.',
+    '- Return only the transformed text.',
+    '- Example: 그녀가 말했다. "Come here. [이리 와.]"',
+  ];
+}
+
+function selectedOutputContract(kind = 'ko') {
+  if (kind === 'full') return bilingualStyleInstruction();
+  if (kind === 'dialogue') return dialogueBilingualRules();
+  return [
+    'Final output contract: Korean only',
+    '- This contract is the complete and controlling output shape for this request.',
+    '- Render every human-readable source unit in natural Korean exactly once and in source order.',
+    '- Preserve paragraph breaks, quotation marks, Markdown, HTML, code fences, structural wrappers, placeholders, macros, keys, separators, and emphasis while placing the corresponding Korean content inside them.',
+    '- Render each status or information block\'s human-readable labels and values in Korean only, exactly once, in its original location. Preserve field order, separators, emojis, fences, and shape; keep only literal placeholders, macros, and executable data keys verbatim.',
+    '- Return only the transformed text.',
   ];
 }
 
 function normalizeDialogueBilingualQuotePairs(value = '') {
   return normalizeBilingualQuotes(value);
+}
+
+function relocateDetachedDialogueTranslationBrackets(value = '', original = '') {
+  const text = String(value || '').replace(/\r\n/g, '\n');
+  const source = String(original || '').replace(/\r\n/g, '\n');
+  if (!text || !source) return text;
+
+  const sourceSpans = orderedQuotationSpans(source);
+  const outputSpans = orderedQuotationSpans(text);
+  if (!sourceSpans.length || sourceSpans.length !== outputSpans.length) return text;
+
+  const insideTranslation = /^[ \t\u00a0\u202f]+\[[^\[\]\r\n]*[가-힣][^\[\]\r\n]*\]$/;
+  const movableSpace = /[ \t\u00a0\u202f]/;
+  const replacements = [];
+
+  for (let i = 0; i < sourceSpans.length; i++) {
+    const sourceSpan = sourceSpans[i];
+    const outputSpan = outputSpans[i];
+    if (sourceSpan.open !== outputSpan.open || sourceSpan.close !== outputSpan.close) return text;
+
+    const sourceBody = String(sourceSpan.body || '');
+    const outputBody = String(outputSpan.body || '');
+    const hasInsideTranslation = outputBody.startsWith(sourceBody)
+      && insideTranslation.test(outputBody.slice(sourceBody.length));
+    if (outputBody !== sourceBody && !hasInsideTranslation) return text;
+
+    let sourceCursor = sourceSpan.end;
+    while (sourceCursor < source.length && movableSpace.test(source[sourceCursor])) sourceCursor += 1;
+    if (source[sourceCursor] === '[') return text;
+
+    let cursor = outputSpan.end;
+    while (cursor < text.length && movableSpace.test(text[cursor])) cursor += 1;
+    if (text[cursor] !== '[') continue;
+
+    const bracketEnd = text.indexOf(']', cursor + 1);
+    if (bracketEnd < 0) return text;
+    const bracketBody = text.slice(cursor + 1, bracketEnd);
+    if (!bracketBody || /[\[\]\r\n]/.test(bracketBody) || !/[가-힣]/.test(bracketBody)) return text;
+
+    let after = bracketEnd + 1;
+    while (after < text.length && movableSpace.test(text[after])) after += 1;
+    if (text[after] === '[' || hasInsideTranslation) return text;
+
+    const separator = /[ \t\u00a0\u202f]$/.test(sourceBody) ? '' : ' ';
+    replacements.push({
+      start: outputSpan.end - outputSpan.close.length,
+      end: bracketEnd + 1,
+      replacement: `${separator}[${bracketBody}]${outputSpan.close}`,
+    });
+  }
+
+  let out = text;
+  for (const item of replacements.sort((a, b) => b.start - a.start)) {
+    out = out.slice(0, item.start) + item.replacement + out.slice(item.end);
+  }
+  return out;
 }
 
 function ensureMarkdownInfoHighlightAliases() {
@@ -1419,7 +1492,9 @@ function safeChatTranslationPostprocess(value = '', original = '', kind = '') {
   if (!out.trim() && received.trim()) out = received.replace(/\r\n/g, '\n').trim();
   out = normalizeDisplayFenceLanguageTags(out);
   const mode = String(kind || '');
-  if (mode === 'full' || mode === 'dialogue' || mode.includes(':full') || mode.includes(':dialogue')) {
+  if (mode === 'dialogue' || mode.includes(':dialogue')) {
+    out = relocateDetachedDialogueTranslationBrackets(out, original);
+  } else if (mode === 'full' || mode.includes(':full')) {
     out = normalizeDialogueBilingualQuotePairs(out);
   }
   return out;
@@ -1805,8 +1880,6 @@ function buildPrompt(text, kind, meta = {}) {
     '- Text enclosed in asterisks must remain enclosed in the same asterisks and must never be changed into quotation marks or another wrapper.',
     '- Markdown emphasis marks such as *...*, **...**, and ***...*** remain visible in the source. Preserve every opening and closing asterisk run exactly; do not turn it into quotation marks or attach it to a neighboring paragraph.',
     '- Text wrapped in asterisks remains wrapped in the same asterisk run around the corresponding translated or bilingual content. Never replace that wrapper with quotation marks, and never add asterisks around source text that was not emphasized.',
-    '- A standalone italicized inner-thought paragraph may use source text followed by one Korean bracket inside the same original asterisks, but ordinary unmarked narration must never be converted into italicized thought.',
-    '- In bilingual modes, only the Korean translation brackets required by the selected layout may be added. Every original source symbol must otherwise remain unchanged and serve the same formatting role.',
     '',
     'Translation priorities',
     '1. Preserve factual and relational meaning: who acts, who receives the action, what is affected, direction, physical contact, sequence, simultaneity, negation, uncertainty, and cause.',
@@ -1871,7 +1944,6 @@ function buildPrompt(text, kind, meta = {}) {
     'Structure and protected content',
     '- Preserve paragraph breaks, blank lines, quote marks, Markdown emphasis, links, images, HTML/custom tags, code fences, lists, tables, indentation, and source order.',
     '- Keep placeholders and macros exactly, including {{char}}, {{user}}, {{random}}, <user>, <char>, {{getvar::x}}, URLs, selectors, IDs, data fields, and executable code.',
-    '- In non-programming status or information blocks, translate human-readable labels and values while preserving keys, separators, emojis, fences, and shape. Do not bilingualize those blocks.',
     '',
     'Silent final check before returning the translation',
     '- Verify that no meaningful information, participant, action, negation, or relationship cue was lost.',
@@ -1899,20 +1971,8 @@ function buildPrompt(text, kind, meta = {}) {
   const sourceSpeaker = cleanName(meta?.targetMsg?.name || (meta?.targetMsg?.is_user ? (ctx?.name1 || 'User') : currentChar()));
   if (sourceSpeaker) lines.push('', 'Primary source speaker / perspective:', sourceSpeaker);
 
-  if (kind === 'ko') lines.push(
-    '',
-    'Mode: Korean only',
-    'Translate the complete source into natural Korean only. Do not retain source-language copies or add bilingual brackets unless they are literal source content.',
-  );
-  if (kind === 'full') lines.push('', ...bilingualStyleInstruction(), '', ...dialogueBilingualRules({ narrationMode: 'bilingual' }));
-  if (kind === 'dialogue') lines.push(
-    '',
-    'Mode: Korean narration with bilingual dialogue',
-    'Translate narration and speech tags into natural Korean. Keep dialogue in its source language and add Korean inside the same quotation.',
-    '',
-    ...dialogueBilingualRules({ narrationMode: 'translated' }),
-  );
   if (gp) lines.push('', 'Additional mandatory translation rules:', gp);
+  lines.push('', ...selectedOutputContract(kind));
   lines.push('', '<source_text>', String(text || ''), '</source_text>');
   return lines.join('\n');
 }
