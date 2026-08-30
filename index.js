@@ -25,7 +25,7 @@ const IS_BETA = false;
 const SHOW_DEBUG = true;
 const MAX_TOKENS = 8000;
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.4.10";
+const PD_VERSION = "1.4.11";
 const PD_GLOBAL_KEY = "__PHRASE_DESK_GLOBAL_STATE__";
 const pdGlobalState = globalThis[PD_GLOBAL_KEY] && typeof globalThis[PD_GLOBAL_KEY] === 'object'
   ? globalThis[PD_GLOBAL_KEY]
@@ -2899,7 +2899,7 @@ function buildPrompt(text, kind, meta = {}) {
     '',
     'Reference evidence and priority',
     '- The current source supplies the events, actions, emotional developments, and facts. References resolve established names, relationships, recurring terms, voice, and register.',
-    '- Apply global preferences across the translation and current-character preferences to that character. Current-character preferences take precedence over conflicting global preferences, and explicit user preferences take precedence over the general defaults below. Source meaning and the final output contract remain fixed.',
+    '- Apply global preferences across the translation and current-character preferences to that character. Current-character preferences take precedence over conflicting global preferences. Explicit user preferences guide Korean expression only inside the source’s fixed meaning, specificity, force, and explicitness; those source boundaries and the final output contract remain controlling.',
   ];
 
   if (meta?.freshRetranslation) lines.push(
@@ -2940,18 +2940,20 @@ function buildPrompt(text, kind, meta = {}) {
     '',
     'Evidence-grounded meaning, voice, and detail',
     '- Keep the source meaning boundary fixed: who does what to whom, physical details, possession, direction, contact, negation, uncertainty, cause, implication, conversational act, and emotional force.',
-    '- Match the source level of specificity. General references such as a boy, coat, doctor, room, illness, or object remain equally general in Korean unless the source or established continuity identifies them more precisely.',
-    '- Match aggression, vulgarity, intimacy, formality, restraint, and emotional intensity at the same level. A restrained or neutral source takes restrained or neutral Korean, with natural address omission when Korean prefers it. Authority comes through concise, precise phrasing and the established register.',
-    '- Map profanity, slang, forms of address, kinship, and gendered language by their conversational function and supported intensity. For open or neutral relationships, use a name, a neutral expression, or natural Korean omission.',
+    '- Match source specificity. Add no concrete detail unless the current source or supplied references explicitly establish it; never infer it from genre, era, occupation, appearance, or character archetype.',
+    '- Match aggression, vulgarity, intimacy, formality, restraint, and emotional intensity. Do not add or intensify hostility, contempt, profanity, threats, or emotion absent from the current source; references may guide voice and register but never raise its force.',
+    '- Map profanity, slang, address, kinship, and gendered language by function and supported intensity; for neutral relationships, use a name, neutral wording, or natural omission.',
+    '- Never turn neutral wording such as you, she, her, girl, or woman, or hostility that is not explicitly gendered, into Korean misogynistic or gendered abuse: “년” as a person-label or suffix, “네년”, “그년”, “이년”, “계집”, “계집애”, “암캐”, or similar terms.',
+    '- Use gendered abuse only when the current source itself explicitly contains equivalent gendered abuse; preserve its target and intensity without strengthening or multiplying it.',
     '- Use historical, occupational, medical, and technical terms where the source or established continuity supplies that detail; ordinary source nouns remain ordinary Korean nouns.',
     '- Naturalization may reshape expression and syntax while keeping facts, relationships, intensity, explicitness, and specificity unchanged.',
     '',
     'Meaning-first native Korean reconstruction',
-    '- First determine each sentence or utterance’s contextual meaning, implication, conversational function, and emotional effect. Then compose Korean from that understanding rather than mapping the English wording or concepts one by one.',
-    '- When literal and idiomatic Korean are equally faithful, choose the idiomatic expression that directly recreates the line’s function and effect in this character, relationship, genre, and moment.',
+    '- First determine each sentence or utterance’s contextual meaning, implication, negation scope, reference, possession, modal force, conversational function, and emotional effect. Distinguish willingness, intention, likelihood, ability, permission, and obligation before composing Korean from that understanding rather than mapping English wording or concepts one by one.',
+    '- When literal and idiomatic Korean are equally faithful, choose the idiomatic expression. Before returning, read the Korean as a standalone passage and revise wording that is accidentally incomplete, malformed, or English-shaped, while preserving deliberate fragments and keeping meaning, voice, intensity, specificity, brevity, and structure fixed.',
     '- Let Korean syntax, subject omission, clause order, vocabulary, endings, and rhythm take the form a native Korean speaker or fiction writer would naturally choose.',
-    '- Express compressed formulas, light-verb and abstract constructions, deadpan humor, understatement, rhetorical replies, idioms, quantities, metonymy, and figurative descriptions through their contextual meaning and effect.',
-    '- Interpret formulaic time, existence, permission, entitlement, and quantity expressions as a whole within the local conversational logic before choosing Korean words.',
+    '- Recast English light-verb, nominal, body-part, abstract, and formulaic constructions as the action, state, result, relationship, implication, or rhetorical effect that natural Korean expresses in context. This includes compressed expressions of time, existence, permission, entitlement, degree, and quantity.',
+    '- Carry deadpan humor, understatement, rhetorical replies, idioms, metonymy, and figurative descriptions through their whole contextual meaning and effect rather than their surface wording.',
     '- Keep brief lines brief, implications implicit, and each speaker’s voice distinct.',
     '- These examples illustrate the decision method, not fixed phrase substitutions:',
     '  · “You picked a fine time to tell me.” → annoyed/sarcastic context: “하필 지금 말하냐.”',
