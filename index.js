@@ -25,7 +25,7 @@ const IS_BETA = false;
 const SHOW_DEBUG = true;
 const MAX_TOKENS = 8000;
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.4.1";
+const PD_VERSION = "1.4.2";
 const PD_GLOBAL_KEY = "__PHRASE_DESK_GLOBAL_STATE__";
 const pdGlobalState = globalThis[PD_GLOBAL_KEY] && typeof globalThis[PD_GLOBAL_KEY] === 'object'
   ? globalThis[PD_GLOBAL_KEY]
@@ -1360,15 +1360,19 @@ function bilingualStyleInstruction() {
 
 function dialogueBilingualRules() {
   return [
-    'Final output contract: Dialogue bilingual',
-    '- This contract is the complete and controlling output shape for this request.',
-    '- Render every part outside original dialogue quotation spans in Korean only, including narration, action, inner thought, and speech tags.',
-    '- For each original dialogue quotation span, output: original opening quote + source dialogue verbatim + one square-bracketed idiomatic Korean translation + original closing quote.',
-    '- Reproduce every original dialogue span exactly once, in source order, preserving its original quote style, pairing, boundaries, punctuation, and emphasis.',
-    '- Put exactly one Korean bracket inside that same quotation immediately before its closing mark; combine multi-sentence dialogue into that one bracket.',
+    'Final output contract: Korean narration with source-language dialogue',
+    '- This contract is the complete and controlling output shape for this request. It determines where Korean replaces source text and where source text remains visibly present.',
+    '- NON-DIALOGUE ZONE: Translate narration, action, inner thought, speech tags, and all other prose outside original dialogue quotation spans into Korean only.',
+    '- DIALOGUE EXCEPTION: Keep every complete utterance inside each original dialogue quotation span in its source language and reproduce it verbatim. If a quoted utterance is English in the source, that exact English text must remain visibly present in the final output.',
+    '- Add Korean to each source-language dialogue span; never replace the source utterance with Korean-only dialogue.',
+    '- Inside every dialogue span, use exactly this order: original opening quote + complete unchanged source-language utterance + one space + exactly one [idiomatic Korean translation] + original closing quote.',
+    '- Preserve the exact number, order, quote style, pairing, boundaries, punctuation, and emphasis of all original dialogue quotation spans. Reproduce each span exactly once and keep all text within its original quotation boundary.',
+    '- When one dialogue span contains several sentences, keep its complete source utterance together and use one final Korean bracket for that whole span.',
+    '- Before returning, verify that every original source-language dialogue utterance is still visibly present before its Korean bracket and that no originally non-Korean dialogue span became Korean-only.',
     '- Keep every paragraph and structural wrapper in source order. Render each status or information block\'s human-readable labels and values in Korean only, exactly once, in its original location. Preserve field order, separators, emojis, fences, and shape; keep only literal placeholders, macros, and executable data keys verbatim.',
+    '- Input example: She smiled. "Come here. Stay close." He asked, “Why?”',
+    '- Required output example: 그녀는 미소 지었다. "Come here. Stay close. [이리 와. 곁에 있어.]" 그가 물었다. “Why? [왜?]”',
     '- Return only the transformed text.',
-    '- Example: 그녀가 말했다. "Come here. [이리 와.]"',
   ];
 }
 
