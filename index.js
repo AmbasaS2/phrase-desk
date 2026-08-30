@@ -25,7 +25,7 @@ const IS_BETA = false;
 const SHOW_DEBUG = true;
 const MAX_TOKENS = 8000;
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.4.8";
+const PD_VERSION = "1.4.9";
 const PD_GLOBAL_KEY = "__PHRASE_DESK_GLOBAL_STATE__";
 const pdGlobalState = globalThis[PD_GLOBAL_KEY] && typeof globalThis[PD_GLOBAL_KEY] === 'object'
   ? globalThis[PD_GLOBAL_KEY]
@@ -647,6 +647,14 @@ function cloneCanonicalRecord(record = null) {
       Array.isArray(ranges) ? ranges.map(range => ({ ...range })) : [],
     ])),
     infoRanges:Array.isArray(record.infoRanges) ? record.infoRanges.map(range => ({ ...range })) : [],
+    quality:record.quality && typeof record.quality === 'object'
+      ? {
+          ...record.quality,
+          issues:Array.isArray(record.quality.issues)
+            ? record.quality.issues.map(issue => ({ ...issue }))
+            : [],
+        }
+      : null,
   };
 }
 function backupOriginalFromMsg(payload, state = null) {
@@ -918,6 +926,23 @@ function extractAIText(res) {
   return '';
 }
 
+function extractAIFinishReason(res) {
+  const candidates = [
+    res?.choices?.[0]?.finish_reason,
+    res?.choices?.[0]?.finishReason,
+    res?.candidates?.[0]?.finishReason,
+    res?.candidates?.[0]?.finish_reason,
+    res?.finish_reason,
+    res?.finishReason,
+    res?.stop_reason,
+    res?.response_metadata?.finish_reason,
+  ];
+  for (const value of candidates) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return '';
+}
+
 
 
 
@@ -931,6 +956,9 @@ async function callAI(prompt, maxTokens = MAX_TOKENS, meta = {}) {
       [{ role:'user', content: requestPrompt }],
       tokenBudget,
     );
+    if (meta?.responseInfo && typeof meta.responseInfo === 'object') {
+      meta.responseInfo.finishReason = extractAIFinishReason(res);
+    }
     const text = extractAIText(res);
     const rawText = String(text || '');
     // Let the cleaner distinguish a model-added outer fence from one that was
@@ -2215,10 +2243,257 @@ function koreanKinshipTermsInText(value = '') {
 function unsupportedInventedKinshipTerms(result = '', source = '', meta = {}) {
   const present = koreanKinshipTermsInText(result);
   if (!present.length) return [];
-  const evidence = [String(source || ''), contextLines(meta), globalPrompt(), currentPrompt()].join('\n');
-  const hasEnglishKinship = /\b(?:brother|sister|sibling|half-brother|half-sister|stepbrother|stepsister|older brother|older sister|younger brother|younger sister)\b/i.test(evidence);
-  const hasKoreanKinship = koreanKinshipTermsInText(evidence).length > 0 || /형제|자매|남매|동생/.test(evidence);
+  const evidence = [
+    String(source || ''),
+    String(meta?.qualityEvidence || '') || [contextLines(meta), globalPrompt(), currentPrompt(), currentCharacterVoiceReference()].join('\n'),
+  ].join('\n');
+  const negativeReference = /\b(?:do\s+not|don't|never|avoid|without|must\s+not|should\s+not|forbid(?:den)?|prohibit(?:ed)?|not\s+(?:use|say|call))\b|금지|쓰지\s*(?:않|마)|사용하지|말하지|부르지|피하|배제|제외|없어야|하지\s*마|안\s*(?:쓴|쓰|부른|말)/i;
+  const positiveEvidence = evidence
+    .split(/\n+|(?<=[.!?。！？])\s+/)
+    .filter(segment => segment.trim() && !negativeReference.test(segment))
+    .join('\n');
+  const hasEnglishKinship = /\b(?:brother|sister|sibling|half-brother|half-sister|stepbrother|stepsister|older brother|older sister|younger brother|younger sister)\b/i.test(positiveEvidence);
+  const hasKoreanKinship = koreanKinshipTermsInText(positiveEvidence).length > 0 || /형제|자매|남매|동생/.test(positiveEvidence);
   return (hasEnglishKinship || hasKoreanKinship) ? [] : present;
+}
+
+function inspectCanonicalTranslationQuality(record = null, source = '', meta = {}) {
+  // This is deliberately a high-confidence warning detector, not a second translator.
+  // It reads the stored PDU Korean bodies, never rewrites them, and never requests AI.
+  const issueMap = new Map();
+  const severityRank = { ok:0, warn:1, high:2 };
+  const addIssue = (code, count = 1, severity = 'warn') => {
+    const safeCount = Math.max(1, Number(count) || 1);
+    const prior = issueMap.get(code);
+    if (prior) {
+      prior.count += safeCount;
+      if ((severityRank[severity] || 0) > (severityRank[prior.severity] || 0)) prior.severity = severity;
+      return;
+    }
+    issueMap.set(code, { code, count:safeCount, severity:severityRank[severity] === 2 ? 'high' : 'warn' });
+  };
+  const rawSource = String(source || record?.source || '');
+  const evidence = String(meta?.evidence || '');
+  const negativeReference = /\b(?:do\s+not|don't|never|avoid|without|must\s+not|should\s+not|forbid(?:den)?|prohibit(?:ed)?|not\s+(?:use|say|call))\b|금지|쓰지\s*(?:않|마)|사용하지|말하지|부르지|피하|배제|제외|없어야|하지\s*마|안\s*(?:쓴|쓰|부른|말)/i;
+  const positiveReference = value => String(value || '')
+    .split(/\n+|(?<=[.!?。！？])\s+/)
+    .filter(segment => segment.trim() && !negativeReference.test(segment))
+    .join('\n');
+  const positiveEvidence = positiveReference(evidence);
+  const normalize = value => String(value || '').normalize('NFKC').replace(/[’‘]/g, "'").replace(/\s+/g, ' ').trim();
+  const stripProtected = value => normalize(value)
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/~~~[\s\S]*?~~~/g, ' ')
+    .replace(/`[^`\n]*`/g, ' ')
+    .replace(/\{\{[\s\S]*?\}\}|<%[\s\S]*?%>|\$\{[\s\S]*?\}/g, ' ')
+    .replace(/!?(?:\[[^\]]*\])\((?:[^()]|\([^()]*\))*\)/g, ' ')
+    .replace(/https?:\/\/\S+|www\.\S+|\b\S+@\S+\.\S+\b/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const englishWords = value => (stripProtected(value).match(/[A-Za-z]+(?:'[A-Za-z]+)?/g) || [])
+    .filter(word => word.length > 1 && !(/^(?:API|HTTP|HTTPS|JSON|JSONL|XML|HTML|CSS|GPS|URL|URI|SQL|CPU|GPU|UI|UX|ID|UUID|NPC|RP)$/.test(word)))
+    .map(word => word.toLowerCase());
+  const englishFunctionWords = new Set([
+    'a', 'an', 'the', 'and', 'or', 'but', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+    'to', 'of', 'in', 'on', 'at', 'for', 'from', 'with', 'as', 'that', 'this', 'these', 'those',
+    'he', 'she', 'it', 'they', 'we', 'you', 'my', 'your', 'his', 'her', 'their', 'our', 'will',
+    'would', 'can', 'could', 'should', 'not', 'have', 'has', 'had', 'do', 'did', 'does', 'into',
+    'over', 'under', 'up', 'out', 'here', 'there', 'no',
+  ]);
+  const latinCount = value => (stripProtected(value).match(/[A-Za-z]/g) || []).length;
+  const hangulCount = value => (stripProtected(value).match(/[가-힣]/g) || []).length;
+  const longestSharedEnglishRun = (left, right, ceiling = 12) => {
+    const a = englishWords(left);
+    const b = englishWords(right);
+    const max = Math.min(ceiling, a.length, b.length);
+    for (let size = max; size >= 2; size--) {
+      const rightRuns = new Set();
+      for (let index = 0; index <= b.length - size; index++) rightRuns.add(b.slice(index, index + size).join('\u0001'));
+      for (let index = 0; index <= a.length - size; index++) {
+        if (rightRuns.has(a.slice(index, index + size).join('\u0001'))) return size;
+      }
+    }
+    return 0;
+  };
+  const isUntranslatedEnglish = (unitSource, unitKorean) => {
+    const src = stripProtected(unitSource);
+    const ko = stripProtected(unitKorean);
+    const srcWords = englishWords(src);
+    const koWords = englishWords(ko);
+    if (srcWords.length < 3 || latinCount(src) < 10 || !koWords.length) return false;
+    const sourcePlain = normalize(src).toLowerCase().replace(/[^a-z0-9']+/g, ' ').trim();
+    const targetPlain = normalize(ko).toLowerCase().replace(/[^a-z0-9']+/g, ' ').trim();
+    if (srcWords.length >= 3
+      && latinCount(src) >= 10
+      && srcWords.some(word => englishFunctionWords.has(word))
+      && sourcePlain === targetPlain) return true;
+    const sharedRun = longestSharedEnglishRun(src, ko);
+    if (sharedRun >= 5 && koWords.some(word => englishFunctionWords.has(word))) return true;
+    return koWords.length >= 8
+      && sharedRun >= 4
+      && latinCount(ko) >= 32
+      && latinCount(ko) > Math.max(12, hangulCount(ko) * 1.5);
+  };
+  const hasOutputDamage = (unitSource, unitKorean) => {
+    const src = String(unitSource || '');
+    const ko = String(unitKorean || '');
+    let count = 0;
+    if (/\uFFFD/.test(ko)) count += 1;
+    if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(ko)) count += 1;
+    const modelToken = /<\|(?:assistant|user|system|im_start|im_end|endoftext)\|>/i;
+    if (modelToken.test(ko) && !modelToken.test(src)) count += 1;
+    const assemblyToken = /\[{0,3}\/?\s*(?:PDU-[A-Z]+-\d{4}|PDQ-[A-Z]+-\d{4}|PD_FMT_[A-Z0-9_-]+)\s*\]{0,3}/i;
+    if (assemblyToken.test(ko) && !assemblyToken.test(src)) count += 1;
+    return count;
+  };
+  const explicitRoughStyle = /\b(?:vulgar|profane|coarse|foul[- ]mouthed|uses? slurs?)\b|욕설|비속어|상스러운 말투|거친 말투를 사용/i.test(positiveEvidence);
+  const sourceStrongProfanity = /\b(?:fuck(?:ing|er)?|motherfucker|bitch|cunt|whore|slut|asshole|shithead|bastard|dickhead)\b/i;
+  const toneSignals = [
+    { level:'high', name:'gendered-slur', target:/(?:네년|이년|저년|개년|쌍년|창년)(?=$|[은는이가을를도만의에한아야,.;:!?…~'"“”‘’()\[\]{}])/, license:/\b(?:bitch|cunt|whore|slut)\b|(?:네년|이년|저년|개년|쌍년|창년)(?=$|[은는이가을를도만의에한아야,.;:!?…~'"“”‘’()\[\]{}])/i },
+    { level:'high', name:'hard-profanity', target:/씨발|좆|개새끼|병신(?!년)|지랄|뒈져|아가리/, license:sourceStrongProfanity },
+    { level:'mid', name:'contemptuous-address', target:/네\s*놈|이\s*놈|저\s*놈/, license:/\b(?:bastard|scum|wretch|cur)\b|네\s*놈|이\s*놈|저\s*놈/i },
+    { level:'mid', name:'expulsion-insult', target:/썩\s*꺼져/, license:/\b(?:fuck off|get the hell out|piss off)\b|썩\s*꺼져/i },
+    { level:'mid', name:'degrading-body-word', target:/대가리|주둥이/, license:/\b(?:skull|mug|snout)\b|대가리|주둥이/i },
+    { level:'mid', name:'shove-register', target:/[쳐처]\s*박(?:아|아라|다|아두|아\s*두|아\s*놓|아\s*버)/, license:/\b(?:shove|stuff|slam|hurl|throw)\b[\s\S]{0,40}\b(?:into|in)\b|[쳐처]\s*박/i },
+    { level:'mid', name:'silencing-insult', target:/닥쳐/, license:/\bshut up\b|닥쳐/i },
+    { level:'low', name:'marked-address', target:/네\s*녀석/, license:/\b(?:brat|wretch|rascal)\b|네\s*녀석/i },
+    { level:'low', name:'archaic-dominance', target:/가르쳐\s*주마|보여\s*주마|알려\s*주마/, license:/가르쳐\s*주마|보여\s*주마|알려\s*주마/i },
+    { level:'low', name:'dismissive-register', target:/따위/, license:/\b(?:mere|worthless|such a)\b|따위/i },
+  ];
+  const specificityRules = [
+    { target:/화약수/, license:/\b(?:powder monkey|powder boy)\b|화약수/i },
+    { target:/프록\s*코트/, license:/\bfrock coat\b|프록\s*코트/i },
+    { target:/광신도/, license:/\b(?:fanatic|zealot|cultist)\b|광신도/i },
+    { target:/시한부|말기\s*(?:선고|환자)|사형\s*선고/, license:/\b(?:terminal(?:ly)?|dying|death sentence|time (?:left|remaining))\b|시한부|말기\s*(?:선고|환자)|사형\s*선고/i },
+    { target:/주치의/, license:/\b(?:personal physician|attending physician|family doctor)\b|주치의/i },
+  ];
+  const literalRules = [
+    { source:/\bby all means\b[\s\S]{0,40}\bperform\b/i, target:/마음껏\s*공연(?:하|해)/ },
+    { source:/\btoday will not be the day\b/i, target:/오늘(?:이|은|도)?\s*그\s*날이\s*되지(?:는)?\s*않/ },
+    { source:/\bmak(?:e|ing) it a thing\b/i, target:/존재하게\s*만들|존재하는\s*것으로\s*만들|그걸\s*존재하게/ },
+    { source:/\bjust enough\b/i, target:/그저\s*충분히/ },
+    { source:/\b(?:a )?very large drink\b/i, target:/(?:아주\s*)?큰\s*술잔/ },
+    { source:/\bhad a right to be\b/i, target:/자격이\s*없|가질\s*자격/ },
+    { source:/\bvery long tea\b/i, target:/긴\s*(?:차|차\s*시간)|차(?:는|가|\s*시간은)?\s*아주\s*길/ },
+  ];
+
+  if (!record || typeof record !== 'object' || record.complete !== true) addIssue('structure-damaged', 1, 'high');
+  if (/length|max[_ -]?tokens?|token[_ -]?limit|output[_ -]?limit/i.test(String(meta?.finishReason || ''))) {
+    addIssue('provider-truncated', 1, 'high');
+  }
+  const units = record?.complete && Array.isArray(record?.units) && record.units.length
+    ? record.units.map(unit => ({ sourceText:String(unit?.sourceText || ''), ko:String(unit?.ko || '') }))
+    : [{ sourceText:rawSource, ko:String(record?.plainKorean || '') }];
+  let untranslatedCount = 0;
+  let shortCount = 0;
+  let damageCount = 0;
+  let specificityCount = 0;
+  let literalCount = 0;
+  let shortEnglishEchoCount = 0;
+  const unsupportedTone = { high:new Set(), mid:new Set(), low:new Set() };
+  const unsupportedToneHits = { high:0, mid:0, low:0 };
+  for (const unit of units) {
+    const unitSource = unit.sourceText;
+    const unitKorean = unit.ko;
+    const licensingSource = positiveReference(unitSource);
+    const positiveKorean = positiveReference(unitKorean);
+    if (isUntranslatedEnglish(unitSource, unitKorean)) untranslatedCount += 1;
+    else {
+      const shortSourceWords = englishWords(unitSource);
+      const exactShortEcho = shortSourceWords.length > 0
+        && shortSourceWords.length <= 3
+        && normalize(stripProtected(unitSource)).toLowerCase() === normalize(stripProtected(unitKorean)).toLowerCase()
+        && (/[.!?]/.test(unitSource) || shortSourceWords.some(word => englishFunctionWords.has(word)));
+      if (exactShortEcho) shortEnglishEchoCount += 1;
+    }
+    damageCount += hasOutputDamage(unitSource, unitKorean);
+    const sourceSize = stripProtected(unitSource).replace(/\s/g, '').length;
+    const targetSize = stripProtected(unitKorean).replace(/\s/g, '').length;
+    const targetMeaningfulSize = (stripProtected(unitKorean).match(/[A-Za-z가-힣0-9]/g) || []).length;
+    if ((sourceSize >= 70 && targetMeaningfulSize <= 4)
+      || (sourceSize >= 220 && targetSize < Math.max(12, sourceSize * 0.12))) shortCount += 1;
+
+    for (const signal of toneSignals) {
+      const targetMatcher = new RegExp(signal.target.source, `${signal.target.flags.replace(/g/g, '')}g`);
+      const hits = positiveKorean.match(targetMatcher) || [];
+      if (!hits.length) continue;
+      const licensed = signal.license.test(licensingSource)
+        || signal.target.test(positiveEvidence)
+        || explicitRoughStyle;
+      if (!licensed) {
+        unsupportedTone[signal.level].add(signal.name);
+        unsupportedToneHits[signal.level] += hits.length;
+      }
+    }
+    const specificityEvidence = `${licensingSource}\n${positiveEvidence}`;
+    for (const rule of specificityRules) {
+      if (rule.target.test(positiveKorean) && !rule.license.test(specificityEvidence)) specificityCount += 1;
+    }
+    for (const rule of literalRules) {
+      if (rule.source.test(licensingSource) && rule.target.test(positiveKorean)) literalCount += 1;
+    }
+  }
+  const overallSourceSize = stripProtected(rawSource).replace(/\s/g, '').length;
+  const overallTargetSize = stripProtected(record?.plainKorean || units.map(unit => unit.ko).join(' ')).replace(/\s/g, '').length;
+  const combinedTarget = units.map(unit => String(unit.ko || '')).join('\n');
+  const joinedPeriods = combinedTarget.match(/(?<=[가-힣])[.。][”’"')\]]?(?=[A-Za-z가-힣])/g) || [];
+  if (overallSourceSize >= 800 && overallTargetSize < Math.max(40, overallSourceSize * 0.2)) shortCount += 1;
+  if (shortEnglishEchoCount >= 3) untranslatedCount += shortEnglishEchoCount;
+  if (untranslatedCount) addIssue('untranslated-english', untranslatedCount, 'high');
+  if (shortCount) addIssue('possible-truncation', shortCount, 'warn');
+  if (damageCount) addIssue('output-damage', damageCount, 'high');
+  if (combinedTarget.length >= 250 && joinedPeriods.length >= 3) addIssue('output-damage', joinedPeriods.length, 'warn');
+  if (unsupportedToneHits.high || unsupportedTone.mid.size >= 2 || unsupportedToneHits.mid >= 2 || unsupportedTone.low.size >= 2 || unsupportedToneHits.low >= 3) {
+    addIssue('tone-escalation', unsupportedToneHits.high + unsupportedToneHits.mid + unsupportedToneHits.low, unsupportedToneHits.high ? 'high' : 'warn');
+  }
+  if (specificityCount) addIssue('unsupported-specificity', specificityCount, 'warn');
+  if (literalCount >= 2) addIssue('literal-pattern', literalCount, 'warn');
+  for (const finding of Array.isArray(meta?.extraFindings) ? meta.extraFindings : []) {
+    if (finding?.code) addIssue(String(finding.code), finding.count, finding.severity);
+  }
+  const issues = [...issueMap.values()];
+  const severity = issues.some(issue => issue.severity === 'high') ? 'high' : (issues.length ? 'warn' : 'ok');
+  return { schema:1, severity, issues, checkedAt:Date.now() };
+}
+
+function translationQualityWarningText(report = null) {
+  const labels = {
+    'structure-damaged':'번역 형식 손상',
+    'provider-truncated':'출력 길이 중단',
+    'untranslated-english':'영어 미번역 구간',
+    'possible-truncation':'번역 누락·축약 의심',
+    'output-damage':'출력 문자 손상',
+    'tone-escalation':'원문보다 거친 말투',
+    'unsupported-specificity':'원문에 없는 구체화',
+    'literal-pattern':'반복 직역투 의심',
+    'invented-relation':'관계 호칭 추가',
+  };
+  const items = Array.isArray(report?.issues) ? report.issues : [];
+  const readable = [...new Set(items.map(issue => labels[issue?.code] || '').filter(Boolean))];
+  if (!readable.length) return '';
+  return `번역은 그대로 저장했지만 품질 확인이 필요해요: ${readable.join(' · ')}. 결과는 보존했으며 길게 눌러 다시 번역할 수 있어요.`;
+}
+
+function applyMessageTranslationQualityIndicator(btn, recordOrReport = null) {
+  const report = recordOrReport?.quality && typeof recordOrReport.quality === 'object'
+    ? recordOrReport.quality
+    : recordOrReport;
+  const warning = translationQualityWarningText(report);
+  const $btn = btn?.jquery ? btn : $(btn || []);
+  if (!$btn.length) return !!warning;
+  $btn.toggleClass('pd-quality-warning', !!warning);
+  if (warning) {
+    const codes = (Array.isArray(report?.issues) ? report.issues : []).map(issue => issue?.code).filter(Boolean);
+    $btn.attr('data-pd-quality', codes.join(','));
+    $btn.attr('title', `${warning} / 길게 눌러 재번역`);
+    $btn.attr('aria-label', '번역 품질 경고가 있는 메시지 / 길게 눌러 재번역');
+    return true;
+  }
+  $btn.removeAttr('data-pd-quality');
+  $btn.attr('title', '이 메시지 번역 / 길게 눌러 재번역');
+  $btn.attr('aria-label', '이 메시지 번역');
+  return false;
 }
 
 function bilingualStyleInstruction() {
@@ -2808,16 +3083,19 @@ function reapplyVisiblePhraseDeskTranslations(syncCanonicalMode = false) {
         : '';
       const mode = canonicalText ? preferredKey : (data?.state?.activeMode || preferredKey);
       const picked = data?.state?.showing ? pickCachedMessageTranslation(data.state, mode) : { text: '' };
+      const translateBtn = $(payload.mes).find('.pd-message-translate-btn');
       if (picked.text) {
         const display = displayTranslationText(picked.text, picked.key || mode);
         payload.textEl.html(renderMessageHtml(display, payload));
         scheduleBilingualDomDecoration(payload, picked.key || mode);
-        $(payload.mes).find('.pd-message-translate-btn').addClass('translated').removeClass('busy');
+        translateBtn.addClass('translated').removeClass('busy');
+        applyMessageTranslationQualityIndicator(translateBtn, picked.record || data?.state?.canonical || null);
       }
       else {
         const original = messageOriginalForTranslation(payload, data?.state, false) || data?.original || '';
         if (original) payload.textEl.html(renderMessageHtml(original, payload));
-        $(payload.mes).find('.pd-message-translate-btn').removeClass('translated busy');
+        translateBtn.removeClass('translated busy');
+        applyMessageTranslationQualityIndicator(translateBtn, null);
         scheduleBilingualDomDecoration(payload, settings.chatMode || 'full');
       }
     });
@@ -2865,7 +3143,20 @@ function canonicalRecordForState(state = null, preferredKey = '') {
     && record?.sourceHash === hash(source)
     && typeof record?.plainKorean === 'string'
     && record.plainKorean.trim()) {
-    return { ...record, complete:false, units:[], groups:{}, infoRanges:[] };
+    const issues = Array.isArray(record?.quality?.issues)
+      ? record.quality.issues.map(issue => ({ ...issue }))
+      : [];
+    if (!issues.some(issue => issue?.code === 'structure-damaged')) {
+      issues.unshift({ code:'structure-damaged', count:1, severity:'high' });
+    }
+    return {
+      ...record,
+      complete:false,
+      units:[],
+      groups:{},
+      infoRanges:[],
+      quality:{ schema:1, ...(record.quality || {}), severity:'high', issues, checkedAt:Date.now() },
+    };
   }
   return null;
 }
@@ -2874,7 +3165,7 @@ function pickCachedMessageTranslation(state, preferredKey = '') {
   const canonical = canonicalRecordForState(state, preferredKey);
   if (canonical) {
     const rendered = renderCanonicalTranslation(canonical, preferredKey);
-    if (String(rendered || '').trim()) return { key:preferredKey, text:rendered, canonical:true, legacy:false };
+    if (String(rendered || '').trim()) return { key:preferredKey, text:rendered, canonical:true, legacy:false, record:canonical };
   }
   const exact = translations[preferredKey];
   if (typeof exact === 'string' && exact.trim()) return { key:preferredKey, text:normalizeDialogueBilingualQuotePairs(exact), canonical:false, legacy:true };
@@ -3526,6 +3817,7 @@ function applyPersistedMessageTranslation(payload, btn=null) {
   if (btn) {
     if (hasDisplayedTranslation) btn.addClass('translated').removeClass('busy');
     else btn.removeClass('translated busy');
+    applyMessageTranslationQualityIndicator(btn, hasDisplayedTranslation ? (picked.record || state?.canonical || null) : null);
   }
 
   // Hydration only restores button state. It must not decorate or rerender cached messages.
@@ -3858,7 +4150,8 @@ async function translateMessagePayload(payload, forceRetranslate = false, option
       btn.removeClass('translated busy');
       toast('원문으로 돌렸습니다.', 'success');
     }
-    return { status:'processed', reason:state.showing ? 'shown' : 'hidden' };
+    const qualityWarning = applyMessageTranslationQualityIndicator(btn, state.showing ? (activeCached.record || state.canonical || null) : null);
+    return { status:'processed', reason:state.showing ? 'shown' : 'hidden', qualityWarning };
   }
   const cached = !forceRetranslate ? pickCachedMessageTranslation(state, tKey) : { text: '' };
   if (!forceRetranslate && cached.text) {
@@ -3872,8 +4165,12 @@ async function translateMessagePayload(payload, forceRetranslate = false, option
     root.revision = state.revision;
     commitMessageTranslation(payload, root);
     btn.addClass('translated').removeClass('busy');
-    if (!options.auto) toast('번역본으로 돌렸습니다.', 'success');
-    return { status:'processed', reason:'cached' };
+    const qualityWarning = applyMessageTranslationQualityIndicator(btn, cached.record || state.canonical || null);
+    if (!options.auto) {
+      if (qualityWarning) toast(translationQualityWarningText(state.canonical?.quality), 'warn');
+      else toast('번역본으로 돌렸습니다.', 'success');
+    }
+    return { status:'processed', reason:'cached', qualityWarning };
   }
 
   messageBusy = true;
@@ -3884,6 +4181,8 @@ async function translateMessagePayload(payload, forceRetranslate = false, option
   let renderedKey = tKey;
   let canonicalRecord = null;
   let canonicalFallbackUsed = false;
+  let qualityReport = null;
+  const responseInfo = {};
   try {
     const canonicalPlan = createCanonicalTranslationPlan(original);
     const sourceForPrompt = canonicalPlan.promptSource || original;
@@ -3894,6 +4193,16 @@ async function translateMessagePayload(payload, forceRetranslate = false, option
       canonicalUnitCount:canonicalPlan?.items?.length || 0,
       canonicalSupported:canonicalPlan?.supported !== false,
     };
+    // Snapshot exactly the live reference evidence used at request time. The model
+    // response may arrive after a prompt/card/chat change, so quality licensing must
+    // not reread a different state later.
+    const qualityEvidenceSnapshot = [
+      contextLines(promptMeta),
+      globalPrompt(),
+      currentPrompt(),
+      currentCharacterVoiceReference(),
+    ].filter(Boolean).join('\n');
+    promptMeta.qualityEvidence = qualityEvidenceSnapshot;
     let rawResult = '';
     if (settings.translationEngine === 'google') {
       // The Google path receives the same protected canonical source. Once translated,
@@ -3901,7 +4210,11 @@ async function translateMessagePayload(payload, forceRetranslate = false, option
       rawResult = await translateViaGoogleSimple(sourceForPrompt, 'ko');
     } else {
       const basePrompt = buildPrompt(sourceForPrompt, 'canonical', promptMeta);
-      rawResult = await callAI(basePrompt, MAX_TOKENS, { sourceText: sourceForPrompt, preserveNonEmptyResponse: true });
+      rawResult = await callAI(basePrompt, MAX_TOKENS, {
+        sourceText: sourceForPrompt,
+        preserveNonEmptyResponse: true,
+        responseInfo,
+      });
     }
     if (String(rawResult || '').trim()) {
       canonicalRecord = parseCanonicalTranslationResult(rawResult, canonicalPlan, translationEngineKey());
@@ -3916,9 +4229,22 @@ async function translateMessagePayload(payload, forceRetranslate = false, option
         });
       }
       const inventedKinship = unsupportedInventedKinshipTerms(canonicalRecord.plainKorean, original, promptMeta);
-      if (inventedKinship.length) {
-        // Quality warnings are diagnostic only. They never trigger a second request.
-        logDebug({ type:'translation-warning', warning:'unsupported-invented-kinship', count:inventedKinship.length });
+      canonicalRecord.quality = inspectCanonicalTranslationQuality(canonicalRecord, original, {
+        evidence:qualityEvidenceSnapshot,
+        finishReason:responseInfo.finishReason,
+        extraFindings:inventedKinship.length
+          ? [{ code:'invented-relation', count:inventedKinship.length, severity:'warn' }]
+          : [],
+      });
+      qualityReport = canonicalRecord.quality;
+      if (qualityReport.issues.length) {
+        // Quality warnings are diagnostic only. They never trigger a second request,
+        // discard the first response, or demote a structurally complete record.
+        logDebug({
+          type:'translation-quality-warning',
+          severity:qualityReport.severity,
+          issues:qualityReport.issues.map(issue => ({ code:issue.code, count:issue.count })),
+        });
       }
       renderedKey = translationCacheKey(settings.chatMode || 'full');
       result = renderCanonicalTranslation(canonicalRecord, renderedKey);
@@ -3933,12 +4259,26 @@ async function translateMessagePayload(payload, forceRetranslate = false, option
   }
   if (!translationRequestTargetStillCurrent(requestTarget)) {
     logDebug({ type:'translation-stale-target', idx:requestTarget.idx, sourceHash:requestTarget.sourceHash });
-    btn.attr('title', '이 메시지 번역 / 길게 눌러 재번역');
+    // The DOM node may already belong to another swipe/message. Resolve its live
+    // owner before restoring a warning; never reuse the previous target's state.
+    let liveWarningRecord = null;
+    try {
+      if (btn?.[0]?.isConnected) {
+        const livePayload = messagePayloadFromButtonDirect(btn[0]);
+        const liveData = variantForPayload(livePayload, false);
+        if (liveData?.state?.showing) {
+          liveWarningRecord = canonicalRecordForState(liveData.state, translationCacheKey(settings.chatMode || 'full'))
+            || liveData.state.canonical
+            || null;
+        }
+      }
+    } catch {}
+    applyMessageTranslationQualityIndicator(btn, liveWarningRecord);
     if (!options.silent) toast('번역 중 메시지나 채팅이 바뀌어 도착한 결과를 적용하지 않았습니다.', 'info');
     return { status:'skipped', reason:'stale-target' };
   }
   if (!result) {
-    btn.attr('title', '이 메시지 번역 / 길게 눌러 재번역');
+    applyMessageTranslationQualityIndicator(btn, state.showing ? (state.canonical || null) : null);
     return { status:'failed', reason:'empty-result' };
   }
   // A successful canonical translation replaces legacy mode-shaped strings. Only this
@@ -3964,12 +4304,13 @@ async function translateMessagePayload(payload, forceRetranslate = false, option
   setMessageText(payload, displayTranslationText(result, renderedKey), renderedKey);
   btn.addClass('translated');
   commitMessageTranslation(payload, root);
-  btn.attr('title', '이 메시지 번역 / 길게 눌러 재번역');
+  const qualityWarning = applyMessageTranslationQualityIndicator(btn, canonicalRecord);
   if (!options.silent) {
     if (canonicalFallbackUsed) toast('번역 형식이 깨져 한국어 전용 임시본으로 저장했습니다. 영한 병기가 필요하면 이 메시지를 길게 눌러 다시 번역해주세요.', 'warn');
+    else if (qualityWarning) toast(translationQualityWarningText(qualityReport || canonicalRecord?.quality), 'warn');
     else toast(forceRetranslate ? '채팅 메시지를 다시 번역했습니다.' : (options.auto ? '새 메시지를 자동 번역했습니다.' : '채팅 메시지 번역이 완료되었습니다.'), 'success');
   }
-  return { status:'processed', reason:'translated' };
+  return { status:'processed', reason:'translated', qualityWarning:!!qualityWarning };
 }
 function messagePayloadFromButtonDirect(button) {
   const btn = $(button || []).closest('.pd-message-translate-btn');
@@ -4196,18 +4537,33 @@ async function translateRenderedChatFromSlash(namedArgs = {}, unnamedArgs = '') 
     toast(skipped ? `이미 모든 메세지가 번역되어 있습니다. (메세지 ${skipped}개)` : '현재 화면에서 번역할 채팅 메시지를 찾지 못했습니다.', 'warn');
     return 'Phrase Desk: no untranslated rendered chat messages found.';
   }
+  const batchChatKey = currentChatKey();
   chatTranslateBusy = true;
   let processed = 0;
   let failed = 0;
   let busySkipped = 0;
+  let staleSkipped = 0;
+  let otherSkipped = 0;
+  let interrupted = 0;
+  let qualityWarned = 0;
   toast(`현재 화면 메시지 ${payloads.length}개를 번역합니다.${skipped ? ` (${skipped}개 건너뜀)` : ''}`, 'info', { timeOut: 2600 });
   try {
-    for (const payload of payloads) {
+    for (let payloadIndex = 0; payloadIndex < payloads.length; payloadIndex++) {
+      if (currentChatKey() !== batchChatKey) {
+        interrupted = payloads.length - payloadIndex;
+        break;
+      }
+      const payload = payloads[payloadIndex];
       try {
         const outcome = await translateMessagePayload(payload, force, { auto:true, silent:true, batch:true });
-        if (outcome?.status === 'processed') processed += 1;
+        if (outcome?.status === 'processed') {
+          processed += 1;
+          if (outcome?.qualityWarning) qualityWarned += 1;
+        }
         else if (outcome?.status === 'failed') failed += 1;
-        else busySkipped += 1;
+        else if (outcome?.reason === 'busy') busySkipped += 1;
+        else if (outcome?.reason === 'stale-target') staleSkipped += 1;
+        else otherSkipped += 1;
       } catch (e) {
         failed += 1;
         logDebug({ type:'slash-translate-all-message-error', idx:payload?.idx, error:e?.message || String(e) });
@@ -4219,10 +4575,15 @@ async function translateRenderedChatFromSlash(namedArgs = {}, unnamedArgs = '') 
   }
   const suffix = skipped && !force ? `, ${skipped}개 이미 번역됨` : '';
   const busySuffix = busySkipped ? `, ${busySkipped}개 처리 중 충돌로 건너뜀` : '';
-  const msg = (failed || busySkipped)
-    ? `전체 번역 완료: ${processed}개 처리, ${failed}개 실패${busySuffix}${suffix}`
-    : `전체 번역 완료: ${processed}개 처리${suffix}`;
-  toast(msg, (failed || busySkipped) ? 'warn' : 'success');
+  const staleSuffix = staleSkipped ? `, ${staleSkipped}개 대상 변경으로 미적용` : '';
+  const otherSuffix = otherSkipped ? `, ${otherSkipped}개 건너뜀` : '';
+  const interruptedSuffix = interrupted ? `, ${interrupted}개 채팅 전환으로 중단` : '';
+  const qualitySuffix = qualityWarned ? `, 품질 경고 ${qualityWarned}개` : '';
+  const heading = interrupted ? '전체 번역 중단' : '전체 번역 완료';
+  const msg = (failed || busySkipped || staleSkipped || otherSkipped || interrupted)
+    ? `${heading}: ${processed}개 처리, ${failed}개 실패${busySuffix}${staleSuffix}${otherSuffix}${interruptedSuffix}${qualitySuffix}${suffix}`
+    : `${heading}: ${processed}개 처리${qualitySuffix}${suffix}`;
+  toast(msg, (failed || busySkipped || staleSkipped || otherSkipped || interrupted || qualityWarned) ? 'warn' : 'success');
   return `Phrase Desk: ${msg}`;
 }
 function lastMessagePayloadForSlash() {
@@ -4258,8 +4619,12 @@ async function translateLastMessageFromSlash() {
   const data = variantForPayload(payload, false);
   const preferredKey = translationCacheKey(settings.chatMode || 'full');
   const hasCachedTranslation = !!pickCachedMessageTranslation(data?.state, preferredKey).text;
-  await translateMessagePayload(payload, hasCachedTranslation, { auto:false, silent:false });
-  return `Phrase Desk: last message ${hasCachedTranslation ? 'retranslated' : 'translated'}.`;
+  const outcome = await translateMessagePayload(payload, hasCachedTranslation, { auto:false, silent:false });
+  if (outcome?.status === 'processed') {
+    const warning = outcome?.qualityWarning ? ' with quality warning' : '';
+    return `Phrase Desk: last message ${hasCachedTranslation ? 'retranslated' : 'translated'}${warning}.`;
+  }
+  return `Phrase Desk: last message translation ${outcome?.status || 'failed'} (${outcome?.reason || 'unknown'}).`;
 }
 
 function registerPhraseDeskSlashCommands() {
@@ -4571,10 +4936,25 @@ async function clearCurrentChatTranslationCache(){
   $('.mes').each(function(){
     const payload = messagePayloadFromTarget(this);
     const stored = payload?.msg?.extra?.phraseDesk;
-    if (stored?.original && stored.showing && payload?.textEl?.length) {
-      try { setMessageText(payload, stored.original, 'none'); } catch {}
-      $(this).find('.pdb-message-translate-btn,.pd-message-translate-btn').removeClass('translated busy');
+    const data = variantForPayload(payload, false);
+    const activeState = data?.state || null;
+    const original = messageOriginalForTranslation(payload, activeState, false)
+      || data?.original
+      || activeState?.original
+      || stored?.original
+      || '';
+    const hasVisibleTranslation = !!(
+      activeState?.showing
+      || stored?.showing
+      || payload?.msg?.extra?.display_text
+    );
+    if (original && hasVisibleTranslation && payload?.textEl?.length) {
+      try { setMessageText(payload, original, 'none'); } catch {}
     }
+    const clearBtn = $(this).find('.pdb-message-translate-btn,.pd-message-translate-btn')
+      .removeClass('translated busy pd-quality-warning')
+      .removeAttr('data-pd-quality');
+    applyMessageTranslationQualityIndicator(clearBtn, null);
   });
   for (const msg of chat) {
     count += clearPhraseDeskCacheFromMessage(msg);
@@ -6014,7 +6394,12 @@ function clearPhraseDeskTranslationAfterMessageUpdate(payload, args = []) {
   }
   delete msg.extra.phraseDeskSwipeTranslations;
   delete msg.extra.phraseDeskSwipeId;
-  if (payload?.mes) $(payload.mes).find('.pd-message-translate-btn').removeClass('translated busy');
+  if (payload?.mes) {
+    const clearBtn = $(payload.mes).find('.pd-message-translate-btn')
+      .removeClass('translated busy pd-quality-warning')
+      .removeAttr('data-pd-quality');
+    applyMessageTranslationQualityIndicator(clearBtn, null);
+  }
   persistChatCache('message-edit-clear');
   return true;
 }
