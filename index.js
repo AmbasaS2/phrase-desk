@@ -25,7 +25,7 @@ const IS_BETA = false;
 const SHOW_DEBUG = true;
 const MAX_TOKENS = 8000;
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.4.12";
+const PD_VERSION = "1.4.14";
 const PD_GLOBAL_KEY = "__PHRASE_DESK_GLOBAL_STATE__";
 const pdGlobalState = globalThis[PD_GLOBAL_KEY] && typeof globalThis[PD_GLOBAL_KEY] === 'object'
   ? globalThis[PD_GLOBAL_KEY]
@@ -2957,7 +2957,6 @@ function buildPrompt(text, kind, meta = {}) {
     '- Let Korean syntax, subject omission, clause order, vocabulary, endings, and rhythm follow the genre, relationship, and moment.',
     '- Render English light-verb, nominal, body-part, and abstract constructions as the concrete action, state, result, or relationship Korean naturally expresses.',
     '- Interpret compressed expressions, ellipsis, deadpan humor, understatement, rhetorical lines, idioms, figurative descriptions, challenges, invitations, mock formality, and indirect refusals by their role in the scene.',
-    '- Before choosing Korean wording, resolve what each ambiguous expression refers to and modifies as one contextual unit, including whether it denotes an object, substance, amount, action, event, or occasion. Use ordinary Korean rather than component-by-component wording or English grammar; add no detail, force, or explanation.',
     '- Match the source’s density: keep brief replies brief, implications implicit, and deliberate fragments, repetitions, hesitations, or interruptions intact.',
     '- Recreate each speaker’s established diction, rhythm, formality, intimacy, humor, aggression, vulgarity, emotional intensity, and comic timing. Keep distinct speakers distinct.',
     '- Keep each speaker-to-addressee banmal or jondaetmal relationship consistent, including intentional shifts in politeness, distance, mock formality, or hostility.',
@@ -2982,7 +2981,6 @@ function buildPrompt(text, kind, meta = {}) {
     'Silent final check',
     '- Read the Korean portions together in source order as one continuous scene. Confirm complete meaning, natural flow, scene logic, speaker distinction, consistent speech levels, and protected structure.',
     '- Refine awkward literal wording into context-appropriate Korean while keeping each source beat aligned with its own PDU pair.',
-    '- Fix only incomplete, ungrammatical, dictionary-calqued, or English-shaped Korean wording and collocation; keep content, agency, tone, force, specificity, brevity, structure, deliberate fragments, and formatting fixed.',
     '- Perform the check silently. The response follows only the final output contract below.',
   );
   lines.push('', ...selectedOutputContract(kind, meta));
@@ -3991,9 +3989,8 @@ async function translateMessagePayload(payload, forceRetranslate = false, option
   btn.addClass('translated');
   commitMessageTranslation(payload, root);
   btn.attr('title', '이 메시지 번역 / 길게 눌러 재번역');
-  if (!options.silent) {
-    if (canonicalFallbackUsed) toast('번역 형식이 깨져 한국어 전용 임시본으로 저장했습니다. 영한 병기가 필요하면 이 메시지를 길게 눌러 다시 번역해주세요.', 'warn');
-    else toast(forceRetranslate ? '채팅 메시지를 다시 번역했습니다.' : (options.auto ? '새 메시지를 자동 번역했습니다.' : '채팅 메시지 번역이 완료되었습니다.'), 'success');
+  if (!options.silent && !canonicalFallbackUsed) {
+    toast(forceRetranslate ? '채팅 메시지를 다시 번역했습니다.' : (options.auto ? '새 메시지를 자동 번역했습니다.' : '채팅 메시지 번역이 완료되었습니다.'), 'success');
   }
   return { status:'processed', reason:'translated' };
 }
