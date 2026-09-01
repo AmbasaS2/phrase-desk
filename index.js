@@ -3843,7 +3843,7 @@ function setupSettingsPanel() {
     const google = ($('#pd-translation-engine').val() || settings.translationEngine || 'profile') === 'google';
     $('#pd-profile').prop('disabled', google).attr('title', google ? '구글 간편 번역은 연결 프로필을 사용하지 않습니다.' : '연결 프로필 번역에 사용됩니다.');
   }
-  $('#pd-profile,#pd-chat-mode,#pd-auto-mode,#pd-bilingual-style,#pd-translation-engine').on('change', (event) => { settings.profile=$('#pd-profile').val(); settings.chatMode=$('#pd-chat-mode').val(); settings.autoMode=$('#pd-auto-mode').val(); settings.bilingualStyle=$('#pd-bilingual-style').val() || 'side_sentence'; settings.translationEngine=$('#pd-translation-engine').val() || 'profile'; saveSettings(); updateBilingualStyleControl(); updateTranslationEngineControl(); const displayModeChanged = event?.currentTarget?.id === 'pd-chat-mode' || event?.currentTarget?.id === 'pd-bilingual-style'; reapplyVisiblePhraseDeskTranslations(displayModeChanged); });
+  $('#pd-profile,#pd-chat-mode,#pd-auto-mode,#pd-bilingual-style,#pd-translation-engine').on('change', (event) => { settings.profile=$('#pd-profile').val(); settings.chatMode=$('#pd-chat-mode').val(); settings.autoMode=$('#pd-auto-mode').val(); settings.bilingualStyle=$('#pd-bilingual-style').val() || 'side_sentence'; settings.translationEngine=$('#pd-translation-engine').val() || 'profile'; saveSettings(); updateBilingualStyleControl(); updateTranslationEngineControl(); const displayModeChanged = event?.currentTarget?.id === 'pd-chat-mode' || event?.currentTarget?.id === 'pd-bilingual-style'; if (displayModeChanged) reapplyVisiblePhraseDeskTranslations(true); });
   $('#pd-bilingual-blur').on('change', function(){ settings.bilingualBlur = !!this.checked; saveSettings(true); applyBilingualBlurClass(); reapplyVisiblePhraseDeskTranslations(); });
   $('#pd-bilingual-notes').on('change', function(){ settings.bilingualNotes = !!this.checked; saveSettings(true); reapplyVisiblePhraseDeskTranslations(); });
   $('#pd-input-correction').on('change', function(){ settings.inputCorrection = !!this.checked; saveSettings(true); });
@@ -7010,7 +7010,14 @@ function setupMessageRenderHooks() {
             const refreshed = payloadFromEventArgs(args);
             if (refreshed?.mes) {
               ensureMessageTranslateButton(refreshed.mes);
-              reapplyVisiblePhraseDeskTranslations(true);
+              // MESSAGE_UPDATED belongs to one message. SillyTavern already owns its
+              // rendered display_text, so refresh only Phrase Desk's control/decorations
+              // for that exact target. Re-rendering every translated message here can
+              // erase DOM added by unrelated extensions and was never required.
+              const current = messagePayloadFromTarget(refreshed.mes) || refreshed;
+              const btn = $(current.mes).find('.pd-message-translate-btn').first();
+              applyPersistedMessageTranslation(current, btn);
+              schedulePhraseDeskRenderDecoration(current, key);
             }
             else queueMessageButtonHydration(document.getElementById('chat') || document);
           }, 40);
