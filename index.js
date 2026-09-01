@@ -542,6 +542,26 @@ function pdSwipeId(msg) {
   const n = Number(msg.swipe_id);
   return Number.isInteger(n) && n >= 0 ? String(n) : String(msg.swipe_id);
 }
+function pdCurrentSwipeSlot(msg) {
+  const swipeId = pdSwipeId(msg);
+  if (swipeId === null) return { hasId:false, id:null, index:-1, hasSlot:false, hasSource:false, exists:false, source:'' };
+  const index = Number(swipeId);
+  const swipes = Array.isArray(msg?.swipes) ? msg.swipes : [];
+  const hasIndex = Number.isInteger(index) && index >= 0;
+  const rawSlot = hasIndex && index < swipes.length && Object.hasOwn(swipes, index) ? swipes[index] : undefined;
+  const hasSlot = rawSlot !== undefined && rawSlot !== null;
+  const source = hasSlot ? pdReadSwipeText(msg, swipeId) : '';
+  const hasSource = hasSlot && !!norm(source);
+  return {
+    hasId:true,
+    id:swipeId,
+    index:hasIndex ? index : -1,
+    hasSlot,
+    hasSource,
+    exists:hasSource,
+    source:hasSlot ? source : '',
+  };
+}
 function pdReadSwipeText(msg, swipeId = pdSwipeId(msg)) {
   if (!msg || swipeId === null) return '';
   try {
@@ -581,6 +601,10 @@ function pdIsKnownTranslationText(msg, value = '') {
 }
 function pdStoredOriginalForCurrentSwipe(msg) {
   if (!msg) return '';
+  const slot = pdCurrentSwipeSlot(msg);
+  // During an overswipe SillyTavern assigns the next swipe_id before that slot
+  // exists. Old originals in the active extra belong to the previous swipe.
+  if (slot.hasId && !slot.exists) return '';
   const root = msg.extra?.phraseDesk;
   const active = root?.variants?.[root?.activeKey];
   const candidates = [active?.original, root?.original, msg.extra?.original_mes, msg.extra?.phraseDeskOriginal];
@@ -594,17 +618,18 @@ function pdStoredOriginalForCurrentSwipe(msg) {
 }
 function pdBestOriginalSource(msg, allowKnownFallback = false) {
   if (!msg) return '';
-  const swipeId = pdSwipeId(msg);
-  const swipeText = swipeId !== null ? pdReadSwipeText(msg, swipeId) : '';
+  const slot = pdCurrentSwipeSlot(msg);
+  // An indexed swipe is authoritative. In particular, never fall through to
+  // msg.mes or a stored original while ST is generating an as-yet missing slot.
+  if (slot.hasId) return slot.exists ? slot.source : '';
   const rawMes = messageSourceText(typeof msg.mes === 'string' ? msg.mes : '', null);
   // Prefer a live source only when it is not one of Phrase Desk's displayed/cached translations.
   // This lets edited originals win while preventing ST display synchronization from becoming the
   // next retranslation source.
-  if (norm(swipeText) && !pdIsKnownTranslationText(msg, swipeText)) return swipeText;
   if (norm(rawMes) && !pdIsKnownTranslationText(msg, rawMes)) return rawMes;
   const stored = pdStoredOriginalForCurrentSwipe(msg);
   if (norm(stored)) return stored;
-  return allowKnownFallback ? (swipeText || rawMes || '') : '';
+  return allowKnownFallback ? rawMes : '';
 }
 
 function pdCurrentRawMessageSource(msg) {
@@ -670,6 +695,8 @@ function backupOriginalFromMsg(payload, state = null) {
   const msg = payload?.msg;
   if (!msg) return '';
   msg.extra = msg.extra || {};
+  const slot = pdCurrentSwipeSlot(msg);
+  if (slot.hasId && !slot.exists) return '';
   const liveOriginal = pdBestOriginalSource(msg);
   if (norm(liveOriginal)) return liveOriginal;
   const stateOriginal = messageSourceText(state?.original || '', null);
@@ -689,6 +716,8 @@ function ensureOriginalBackup(payload, state = null, source = '') {
 }
 function currentMessageOriginal(payload) {
   if (!payload) return '';
+  const slot = pdCurrentSwipeSlot(payload?.msg);
+  if (slot.hasId && !slot.exists) return '';
   const raw = backupOriginalFromMsg(payload, null);
   if (norm(raw)) return raw;
   const fromDom = messageSourceText(payload?.textEl?.html?.() || payload?.textEl?.text?.() || '', payload?.textEl);
@@ -697,6 +726,8 @@ function currentMessageOriginal(payload) {
 function messageOriginalForTranslation(payload, state = null, freshRetranslation = false) {
   // A fresh retranslation may use a live original or a preserved original, but never display_text,
   // a cached translation, or rendered translated DOM as an emergency fallback.
+  const slot = pdCurrentSwipeSlot(payload?.msg);
+  if (slot.hasId && !slot.exists) return '';
   const original = backupOriginalFromMsg(payload, state);
   if (norm(original)) return original;
   const storedOriginal = typeof state?.original === 'string' ? messageSourceText(state.original, null) : '';
@@ -1298,8 +1329,167 @@ function assembleDialogueBilingualResult(value = '', plan = null) {
   return { text:out, complete:true };
 }
 
+function canonicalPduProbeWithMap(value = '') {
+  const source = String(value || '');
+  let text = '';
+  const map = [];
+  for (let index = 0; index < source.length;) {
+    const codePoint = source.codePointAt(index);
+    const rawChar = String.fromCodePoint(codePoint);
+    const end = index + rawChar.length;
+    const folded = rawChar.normalize('NFKC')
+      .replace(/[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]/g, '-')
+      .toUpperCase();
+    for (const char of Array.from(folded)) {
+      if (/[\s\p{Default_Ignorable_Code_Point}]/u.test(char)) continue;
+      text += char;
+      map.push({ start:index, end });
+    }
+    index = end;
+  }
+  return { source, text, map };
+}
+
+function canonicalPduProbeText(value = '') {
+  return canonicalPduProbeWithMap(value).text;
+}
+
+function canonicalMarkerCompactText(value = '') {
+  return canonicalPduProbeText(value);
+}
+
+function canonicalMarkerIgnorablePattern() {
+  return '[\\s\\p{Default_Ignorable_Code_Point}]*';
+}
+
+function canonicalFamilyResiduePattern(family = '', flags = 'i') {
+  const value = String(family || '');
+  if (!value) return null;
+  const ignorable = canonicalMarkerIgnorablePattern();
+  const spacedFamily = Array.from(value)
+    .map(char => char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join(ignorable);
+  const unicodeFlags = String(flags || '').includes('u') ? String(flags || '') : `${String(flags || '')}u`;
+  return new RegExp(`${spacedFamily}${ignorable}-`, unicodeFlags);
+}
+
+function canonicalLiteralPduMarkerPattern(flags = 'gi') {
+  const ignorable = canonicalMarkerIgnorablePattern();
+  const pdu = ['P', 'D', 'U'].join(ignorable);
+  const familyRun = `(?:[A-Z0-9]${ignorable})*`;
+  const bracketedIdRun = `(?:[A-Z0-9]${ignorable})+`;
+  const bareId = `[0-9]${ignorable}[0-9]${ignorable}[0-9]${ignorable}[0-9]`;
+  // Bound damaged bracket runs. An unbounded nested repetition here makes a
+  // long ordinary '[' sequence catastrophically expensive to reject.
+  const optionalOpen = `(?:\\[(?:${ignorable}\\[){0,7}${ignorable})?`;
+  const optionalSlash = `(?:\\/${ignorable})?`;
+  const requiredClose = `${ignorable}\\](?:${ignorable}\\]){0,7}`;
+  const prefix = `${optionalOpen}${optionalSlash}${pdu}${ignorable}-${ignorable}${familyRun}-${ignorable}`;
+  const unicodeFlags = String(flags || '').includes('u') ? String(flags || '') : `${String(flags || '')}u`;
+  return new RegExp(
+    `(?:${prefix}${bracketedIdRun}${requiredClose}|${prefix}${bareId}(?!${ignorable}[0-9]))`,
+    unicodeFlags,
+  );
+}
+
+function canonicalAnyPduResiduePattern(flags = 'gi') {
+  const ignorable = canonicalMarkerIgnorablePattern();
+  const pdu = ['P', 'D', 'U'].join(ignorable);
+  const familyRun = `(?:[A-Z0-9]${ignorable})*`;
+  const unicodeFlags = String(flags || '').includes('u') ? String(flags || '') : `${String(flags || '')}u`;
+  return new RegExp(`${pdu}${ignorable}-${ignorable}${familyRun}-${ignorable}`, unicodeFlags);
+}
+
+function canonicalPduSuspiciousRanges(value = '', activeFamily = '') {
+  const probe = canonicalPduProbeWithMap(value);
+  const family = canonicalPduProbeText(activeFamily);
+  const ranges = [];
+  const stemPattern = /PDU-[A-Z0-9]*-/g;
+  let match;
+  while ((match = stemPattern.exec(probe.text))) {
+    const stemStart = match.index;
+    const stemEnd = stemStart + match[0].length;
+    let left = stemStart;
+    if (probe.text[left - 1] === '/') left -= 1;
+    let openCount = 0;
+    while (left > 0 && probe.text[left - 1] === '[' && openCount < 8) {
+      left -= 1;
+      openCount += 1;
+    }
+    const before = probe.text[left - 1] || '';
+    const beforeGap = left > 0
+      ? probe.source.slice(probe.map[left - 1]?.end ?? 0, probe.map[left]?.start ?? 0)
+      : '';
+    if (/[A-Z0-9_]/.test(before) && !/[\s]/.test(beforeGap)) continue;
+
+    let idEnd = stemEnd;
+    let previousRawEnd = probe.map[stemEnd - 1]?.end ?? 0;
+    const stemRaw = probe.source.slice(probe.map[stemStart]?.start ?? 0, previousRawEnd);
+    const crossLineStem = /[\r\n]/.test(stemRaw);
+    while (idEnd < probe.text.length && /[A-Z0-9]/.test(probe.text[idEnd])) {
+      const gap = probe.source.slice(previousRawEnd, probe.map[idEnd]?.start ?? previousRawEnd);
+      if (/[\r\n]/.test(gap) || (crossLineStem && /\s/.test(gap))) break;
+      const collectedId = probe.text.slice(stemEnd, idEnd);
+      if (/^\d{3,}$/.test(collectedId) && /\s/.test(gap) && /[A-Z]/.test(probe.text[idEnd])) break;
+      previousRawEnd = probe.map[idEnd]?.end ?? previousRawEnd;
+      idEnd += 1;
+    }
+    const id = probe.text.slice(stemEnd, idEnd);
+    let closeEnd = idEnd;
+    while (closeEnd < probe.text.length && probe.text[closeEnd] === ']' && closeEnd - idEnd < 8) closeEnd += 1;
+    const afterStemGap = stemEnd < probe.map.length
+      ? probe.source.slice(probe.map[stemEnd - 1]?.end ?? 0, probe.map[stemEnd]?.start ?? 0)
+      : '';
+    const stemAtBoundary = !id && (
+      stemEnd >= probe.text.length
+      || /[\r\n]/.test(afterStemGap)
+      || !/[A-Z0-9_]/.test(probe.text[stemEnd] || '')
+    );
+    const active = !!family && match[0].slice(0, -1) === family;
+    const numericId = /^\d{3,}$/.test(id);
+    const bracketEvidence = openCount > 0 || closeEnd > idEnd;
+    if (!active && !numericId && !bracketEvidence && !stemAtBoundary && !crossLineStem) continue;
+
+    const right = Math.max(stemEnd, closeEnd > idEnd ? closeEnd : idEnd);
+    const start = probe.map[left]?.start;
+    const end = probe.map[right - 1]?.end;
+    if (Number.isInteger(start) && Number.isInteger(end) && end > start) ranges.push({ start, end });
+  }
+  ranges.sort((a, b) => a.start - b.start || a.end - b.end);
+  const merged = [];
+  for (const range of ranges) {
+    const last = merged[merged.length - 1];
+    if (last && range.start < last.end) last.end = Math.max(last.end, range.end);
+    else merged.push({ ...range });
+  }
+  return merged;
+}
+
+function canonicalSourcePduBlocks(value = '') {
+  const source = String(value || '');
+  const exact = [];
+  const pattern = canonicalLiteralPduMarkerPattern('gi');
+  let match;
+  while ((match = pattern.exec(source))) exact.push({ start:match.index, end:match.index + match[0].length });
+  const ranges = exact.slice();
+  for (const residue of canonicalPduSuspiciousRanges(source)) {
+    if (exact.some(range => residue.start >= range.start && residue.end <= range.end)) continue;
+    const lineStart = source.lastIndexOf('\n', Math.max(0, residue.start - 1)) + 1;
+    const nextBreak = source.indexOf('\n', Math.max(residue.start, residue.end - 1));
+    ranges.push({ start:lineStart, end:nextBreak < 0 ? source.length : nextBreak });
+  }
+  ranges.sort((a, b) => a.start - b.start || a.end - b.end);
+  const merged = [];
+  for (const range of ranges) {
+    const last = merged[merged.length - 1];
+    if (last && range.start <= last.end) last.end = Math.max(last.end, range.end);
+    else merged.push({ ...range });
+  }
+  return merged.map(range => ({ ...range, text:source.slice(range.start, range.end) }));
+}
+
 function canonicalMarkerFamilyForSource(value = '') {
-  const source = String(value || '').toUpperCase().replace(/[ \t]/g, '');
+  const source = canonicalMarkerCompactText(value);
   for (let index = 0; ; index++) {
     let n = index + 1;
     let label = '';
@@ -1515,6 +1705,12 @@ function canonicalLiteralMask(value = '', infoRanges = []) {
   }
   const placeholder = /\{\{[\s\S]*?\}\}|<%[\s\S]*?%>/g;
   while ((match = placeholder.exec(source))) mark(match.index, match.index + match[0].length, true);
+
+  // Source-authored PDU-like text is data, never part of this request's marker
+  // protocol. Exact tokens stay byte-for-byte; ambiguous damaged/Unicode forms
+  // protect only the source lines they span.
+  for (const range of canonicalSourcePduBlocks(source)) mark(range.start, range.end, true);
+
   const rawUrl = /\b(?:https?:\/\/|www\.)[^\s<>"']+/gi;
   while ((match = rawUrl.exec(source))) mark(match.index, match.index + match[0].length, true);
   const email = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
@@ -1833,31 +2029,45 @@ function canonicalMissingGroups(items = [], recoveredUnits = []) {
 }
 
 function canonicalLiteralPduMarkers(value = '') {
-  return String(value || '').match(/\[(?:[ \t]*\[){0,7}[ \t]*\/?[ \t]*P[ \t]*D[ \t]*U[ \t]*-[ \t]*(?:[A-Z0-9][ \t]*)+-[ \t]*(?:[A-Z0-9][ \t]*)+\](?:[ \t]*\]){0,7}/gi) || [];
+  return String(value || '').match(canonicalLiteralPduMarkerPattern('gi')) || [];
+}
+
+function canonicalStripExpectedPduBlocks(value = '', source = '') {
+  const text = String(value || '');
+  const blocks = canonicalSourcePduBlocks(source);
+  let cursor = 0;
+  let remainder = '';
+  for (const block of blocks) {
+    const at = text.indexOf(block.text, cursor);
+    if (at < cursor) return { ok:false, text };
+    remainder += text.slice(cursor, at);
+    cursor = at + block.text.length;
+  }
+  remainder += text.slice(cursor);
+  return { ok:true, text:remainder };
 }
 
 function cleanCanonicalUnexpectedPduTokens(value = '', source = '') {
-  const allowed = new Map();
-  for (const token of canonicalLiteralPduMarkers(source)) allowed.set(token, (allowed.get(token) || 0) + 1);
-  return String(value || '').replace(/\[(?:[ \t]*\[){0,7}[ \t]*\/?[ \t]*P[ \t]*D[ \t]*U[ \t]*-[ \t]*(?:[A-Z0-9][ \t]*)+-[ \t]*(?:[A-Z0-9][ \t]*)+\](?:[ \t]*\]){0,7}/gi, token => {
-    const remaining = allowed.get(token) || 0;
-    if (remaining <= 0) return '';
-    allowed.set(token, remaining - 1);
-    return token;
-  });
+  return canonicalUnexpectedPduResidueCount(value, source) > 0 ? String(source || '') : String(value || '');
+}
+
+function canonicalRemoveAllowedPduTokens(value = '', source = '') {
+  const stripped = canonicalStripExpectedPduBlocks(value, source);
+  return stripped.ok ? stripped.text : String(value || '');
+}
+
+function canonicalUnexpectedPduResidueCount(value = '', source = '', activeFamily = '') {
+  const stripped = canonicalStripExpectedPduBlocks(value, source);
+  if (!stripped.ok) return 1;
+  return canonicalPduSuspiciousRanges(stripped.text, activeFamily).length;
+}
+
+function canonicalPduResidueLines(value = '') {
+  return canonicalSourcePduBlocks(value).map(block => block.text);
 }
 
 function canonicalUnexpectedInternalMarkerCount(value = '', plan = null) {
-  const source = String(plan?.source || '');
-  const allowed = new Map();
-  for (const token of canonicalLiteralPduMarkers(source)) allowed.set(token, (allowed.get(token) || 0) + 1);
-  let unexpected = 0;
-  for (const token of canonicalLiteralPduMarkers(value)) {
-    const remaining = allowed.get(token) || 0;
-    if (remaining > 0) allowed.set(token, remaining - 1);
-    else unexpected += 1;
-  }
-  return unexpected;
+  return canonicalUnexpectedPduResidueCount(value, String(plan?.source || ''), String(plan?.family || ''));
 }
 
 function canonicalInternalFormatTokens(value = '') {
@@ -1914,7 +2124,10 @@ function canonicalRawInternalMarkerCount(value = '', plan = null) {
   if (looseFamilyMarkers.length) {
     remainder = remainder.replace(canonicalLooseFamilyMarkerPattern(plan, 'gi', false), '');
   }
+  const familyResidue = canonicalFamilyResiduePattern(plan?.family, 'gi');
+  const familyResidues = familyResidue ? (remainder.match(familyResidue) || []) : [];
   return looseFamilyMarkers.length
+    + familyResidues.length
     + canonicalUnexpectedInternalMarkerCount(remainder, plan)
     + canonicalUnexpectedInternalFormatTokenCount(remainder, plan?.source || '');
 }
@@ -1922,12 +2135,8 @@ function canonicalRawInternalMarkerCount(value = '', plan = null) {
 function sanitizeCanonicalFallback(value = '', plan = null) {
   let out = stripCanonicalMarkers(value, plan);
   const source = String(plan?.source || '');
-  out = cleanCanonicalUnexpectedPduTokens(out, source);
-  // Without brackets, a fifth digit may be either a damaged ID or the first
-  // translated character. Do not guess the boundary: retain the exact source
-  // instead of exposing or partially deleting an internal family fragment.
-  const unresolvedFamilyMarker = canonicalLooseFamilyMarkerPattern(plan, 'i', false);
-  if (unresolvedFamilyMarker?.test(out)) return source;
+  const stripped = canonicalStripExpectedPduBlocks(out, source);
+  if (!stripped.ok || canonicalPduSuspiciousRanges(stripped.text).length) return source;
   return cleanCanonicalInternalFormatTokens(out, source);
 }
 
@@ -1947,10 +2156,12 @@ function salvageCanonicalTranslationResult(received = '', plan = null, base = nu
   const response = String(received || '');
   const family = String(plan.family || '');
   const source = String(plan.source || '');
-  const spacedFamily = Array.from(family)
-    .map(char => char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-    .join('[ \\t]*');
-  const selectedFamilyFragment = new RegExp(`${spacedFamily}[ \\t]*-`, 'i');
+  // Source-authored PDU-looking blocks are protected skeleton, not translation
+  // markers.  Salvage is safe only while every such block is still present
+  // byte-for-byte and in source order; otherwise even otherwise valid marker
+  // pairs no longer prove the recovered units occupy the right skeleton.
+  if (!canonicalStripExpectedPduBlocks(response, source).ok) return base;
+  const selectedFamilyFragment = canonicalFamilyResiduePattern(family, 'i');
   const tokens = canonicalResponseMarkerTokens(response, plan);
   const allById = new Map();
   for (const token of tokens) {
@@ -2000,7 +2211,8 @@ function salvageCanonicalTranslationResult(received = '', plan = null, base = nu
     const expectedLiterals = canonicalLiteralPduMarkers(item.sourceText);
     const receivedLiterals = canonicalLiteralPduMarkers(body);
     if (expectedLiterals.length !== receivedLiterals.length
-      || expectedLiterals.some((token, markerIndex) => token !== receivedLiterals[markerIndex])) continue;
+      || expectedLiterals.some((token, markerIndex) => token !== receivedLiterals[markerIndex])
+      || canonicalUnexpectedPduResidueCount(body, item.sourceText, family) > 0) continue;
     const expectedFormatTokens = canonicalInternalFormatTokens(item.sourceText);
     const receivedFormatTokens = canonicalInternalFormatTokens(body);
     if (expectedFormatTokens.length !== receivedFormatTokens.length
@@ -2076,17 +2288,24 @@ function salvageCanonicalTranslationResult(received = '', plan = null, base = nu
       info:!!item.info,
     }));
   if (!recovered.length) return base;
-  const partial = Object.assign(base, {
-    complete:false,
-    partial:true,
+  const fullyRecovered = recovered.length === items.length
+    && recovered.every((unit, index) => String(unit.id) === String(items[index].id));
+  const aligned = Object.assign({}, base, {
+    complete:fullyRecovered,
+    partial:!fullyRecovered,
     units:recovered,
     totalUnits:items.length,
     recoveredUnits:recovered.length,
     missingUnits:Math.max(0, items.length - recovered.length),
     missingGroups:canonicalMissingGroups(items, recovered),
   });
-  partial.plainKorean = renderCanonicalRange(partial, 0, partial.source.length).trim();
-  return partial;
+  aligned.plainKorean = renderCanonicalRange(aligned, 0, aligned.source.length).trim();
+  // A fully recovered salvage is complete only when its rebuilt canonical
+  // record also passes persisted-record validation. Flipping an invalid full
+  // record to partial cannot make its common invariants valid, so fall back to
+  // the safe unaligned first-response record instead.
+  if (fullyRecovered && !canonicalRecordValid(aligned, source, aligned.engine)) return base;
+  return aligned;
 }
 
 function parseCanonicalTranslationResult(value = '', plan = null, engine = translationEngineKey()) {
@@ -2144,10 +2363,7 @@ function parseCanonicalTranslationResult(value = '', plan = null, engine = trans
   let cursor = 0;
   let expectedCursor = 0;
   const expectedPrompt = String(plan.promptSource || '');
-  const spacedFamily = Array.from(String(plan.family || ''))
-    .map(char => char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-    .join('[ \\t]*');
-  const selectedFamilyFragment = new RegExp(`${spacedFamily}[ \\t]*-`, 'i');
+  const selectedFamilyFragment = canonicalFamilyResiduePattern(plan.family, 'i');
   for (const item of items) {
     const openAt = received.indexOf(item.openMarker, cursor);
     const expectedOpenAt = expectedPrompt.indexOf(item.openMarker, expectedCursor);
@@ -2166,6 +2382,7 @@ function parseCanonicalTranslationResult(value = '', plan = null, engine = trans
     if (selectedFamilyFragment.test(body)
       || expectedLiterals.length !== receivedLiterals.length
       || expectedLiterals.some((token, markerIndex) => token !== receivedLiterals[markerIndex])
+      || canonicalUnexpectedPduResidueCount(body, item.sourceText, plan.family) > 0
       || expectedFormatTokens.length !== receivedFormatTokens.length
       || expectedFormatTokens.some((token, markerIndex) => token !== receivedFormatTokens[markerIndex])) return salvage();
     const ko = cleanCanonicalInternalFormatTokens(body, item.sourceText).trim();
@@ -2225,9 +2442,7 @@ function canonicalRecordValid(record = null, original = '', engine = '') {
   if (partial && (!record.units.length || record.units.length > expected.length)) return false;
   if (!expected.length) return record.plainKorean === source;
   const expectedById = new Map(expected.map((item, index) => [String(item.id), { item, index }]));
-  const selectedFamilyFragment = new RegExp(`${Array.from(String(plan.family || ''))
-    .map(char => char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-    .join('[ \\t]*')}[ \\t]*-`, 'i');
+  const selectedFamilyFragment = canonicalFamilyResiduePattern(plan.family, 'i');
   let previousPlanIndex = -1;
   for (let index = 0; index < record.units.length; index++) {
     const unit = record.units[index];
@@ -2247,6 +2462,7 @@ function canonicalRecordValid(record = null, original = '', engine = '') {
     if (selectedFamilyFragment.test(unit.ko)
       || expectedLiterals.length !== translatedLiterals.length
       || expectedLiterals.some((token, markerIndex) => token !== translatedLiterals[markerIndex])
+      || canonicalUnexpectedPduResidueCount(unit.ko, item.sourceText, plan.family) > 0
       || expectedFormatTokens.length !== translatedFormatTokens.length
       || expectedFormatTokens.some((token, markerIndex) => token !== translatedFormatTokens[markerIndex])) return false;
     for (const field of ['sentenceId', 'lineId', 'paragraphId', 'quoteId']) {
@@ -2670,14 +2886,7 @@ function requireTranslationReady() {
 }
 function promptContextSourceFromMsg(msg) {
   if (!msg) return '';
-  const body = messageSourceText(
-    pdCurrentRawMessageSource(msg) ||
-    msg?.extra?.original_mes ||
-    msg?.extra?.phraseDeskOriginal ||
-    msg?.extra?.phraseDesk?.original ||
-    msg?.mes || '',
-    null,
-  );
+  const body = messageSourceText(pdCurrentRawMessageSource(msg), null);
   return norm(body);
 }
 function currentCharacterVoiceReference() {
@@ -3291,6 +3500,10 @@ function synchronizeStoredCanonicalViews(preferredKey = translationCacheKey(sett
   const chat = Array.isArray(live?.chat) ? live.chat : (Array.isArray(ctx?.chat) ? ctx.chat : []);
   let changed = false;
   for (const msg of chat) {
+    const swipeSlot = pdCurrentSwipeSlot(msg);
+    // Never rewrite transient overswipe state. ST deliberately leaves the new
+    // slot absent and renders "..." until generation supplies its real source.
+    if (swipeSlot.hasId && !swipeSlot.exists) continue;
     const root = msg?.extra?.phraseDesk;
     if (!root || typeof root !== 'object') continue;
     msg.extra = msg.extra || {};
@@ -3324,6 +3537,66 @@ function synchronizeStoredCanonicalViews(preferredKey = translationCacheKey(sett
   }
   if (changed) persistChatCache('canonical-display-mode');
   return changed;
+}
+
+function pdExactSwipeTranslationState(msg, source = '') {
+  const exactSource = String(source || '').replace(/\r\n/g, '\n');
+  if (!msg?.extra || !norm(exactSource)) return { root:null, key:'', state:null };
+  const root = msg.extra.phraseDesk;
+  if (!root || typeof root !== 'object' || Array.isArray(root)) return { root:null, key:'', state:null };
+  const key = hash(exactSource);
+  const state = root?.variants?.[key];
+  if (!state || typeof state !== 'object' || Array.isArray(state)) return { root, key, state:null };
+  const storedSource = String(state.original || '').replace(/\r\n/g, '\n');
+  if (storedSource !== exactSource || String(state.originalHash || '') !== key) return { root, key, state:null };
+  if (state.canonical && !canonicalRecordForState(state, state.activeMode || translationCacheKey(settings.chatMode || 'full'))) {
+    return { root, key, state:null };
+  }
+  return { root, key, state };
+}
+
+function reapplyPhraseDeskTranslationForSwipedMessage(msg, idx, expectedSource = '') {
+  if (!msg || !Number.isFinite(Number(idx)) || Number(idx) < 0) return false;
+  const slot = pdCurrentSwipeSlot(msg);
+  const source = String(expectedSource || '').replace(/\r\n/g, '\n');
+  if (!slot.exists || String(slot.source || '').replace(/\r\n/g, '\n') !== source) return false;
+
+  const mes = pdFindRenderedMessageByIndex(Number(idx));
+  const textEl = pdTextElementForRenderedMessage(mes);
+  const payload = { mes, msg, idx:Number(idx), textEl, text:source, bodyText:source, source:noteSource(mes, msg) };
+  const preferredKey = translationCacheKey(settings.chatMode || 'full');
+  const exact = pdExactSwipeTranslationState(msg, source);
+  const staleDisplay = String(msg?.extra?.display_text || '');
+
+  if (!exact.state || !exact.state.showing) {
+    if (staleDisplay && pdIsKnownTranslationText(msg, staleDisplay)) {
+      delete msg.extra.display_text;
+      if (textEl?.length) textEl.html(renderMessageHtml(source, payload));
+      persistChatCache('swipe-stale-display-clear');
+    }
+    if (mes) $(mes).find('.pd-message-translate-btn').removeClass('translated busy');
+    return false;
+  }
+
+  const canonicalText = materializeCanonicalView(exact.state, preferredKey);
+  const mode = canonicalText ? preferredKey : (exact.state.activeMode || preferredKey);
+  const picked = pickCachedMessageTranslation(exact.state, mode);
+  if (!picked.text) return false;
+  const display = displayTranslationText(picked.text, picked.key || mode);
+  exact.root.activeKey = exact.key;
+  exact.root.original = exact.state.original;
+  exact.root.originalHash = exact.state.originalHash;
+  exact.root.translations = Object.assign({}, exact.state.translations || {});
+  exact.root.activeMode = picked.key || mode;
+  exact.root.showing = true;
+  msg.extra.display_text = display;
+  if (textEl?.length) {
+    textEl.html(renderMessageHtml(display, payload));
+    scheduleBilingualDomDecoration(payload, picked.key || mode);
+  }
+  if (mes) $(mes).find('.pd-message-translate-btn').addClass('translated').removeClass('busy');
+  persistChatCache('swipe-translation-restore');
+  return true;
 }
 
 function reapplyVisiblePhraseDeskTranslations(syncCanonicalMode = false) {
@@ -3998,15 +4271,21 @@ function messagePayloadFromTarget(target) {
   if (mes && $(mes).closest('.pd-popover,.pd-modal,.pd-modal-backdrop,.pd-menu,.pd-selection-bubble,#extensions_settings,#extensions_settings2').length) return null;
   if (msg?.is_system && !pdShouldIncludeHiddenChatRecord(msg, mes)) return null;
 
+  const swipeSlot = pdCurrentSwipeSlot(msg);
+  if (swipeSlot.hasId && !swipeSlot.hasSource) {
+    logDebug({ type:'message-resolve-failed', reason:'swipe-source-unavailable', idx, swipeId:swipeSlot.id });
+    return null;
+  }
+
   if (!textEl.length && mes) textEl = $(mes);
-  const msgSource = messageSourceText((pdCurrentRawMessageSource(msg) || msg?.extra?.original_mes || msg?.extra?.phraseDeskOriginal || msg?.mes || ''), null);
+  const msgSource = messageSourceText(pdCurrentRawMessageSource(msg), null);
   const tempPayload = { mes, msg, idx, textEl, text: '', bodyText: msgSource || domSource, source: noteSource(mes, msg) };
   const data = variantForPayload(tempPayload, false);
   const { root, key, state, original } = data;
   const preferredKey = state?.activeMode || translationCacheKey(settings.chatMode || 'full');
   const picked = shouldShowCachedMessageTranslation(root, key, state) ? pickCachedMessageTranslation(state, preferredKey) : { text: '' };
   const activeTranslation = picked.text || '';
-  const bodyText = activeTranslation ? plain(activeTranslation) : messageSourceText(original || msgSource || msg?.mes || domSource || '', textEl);
+  const bodyText = activeTranslation ? plain(activeTranslation) : messageSourceText(original || msgSource || domSource || '', textEl);
   const text = bodyText;
   if (!norm(text) || !/[A-Za-z가-힣]/.test(text)) {
     logDebug({ type:'message-resolve-failed',
@@ -4287,10 +4566,7 @@ function refreshPayloadMessageReference(payload, expectedOriginal = '') {
   const liveMsg = chat[idx];
   if (!liveMsg) return payload;
   if (expectedOriginal) {
-    const liveSource = messageSourceText(
-      pdCurrentRawMessageSource(liveMsg) || liveMsg?.extra?.original_mes || liveMsg?.extra?.phraseDeskOriginal || liveMsg?.mes || '',
-      null,
-    );
+    const liveSource = messageSourceText(pdCurrentRawMessageSource(liveMsg), null);
     if (norm(liveSource) && hash(liveSource) !== hash(expectedOriginal)) return payload;
   }
   payload.msg = liveMsg;
@@ -4303,11 +4579,9 @@ function translationRequestTargetStillCurrent(request = null) {
   const chat = Array.isArray(live?.chat) ? live.chat : (Array.isArray(ctx?.chat) ? ctx.chat : []);
   const msg = chat[request.idx];
   if (!msg || msg !== request.msg) return false;
-  const source = messageSourceText(
-    pdCurrentRawMessageSource(msg) || msg?.extra?.original_mes || msg?.extra?.phraseDeskOriginal || msg?.mes || '',
-    null,
-  );
-  return !!norm(source) && hash(source) === request.sourceHash;
+  if (pdSwipeId(msg) !== request.swipeId) return false;
+  const source = messageSourceText(pdCurrentRawMessageSource(msg), null);
+  return !!norm(source) && source === request.source && hash(source) === request.sourceHash;
 }
 function applyCommittedTranslationToMessage(msg, cloned, original = '') {
   if (!msg || !cloned) return;
@@ -4328,7 +4602,9 @@ function scheduleCommittedTranslationStabilization(payload, store, expectedOrigi
   const idx = messageIndexForPayload(payload);
   if (!Number.isFinite(idx) || idx < 0 || !store || !expectedOriginal) return;
   const chatKey = currentChatKey();
-  const expectedHash = hash(expectedOriginal);
+  const expectedSource = String(expectedOriginal || '').replace(/\r\n/g, '\n');
+  const expectedHash = hash(expectedSource);
+  const expectedSwipeId = pdSwipeId(payload?.msg);
   const generation = translationStabilizationGeneration;
   [140, 520].forEach(delay => setTimeout(() => {
     try {
@@ -4338,11 +4614,9 @@ function scheduleCommittedTranslationStabilization(payload, store, expectedOrigi
       const chat = Array.isArray(live?.chat) ? live.chat : (Array.isArray(ctx?.chat) ? ctx.chat : []);
       const msg = chat[idx];
       if (!msg) return;
-      const source = messageSourceText(
-        pdCurrentRawMessageSource(msg) || msg?.extra?.original_mes || msg?.extra?.phraseDeskOriginal || msg?.mes || '',
-        null,
-      );
-      if (norm(source) && hash(source) !== expectedHash) return;
+      if (pdSwipeId(msg) !== expectedSwipeId) return;
+      const source = messageSourceText(pdCurrentRawMessageSource(msg), null);
+      if (!norm(source) || source !== expectedSource || hash(source) !== expectedHash) return;
       const stored = msg?.extra?.phraseDesk;
       const incomingKey = String(store?.activeKey || '');
       const incomingState = store?.variants?.[incomingKey] || null;
@@ -4399,6 +4673,8 @@ async function translateMessagePayload(payload, forceRetranslate = false, option
     chatKey:currentChatKey(),
     idx:messageIndexForPayload(payload),
     msg:payload.msg,
+    swipeId:pdSwipeId(payload.msg),
+    source:original,
     sourceHash:hash(original),
   };
   state.original = original;
@@ -4618,7 +4894,12 @@ function messagePayloadFromButtonDirect(button) {
   if (!textEl.length && mes) textEl = $(mes);
 
   const domSource = mes ? messageSourceText(textEl.html?.() || textEl.text?.() || $(mes).text?.() || '', textEl) : '';
-  const msgSource = messageSourceText(msg?.extra?.original_mes || msg?.extra?.phraseDeskOriginal || msg?.mes || '', null);
+  const swipeSlot = pdCurrentSwipeSlot(msg);
+  if (swipeSlot.hasId && !swipeSlot.hasSource) {
+    logDebug({ type:'message-resolve-failed', resolver:'button-direct', reason:'swipe-source-unavailable', rawId, idx, swipeId:swipeSlot.id });
+    return null;
+  }
+  const msgSource = messageSourceText(pdCurrentRawMessageSource(msg), null);
   const bodyText = msgSource || domSource;
   const text = bodyText;
 
@@ -4668,7 +4949,7 @@ function pdShouldIncludeHiddenChatRecord(msg, mes = null) {
   // separate is_hidden flag. For the batch display translator, those still need a payload so
   // /unhide can show an already translated message.
   if (msg.is_system === true) {
-    const source = messageSourceText(pdCurrentRawMessageSource(msg) || msg.extra?.original_mes || msg.extra?.phraseDeskOriginal || msg.mes || '', null);
+    const source = messageSourceText(pdCurrentRawMessageSource(msg), null);
     if (norm(source) && !msg.extra?.media?.length) return true;
   }
   return false;
@@ -4696,7 +4977,7 @@ function messagePayloadFromChatIndex(idx) {
   if (!msg || (msg.is_system && !pdShouldIncludeHiddenChatRecord(msg)) || msg.extra?.media?.length) return null;
   const mes = pdFindRenderedMessageByIndex(idx);
   const textEl = pdTextElementForRenderedMessage(mes);
-  const sourceText = messageSourceText(pdCurrentRawMessageSource(msg) || msg.extra?.original_mes || msg.extra?.phraseDeskOriginal || msg.mes || '', null);
+  const sourceText = messageSourceText(pdCurrentRawMessageSource(msg), null);
   const text = sourceText;
   if (!norm(text) || !/[A-Za-z가-힣]/.test(text)) return null;
   const payload = { mes, msg, idx, textEl, text, bodyText:sourceText, source: noteSource(mes, msg) };
@@ -6484,7 +6765,7 @@ function openQuizHistory(){
 
 function payloadFromEventArgs(args = []) {
   for (const arg of args) {
-    if (!arg) continue;
+    if (arg === undefined || arg === null) continue;
     if (arg?.nodeType === 1 && arg?.matches?.('.mes')) return messagePayloadFromTarget(arg);
     if (arg?.target?.nodeType === 1) {
       const p = messagePayloadFromTarget(arg.target);
@@ -6497,6 +6778,72 @@ function payloadFromEventArgs(args = []) {
     }
   }
   return null;
+}
+function phraseDeskEventMessageTarget(args = [], payload = null) {
+  const live = liveContext();
+  const chat = Array.isArray(live?.chat) ? live.chat : (Array.isArray(ctx?.chat) ? ctx.chat : []);
+  let idx = messageIndexForPayload(payload);
+  if (Number.isFinite(idx) && idx >= 0 && chat[idx]) return { chat, msg:chat[idx], idx };
+  if (payload?.msg) {
+    idx = chat.indexOf(payload.msg);
+    if (idx >= 0) return { chat, msg:chat[idx], idx };
+  }
+  for (const arg of args) {
+    if (arg === undefined || arg === null) continue;
+    const directIndex = chat.indexOf(arg);
+    if (directIndex >= 0) return { chat, msg:chat[directIndex], idx:directIndex };
+    const node = arg?.nodeType === 1 ? arg : (arg?.target?.nodeType === 1 ? arg.target : null);
+    const raw = node?.closest?.('.mes')?.getAttribute?.('mesid')
+      ?? node?.closest?.('.mes')?.getAttribute?.('data-mesid')
+      ?? arg?.mesid ?? arg?.messageId ?? arg?.index ?? arg?.id ?? arg;
+    const candidate = Number(raw);
+    if (Number.isInteger(candidate) && candidate >= 0 && chat[candidate]) {
+      return { chat, msg:chat[candidate], idx:candidate };
+    }
+  }
+  return { chat, msg:null, idx:-1 };
+}
+
+function handlePhraseDeskMessageSwiped(args = [], payload = null) {
+  const target = phraseDeskEventMessageTarget(args, payload);
+  const msg = target.msg;
+  if (!msg) return false;
+  const slot = pdCurrentSwipeSlot(msg);
+  if (!slot.hasId) return false;
+  const mes = pdFindRenderedMessageByIndex(target.idx);
+
+  if (!slot.hasSource) {
+    // ST already cloned the previous active extra into swipe_info[oldId].extra.
+    // Detach only the transient current extra so the pending slot cannot inherit
+    // the previous swipe's Phrase Desk cache. Never save or touch swipe_info here.
+    const cleared = clearPhraseDeskCacheFromExtra(msg.extra);
+    if (mes) $(mes).find('.pd-message-translate-btn').removeClass('translated busy');
+    logDebug({ type:'swipe-pending-skip', idx:target.idx, swipeId:slot.id, cacheDetached:!!cleared });
+    return true;
+  }
+
+  const chatRef = target.chat;
+  const msgRef = msg;
+  const expectedSwipeId = slot.id;
+  const expectedSource = String(slot.source || '').replace(/\r\n/g, '\n');
+  const expectedHash = hash(expectedSource);
+  setTimeout(() => {
+    try {
+      const live = liveContext();
+      const chat = Array.isArray(live?.chat) ? live.chat : (Array.isArray(ctx?.chat) ? ctx.chat : []);
+      if (chat !== chatRef || chat[target.idx] !== msgRef) return;
+      const current = chat[target.idx];
+      const currentSlot = pdCurrentSwipeSlot(current);
+      const currentSource = String(currentSlot.source || '').replace(/\r\n/g, '\n');
+      if (!currentSlot.exists || currentSlot.id !== expectedSwipeId || hash(currentSource) !== expectedHash || currentSource !== expectedSource) return;
+      const currentMes = pdFindRenderedMessageByIndex(target.idx);
+      if (currentMes) ensureMessageTranslateButton(currentMes);
+      reapplyPhraseDeskTranslationForSwipedMessage(current, target.idx, expectedSource);
+    } catch (e) {
+      logDebug({ type:'swipe-restore-error', idx:target.idx, error:e?.message || String(e) });
+    }
+  }, 40);
+  return true;
 }
 function latestPayloadForRole(role) {
   const list = Array.from(document.querySelectorAll('.mes'));
@@ -6562,6 +6909,8 @@ function maybeAutoTranslateRenderedMessage(roleHint, args = []) {
 
 function canonicalMessageSourceAfterUpdate(msg) {
   if (!msg) return '';
+  const slot = pdCurrentSwipeSlot(msg);
+  if (slot.hasId) return slot.exists ? slot.source : '';
   const messageText = messageSourceText(typeof msg.mes === 'string' ? msg.mes : '', null);
   if (norm(messageText) && !pdIsKnownTranslationText(msg, messageText)) return messageText;
   return pdCurrentRawMessageSource(msg);
@@ -6581,6 +6930,8 @@ function clearPhraseDeskTranslationAfterMessageUpdate(payload, args = []) {
       msg = chat[idx] || null;
     }
   }
+  const swipeSlot = pdCurrentSwipeSlot(msg);
+  if (swipeSlot.hasId && !swipeSlot.hasSource) return false;
   if (!msg?.extra) return false;
   const hadPhraseDeskTranslation = !!(
     msg.extra.phraseDesk || msg.extra.original_mes || msg.extra.phraseDeskOriginal ||
@@ -6640,6 +6991,10 @@ function setupMessageRenderHooks() {
         // observer as soon as SillyTavern actually renders or switches a chat.
         setupMessageButtonObserver();
         const payload = payloadFromEventArgs(args);
+        if (key === 'MESSAGE_SWIPED') {
+          handlePhraseDeskMessageSwiped(args, payload);
+          return;
+        }
         if (key === 'MESSAGE_UPDATED') clearPhraseDeskTranslationAfterMessageUpdate(payload, args);
         if (payload?.mes) {
           ensureMessageTranslateButton(payload.mes);
@@ -6650,7 +7005,7 @@ function setupMessageRenderHooks() {
             queueMessageButtonHydration(document.getElementById('chat') || document);
             reapplyVisiblePhraseDeskTranslations(true);
           }, 250);
-        } else if (key === 'MESSAGE_SWIPED' || key === 'MESSAGE_UPDATED') {
+        } else if (key === 'MESSAGE_UPDATED') {
           setTimeout(() => {
             const refreshed = payloadFromEventArgs(args);
             if (refreshed?.mes) {
