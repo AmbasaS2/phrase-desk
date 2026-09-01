@@ -35,6 +35,11 @@ const CHAT_TRANSLATION_QUALITY_LIMITS = Object.freeze({
   languageMinFunctionWords:2,
   languageAllCapsWordRatio:0.7,
   missingKoreanMaxRatio:0.05,
+  residualEnglishMinLatinLetters:80,
+  residualEnglishMaxLatinShare:0.52,
+  englishPrefixMinLatinLetters:120,
+  englishPrefixMinWords:18,
+  englishPrefixMinFunctionWords:4,
   lengthProbeMinChars:80,
   minLengthRatio:0.18,
   maxLengthRatio:4.0,
@@ -2207,7 +2212,7 @@ function salvageCanonicalTranslationResult(received = '', plan = null, base = nu
     const { item, open, close } = interval;
     const body = response.slice(open.end, close.start);
     const ko = cleanCanonicalInternalFormatTokens(body, item.sourceText).trim();
-    if (!ko || selectedFamilyFragment.test(body)) continue;
+    if (!ko || !canonicalUnitTranslationUsable(item.sourceText, ko) || selectedFamilyFragment.test(body)) continue;
     const expectedLiterals = canonicalLiteralPduMarkers(item.sourceText);
     const receivedLiterals = canonicalLiteralPduMarkers(body);
     if (expectedLiterals.length !== receivedLiterals.length
@@ -2272,10 +2277,19 @@ function salvageCanonicalTranslationResult(received = '', plan = null, base = nu
     if (skeletonInvalid.has(candidate.index)) candidate.invalid = true;
   }
 
-  const recovered = candidates
-    .filter(candidate => !candidate.invalid)
-    .sort((a, b) => a.index - b.index)
-    .map(({ item, ko }) => ({
+  // After the first missing or invalid unit, later bodies may have shifted under
+  // otherwise valid marker IDs. Structure alone cannot prove their semantics, so
+  // salvage only the validated prefix anchored at the beginning of the source.
+  const candidateByIndex = new Map(
+    candidates.filter(candidate => !candidate.invalid).map(candidate => [candidate.index, candidate]),
+  );
+  const safePrefix = [];
+  for (let index = 0; index < items.length; index++) {
+    const candidate = candidateByIndex.get(index);
+    if (!candidate) break;
+    safePrefix.push(candidate);
+  }
+  const recovered = safePrefix.map(({ item, ko }) => ({
       id:item.id,
       start:item.start,
       end:item.end,
@@ -2386,7 +2400,7 @@ function parseCanonicalTranslationResult(value = '', plan = null, engine = trans
       || expectedFormatTokens.length !== receivedFormatTokens.length
       || expectedFormatTokens.some((token, markerIndex) => token !== receivedFormatTokens[markerIndex])) return salvage();
     const ko = cleanCanonicalInternalFormatTokens(body, item.sourceText).trim();
-    if (!ko) return salvage();
+    if (!ko || !canonicalUnitTranslationUsable(item.sourceText, ko)) return salvage();
     translatedUnits.push({
       id:item.id,
       start:item.start,
@@ -2449,12 +2463,16 @@ function canonicalRecordValid(record = null, original = '', engine = '') {
     const matched = expectedById.get(String(unit?.id || ''));
     const item = matched?.item;
     if (!item || matched.index <= previousPlanIndex) return false;
+    if (partial && matched.index !== index) return false;
     previousPlanIndex = matched.index;
     if (!unit || !Number.isSafeInteger(unit.start) || !Number.isSafeInteger(unit.end)) return false;
     if (unit.start < 0 || unit.start >= unit.end || unit.end > source.length) return false;
     if (index && unit.start < record.units[index - 1].end) return false;
     if (unit.id !== item.id || unit.start !== item.start || unit.end !== item.end || unit.sourceText !== item.sourceText) return false;
-    if (unit.sourceText !== source.slice(unit.start, unit.end) || typeof unit.ko !== 'string' || !unit.ko.trim()) return false;
+    if (unit.sourceText !== source.slice(unit.start, unit.end)
+      || typeof unit.ko !== 'string'
+      || !unit.ko.trim()
+      || !canonicalUnitTranslationUsable(item.sourceText, unit.ko)) return false;
     const expectedLiterals = canonicalLiteralPduMarkers(item.sourceText);
     const translatedLiterals = canonicalLiteralPduMarkers(unit.ko);
     const expectedFormatTokens = canonicalInternalFormatTokens(item.sourceText);
@@ -2667,14 +2685,64 @@ function chatTranslationQualityVisibleText(value = '') {
   return String(value || '')
     .normalize('NFKC')
     .replace(/```[\s\S]*?```|~~~[\s\S]*?~~~/g, ' ')
+    .replace(/<(code|pre|script|style|textarea)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ')
     .replace(/`[^`\n]*`/g, ' ')
     .replace(/\{\{[\s\S]*?\}\}|<%[\s\S]*?%>|\$\{[\s\S]*?\}/g, ' ')
+    .replace(/\[(?:poss|obj|subj|char|user)\]/gi, ' ')
     .replace(/!?\[([^\]]*)\]\((?:[^()]|\([^()]*\))*\)/g, '$1')
     .replace(/https?:\/\/\S+|www\.\S+|\b\S+@\S+\.\S+\b/gi, ' ')
     .replace(/<[^>]+>/g, ' ')
     .replace(/\[(?:[ \t]*\[){0,7}[ \t]*\/?[ \t]*P[ \t]*D[ \t]*U[ \t]*-[ \t]*(?:[A-Z0-9][ \t]*)+-[ \t]*(?:[A-Z0-9][ \t]*)+\](?:[ \t]*\]){0,7}/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function chatTranslationEnglishStats(value = '') {
+  const text = chatTranslationQualityVisibleText(value);
+  const words = text.match(/[A-Za-z]+(?:'[A-Za-z]+)?/g) || [];
+  const lowercaseWords = words.filter(word => /^[a-z]/.test(word));
+  const allCapsWords = words.filter(word => /^[A-Z]{2,}$/.test(word));
+  const functionWords = words.filter(word => /^(?:a|an|the|and|or|but|if|because|as|while|of|to|in|on|at|for|from|with|without|by|about|into|through|after|before|over|under|is|are|was|were|be|been|being|do|does|did|have|has|had|can|could|may|might|must|shall|should|will|would|not|no|i|you|he|she|it|we|they|me|him|her|us|them|this|that|these|those|who|which|what|when|where|why|how)$/i.test(word));
+  return {
+    text,
+    words,
+    lowercaseWords,
+    allCapsWords,
+    functionWords,
+    latinLetters:(text.match(/[A-Za-z]/g) || []).length,
+    hangulLetters:(text.match(/[가-힣]/g) || []).length,
+  };
+}
+
+function canonicalSourceUnitNeedsKorean(sourceText = '') {
+  const stats = chatTranslationEnglishStats(sourceText);
+  if (stats.latinLetters < 2 || stats.hangulLetters > stats.latinLetters) return false;
+  const terminalPunctuation = /[.!?…](?:["'”’\)\]]*)$/.test(stats.text);
+  const firstWord = stats.words[0] || '';
+  const titleWords = stats.words.filter(word => /^[A-Z][a-z]+(?:'[A-Za-z]+)?$/.test(word));
+  const standaloneTitle = stats.words.length >= 2
+    && stats.words.length <= 8
+    && titleWords.length / stats.words.length >= 0.6;
+  if (standaloneTitle) return false;
+  const titleLedSentence = /^[A-Z][a-z]+(?:'[A-Za-z]+)?$/.test(firstWord)
+    && stats.lowercaseWords.length >= 1;
+  const shortLowerPhrase = stats.words.length >= 2
+    && stats.words.length <= 6
+    && stats.lowercaseWords.length >= 2;
+  const allCapsProse = stats.words.length >= 4
+    && stats.allCapsWords.length / stats.words.length >= CHAT_TRANSLATION_QUALITY_LIMITS.languageAllCapsWordRatio
+    && stats.functionWords.length >= 1;
+  return stats.functionWords.length >= 1
+    || (terminalPunctuation && titleLedSentence)
+    || shortLowerPhrase
+    || allCapsProse;
+}
+
+function canonicalUnitTranslationUsable(sourceText = '', translatedText = '') {
+  const translated = chatTranslationQualityVisibleText(translatedText);
+  if (!translated) return false;
+  if (!canonicalSourceUnitNeedsKorean(sourceText)) return true;
+  return /[가-힣]/.test(translated);
 }
 
 function analyzeChatTranslationQuality(record = null, plan = null, rawResult = '') {
@@ -2689,20 +2757,21 @@ function analyzeChatTranslationQuality(record = null, plan = null, rawResult = '
   const unitCoverage = totalUnits > 0 ? recoveredUnits / totalUnits : 1;
   const sourceCoverage = totalSourceChars > 0 ? recoveredSourceChars / totalSourceChars : unitCoverage;
   const coverage = Math.min(unitCoverage, sourceCoverage);
-  const sourceText = chatTranslationQualityVisibleText(
-    units.length ? units.map(unit => unit.sourceText).join(' ') : String(plan?.source || record?.source || ''),
-  );
-  const translatedText = chatTranslationQualityVisibleText(
-    units.length ? units.map(unit => unit.ko).join(' ') : String(record?.plainKorean || ''),
-  );
-  const latinLetters = (translatedText.match(/[A-Za-z]/g) || []).length;
-  const hangulLetters = (translatedText.match(/[가-힣]/g) || []).length;
+  const sourceText = chatTranslationQualityVisibleText(String(plan?.source || record?.source || ''));
+  const renderedKorean = canonicalRecordAligned(record)
+    ? renderCanonicalTranslation(record, 'ko')
+    : String(record?.plainKorean || '');
+  const translatedText = chatTranslationQualityVisibleText(renderedKorean);
+  const translatedStats = chatTranslationEnglishStats(translatedText);
+  const sourceStats = chatTranslationEnglishStats(sourceText);
+  const latinLetters = translatedStats.latinLetters;
+  const hangulLetters = translatedStats.hangulLetters;
   const hangulRatio = (hangulLetters + latinLetters) > 0 ? hangulLetters / (hangulLetters + latinLetters) : 0;
-  const sourceLatinLetters = (sourceText.match(/[A-Za-z]/g) || []).length;
-  const sourceWords = sourceText.match(/[A-Za-z]+(?:'[A-Za-z]+)?/g) || [];
-  const lowercaseWords = sourceWords.filter(word => /^[a-z]/.test(word));
-  const allCapsWords = sourceWords.filter(word => /^[A-Z]{2,}$/.test(word));
-  const functionWords = sourceWords.filter(word => /^(?:a|an|the|and|or|but|if|because|as|while|of|to|in|on|at|for|from|with|without|by|about|into|through|after|before|over|under|is|are|was|were|be|been|being|do|does|did|have|has|had|can|could|may|might|must|shall|should|will|would|not|no|i|you|he|she|it|we|they|me|him|her|us|them|this|that|these|those|who|which|what|when|where|why|how)$/i.test(word));
+  const sourceLatinLetters = sourceStats.latinLetters;
+  const sourceWords = sourceStats.words;
+  const lowercaseWords = sourceStats.lowercaseWords;
+  const allCapsWords = sourceStats.allCapsWords;
+  const functionWords = sourceStats.functionWords;
   const proseCaseEvidence = lowercaseWords.length >= limits.languageMinLowercaseWords
     || (sourceWords.length > 0 && allCapsWords.length / sourceWords.length >= limits.languageAllCapsWordRatio);
   const sourceLength = sourceText.replace(/\s/g, '').length;
@@ -2714,11 +2783,24 @@ function analyzeChatTranslationQuality(record = null, plan = null, rawResult = '
 
   if (!raw) add('empty-output');
   if (totalUnits > 0 && missingUnits > 0 && coverage < limits.partialCoverageMin) add('excessive-omission');
-  if (sourceLatinLetters >= limits.languageMinLatinLetters
-    && sourceWords.length >= limits.languageMinWords
-    && functionWords.length >= limits.languageMinFunctionWords
-    && proseCaseEvidence
-    && hangulRatio < limits.missingKoreanMaxRatio) add('korean-missing');
+  const sourceNeedsKorean = canonicalSourceUnitNeedsKorean(sourceText);
+  if ((sourceNeedsKorean && hangulRatio < limits.missingKoreanMaxRatio)
+    || (sourceLatinLetters >= limits.languageMinLatinLetters
+      && sourceWords.length >= limits.languageMinWords
+      && functionWords.length >= limits.languageMinFunctionWords
+      && proseCaseEvidence
+      && hangulRatio < limits.missingKoreanMaxRatio)) add('korean-missing');
+  const latinShare = (hangulLetters + latinLetters) > 0 ? latinLetters / (hangulLetters + latinLetters) : 0;
+  if (sourceNeedsKorean
+    && latinLetters >= limits.residualEnglishMinLatinLetters
+    && latinShare > limits.residualEnglishMaxLatinShare) add('excessive-source-language');
+  const firstHangulAt = translatedText.search(/[가-힣]/);
+  const englishPrefix = firstHangulAt < 0 ? translatedText : translatedText.slice(0, firstHangulAt);
+  const englishPrefixStats = chatTranslationEnglishStats(englishPrefix);
+  if (sourceNeedsKorean
+    && englishPrefixStats.latinLetters >= limits.englishPrefixMinLatinLetters
+    && englishPrefixStats.words.length >= limits.englishPrefixMinWords
+    && englishPrefixStats.functionWords.length >= limits.englishPrefixMinFunctionWords) add('long-english-prefix');
   if (sourceLength >= limits.lengthProbeMinChars && lengthRatio < limits.minLengthRatio) add('output-too-short');
   if (sourceLength >= limits.lengthProbeMinChars && lengthRatio > limits.maxLengthRatio) add('output-too-long');
 
@@ -2742,6 +2824,10 @@ function analyzeChatTranslationQuality(record = null, plan = null, rawResult = '
   const renderedProbe = canonicalRecordAligned(record)
     ? renderCanonicalTranslation(record, 'ko')
     : String(record?.plainKorean || '');
+  const rawHasCurrentPduMarkers = canonicalResponseMarkerTokens(raw, plan).length > 0
+    || !!canonicalLooseFamilyMarkerPattern(plan, 'i', false)?.test(raw)
+    || !!canonicalFamilyResiduePattern(plan?.family, 'i')?.test(raw);
+  if (!canonicalRecordAligned(record) && rawHasCurrentPduMarkers) add('unaligned-structured-output');
   const internalTokenLeak = canonicalUnexpectedInternalMarkerCount(renderedProbe, plan) > 0
     || canonicalUnexpectedInternalFormatTokenCount(renderedProbe, String(plan?.source || record?.source || '')) > 0
     || canonicalRawInternalMarkerCount(raw, plan) > 0;
@@ -2755,7 +2841,10 @@ function analyzeChatTranslationQuality(record = null, plan = null, rawResult = '
   }
   if (warnings.some(code => ['meta-preamble', 'roleplay-continuation', 'output-too-short', 'output-too-long'].includes(code))
     && (status === 'success' || status === 'partial')) status = 'degraded';
-  if (warnings.some(code => ['empty-output', 'korean-missing', 'refusal', 'internal-token-leak'].includes(code))) status = 'failed';
+  if (warnings.some(code => [
+    'empty-output', 'korean-missing', 'excessive-source-language', 'long-english-prefix',
+    'refusal', 'internal-token-leak', 'unaligned-structured-output',
+  ].includes(code))) status = 'failed';
 
   return {
     status,
@@ -2769,6 +2858,18 @@ function analyzeChatTranslationQuality(record = null, plan = null, rawResult = '
     warnings,
     internalTokenLeak,
   };
+}
+
+function chatTranslationQualityBlocksDisplay(quality = null, record = null) {
+  const warnings = Array.isArray(quality?.warnings) ? quality.warnings : [];
+  const blockingWarnings = new Set([
+    'empty-output', 'korean-missing', 'excessive-source-language', 'long-english-prefix',
+    'meta-preamble', 'refusal', 'roleplay-continuation', 'internal-token-leak',
+    'unaligned-structured-output',
+  ]);
+  if (warnings.some(code => blockingWarnings.has(code))) return true;
+  return record?.partial === true
+    && Number(quality?.unitCoverage || 0) < CHAT_TRANSLATION_QUALITY_LIMITS.degradedCoverageMin;
 }
 function buildGoogleDialogueFromWholeTranslation(source = '', korean = '') {
   const src = String(source || '').replace(/\r\n/g, '\n');
@@ -3665,7 +3766,16 @@ function canonicalRecordForState(state = null, preferredKey = '') {
   void preferredKey;
   const record = state?.canonical;
   const source = String(state?.original || record?.source || '').replace(/\r\n/g, '\n');
-  if (canonicalRecordValid(record, source)) return record;
+  if (canonicalRecordValid(record, source)) {
+    const plan = createCanonicalTranslationPlan(source);
+    const quality = analyzeChatTranslationQuality(record, plan, String(record?.plainKorean || ''));
+    return chatTranslationQualityBlocksDisplay(quality, record) ? null : record;
+  }
+  // Never turn a damaged aligned partial into its already assembled mixed text:
+  // old gapped partial caches can contain correctly numbered but shifted bodies.
+  if (record?.partial === true) return null;
+  if (record?.complete === true && Array.isArray(record?.units)
+    && record.units.some(unit => !canonicalUnitTranslationUsable(unit?.sourceText, unit?.ko))) return null;
   // If only stored assembly metadata was damaged, keep the first AI response visible as
   // one unstructured translation. Source/hash mismatch is still rejected outright.
   if (record?.schema === 1
@@ -3674,7 +3784,7 @@ function canonicalRecordForState(state = null, preferredKey = '') {
     && record?.sourceHash === hash(source)
     && typeof record?.plainKorean === 'string'
     && record.plainKorean.trim()) {
-    return {
+    const fallbackRecord = {
       ...record,
       complete:false,
       partial:false,
@@ -3686,16 +3796,23 @@ function canonicalRecordForState(state = null, preferredKey = '') {
       groups:{},
       infoRanges:[],
     };
+    const plan = createCanonicalTranslationPlan(source);
+    const quality = analyzeChatTranslationQuality(fallbackRecord, plan, fallbackRecord.plainKorean);
+    return chatTranslationQualityBlocksDisplay(quality, fallbackRecord) ? null : fallbackRecord;
   }
   return null;
 }
 function pickCachedMessageTranslation(state, preferredKey = '') {
   const translations = state?.translations && typeof state.translations === 'object' ? state.translations : {};
+  const hadCanonical = !!state?.canonical;
   const canonical = canonicalRecordForState(state, preferredKey);
   if (canonical) {
     const rendered = renderCanonicalTranslation(canonical, preferredKey);
     if (String(rendered || '').trim()) return { key:preferredKey, text:rendered, canonical:true, legacy:false };
   }
+  // A rejected canonical record must not fall through to mode-shaped strings
+  // stored beside that same record; they may be projections of the unsafe data.
+  if (hadCanonical) return { key:'', text:'', canonical:false, legacy:false };
   const exact = translations[preferredKey];
   if (typeof exact === 'string' && exact.trim()) return { key:preferredKey, text:normalizeDialogueBilingualQuotePairs(exact), canonical:false, legacy:true };
   const activeKey = String(state?.activeMode || '');
@@ -4798,9 +4915,21 @@ async function translateMessagePayload(payload, forceRetranslate = false, option
       lengthRatio:Number(quality.lengthRatio.toFixed(3)),
       warnings:quality.warnings.slice(),
     });
-    // A failed local diagnosis suppresses a misleading success toast, but the
-    // first response/partial salvage remains available and no retry is made.
-    if (quality.status === 'failed') canonicalFallbackUsed = true;
+    // Reject only locally provable unsafe output before cache or DOM commit.
+    // This remains a single-call path: the current source (or prior good cache)
+    // stays visible and no automatic retry is attempted.
+    if (chatTranslationQualityBlocksDisplay(quality, canonicalRecord)) {
+      canonicalFallbackUsed = true;
+      logDebug({
+        type:'translation-quality-rejected',
+        status:quality.status,
+        totalUnits:quality.totalUnits,
+        recoveredUnits:quality.recoveredUnits,
+        missingUnits:quality.missingUnits,
+        warnings:quality.warnings.slice(),
+      });
+      result = '';
+    }
   } catch (e) {
     logDebug({ type:'translation-error', engine:translationEngineLabel(), kind, error:e?.message || String(e), sourceLength:String(original || '').length });
     if (!options.silent) toast(`번역 실패: ${e?.message || e}`, 'error');
