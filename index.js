@@ -2140,9 +2140,56 @@ function canonicalRawInternalMarkerCount(value = '', plan = null) {
 function sanitizeCanonicalFallback(value = '', plan = null) {
   let out = stripCanonicalMarkers(value, plan);
   const source = String(plan?.source || '');
-  const stripped = canonicalStripExpectedPduBlocks(out, source);
-  if (!stripped.ok || canonicalPduSuspiciousRanges(stripped.text).length) return source;
-  return cleanCanonicalInternalFormatTokens(out, source);
+  // Keep exact source-authored PDU-looking text, but strip any other damaged
+  // marker residue from the model's first response. A fallback is allowed to
+  // lose canonical alignment; it must not lose the paid translation payload.
+  const protectedBlocks = [];
+  let protectedCursor = 0;
+  for (const [index, block] of canonicalSourcePduBlocks(source).entries()) {
+    const at = out.indexOf(block.text, protectedCursor);
+    if (at < protectedCursor) continue;
+    let token = `\uE000PD_SOURCE_PDU_${index}\uE001`;
+    while (out.includes(token)) token += '_';
+    out = out.slice(0, at) + token + out.slice(at + block.text.length);
+    protectedBlocks.push({ token, text:block.text });
+    protectedCursor = at + token.length;
+  }
+  const currentFamilyMarker = canonicalLooseFamilyMarkerPattern(plan, 'gi', false);
+  if (currentFamilyMarker) out = out.replace(currentFamilyMarker, '');
+  out = out.replace(canonicalLiteralPduMarkerPattern('gi'), '');
+  const residueRanges = canonicalPduSuspiciousRanges(out, String(plan?.family || ''));
+  for (const range of residueRanges.sort((a, b) => b.start - a.start || b.end - a.end)) {
+    out = out.slice(0, range.start) + out.slice(range.end);
+  }
+  for (const block of protectedBlocks) out = out.split(block.token).join(block.text);
+  return cleanCanonicalInternalFormatTokens(out, source).trim();
+}
+
+function canonicalUnalignedFallbackRecord(value = '', plan = null, engine = '', seed = null) {
+  const source = String(plan?.source || '');
+  const items = Array.isArray(plan?.items) ? plan.items : [];
+  const received = String(value || '');
+  if (!received.trim()) return null;
+  const plainKorean = sanitizeCanonicalFallback(received, plan) || source;
+  if (!plainKorean) return null;
+  return {
+    ...(seed && typeof seed === 'object' && !Array.isArray(seed) ? seed : {}),
+    schema:1,
+    source,
+    sourceHash:hash(source),
+    engine:String(engine || seed?.engine || 'profile'),
+    complete:false,
+    partial:false,
+    plainKorean,
+    units:[],
+    groups:plan?.groups || {},
+    infoRanges:Array.isArray(plan?.infoRanges) ? plan.infoRanges : [],
+    totalUnits:items.length,
+    recoveredUnits:0,
+    missingUnits:items.length,
+    missingGroups:canonicalMissingGroups(items, []),
+    generatedAt:Number(seed?.generatedAt || Date.now()),
+  };
 }
 
 function canonicalSkeletonGapMatches(actual = '', expected = '') {
@@ -2658,12 +2705,10 @@ function renderCanonicalTranslation(record = null, key = translationCacheKey(set
   // Fresh and cached aligned records have already passed per-unit token checks.
   // Do not count-clean their final projections: bilingual/separate modes may
   // intentionally reproduce a trusted source literal more than once.
+  const fallbackPlan = aligned ? null : createCanonicalTranslationPlan(String(record?.source || ''));
   const finish = value => aligned
     ? String(value || '')
-    : cleanCanonicalUnexpectedPduTokens(
-      cleanCanonicalInternalFormatTokens(String(value || ''), String(record?.source || '')),
-      String(record?.source || ''),
-    );
+    : sanitizeCanonicalFallback(String(value || ''), fallbackPlan);
   if (!aligned) return finish(record.plainKorean || '');
   if (!Array.isArray(record.units) || !record.units.length) return finish(record.source || record.plainKorean || '');
   const spec = canonicalDisplaySpecFromKey(key);
@@ -2860,14 +2905,14 @@ function analyzeChatTranslationQuality(record = null, plan = null, rawResult = '
   };
 }
 
-function chatTranslationQualityBlocksDisplay(quality = null, record = null) {
+function chatTranslationQualityNeedsFallback(quality = null, record = null) {
   const warnings = Array.isArray(quality?.warnings) ? quality.warnings : [];
-  const blockingWarnings = new Set([
+  const fallbackWarnings = new Set([
     'empty-output', 'korean-missing', 'excessive-source-language', 'long-english-prefix',
     'meta-preamble', 'refusal', 'roleplay-continuation', 'internal-token-leak',
     'unaligned-structured-output',
   ]);
-  if (warnings.some(code => blockingWarnings.has(code))) return true;
+  if (warnings.some(code => fallbackWarnings.has(code))) return true;
   return record?.partial === true
     && Number(quality?.unitCoverage || 0) < CHAT_TRANSLATION_QUALITY_LIMITS.degradedCoverageMin;
 }
@@ -3769,36 +3814,25 @@ function canonicalRecordForState(state = null, preferredKey = '') {
   if (canonicalRecordValid(record, source)) {
     const plan = createCanonicalTranslationPlan(source);
     const quality = analyzeChatTranslationQuality(record, plan, String(record?.plainKorean || ''));
-    return chatTranslationQualityBlocksDisplay(quality, record) ? null : record;
+    if (!chatTranslationQualityNeedsFallback(quality, record)) return record;
+    return canonicalUnalignedFallbackRecord(record.plainKorean, plan, record.engine, record);
   }
-  // Never turn a damaged aligned partial into its already assembled mixed text:
-  // old gapped partial caches can contain correctly numbered but shifted bodies.
+  // Old gapped partial caches no longer contain the original model payload;
+  // their assembled mixed text cannot be safely demoted after the fact.
   if (record?.partial === true) return null;
   if (record?.complete === true && Array.isArray(record?.units)
     && record.units.some(unit => !canonicalUnitTranslationUsable(unit?.sourceText, unit?.ko))) return null;
-  // If only stored assembly metadata was damaged, keep the first AI response visible as
-  // one unstructured translation. Source/hash mismatch is still rejected outright.
+  // Damaged alignment metadata is never trusted as coordinates. Preserve its
+  // non-empty first-response text as one unaligned fallback instead; source/hash
+  // mismatch is still rejected outright so swipe caches cannot cross messages.
   if (record?.schema === 1
     && source
     && record?.source === source
     && record?.sourceHash === hash(source)
     && typeof record?.plainKorean === 'string'
     && record.plainKorean.trim()) {
-    const fallbackRecord = {
-      ...record,
-      complete:false,
-      partial:false,
-      plainKorean:sanitizeCanonicalFallback(record.plainKorean, createCanonicalTranslationPlan(source)),
-      units:[],
-      recoveredUnits:0,
-      missingUnits:Number(record?.totalUnits || 0),
-      missingGroups:{},
-      groups:{},
-      infoRanges:[],
-    };
     const plan = createCanonicalTranslationPlan(source);
-    const quality = analyzeChatTranslationQuality(fallbackRecord, plan, fallbackRecord.plainKorean);
-    return chatTranslationQualityBlocksDisplay(quality, fallbackRecord) ? null : fallbackRecord;
+    return canonicalUnalignedFallbackRecord(record.plainKorean, plan, record.engine, record);
   }
   return null;
 }
@@ -4915,20 +4949,25 @@ async function translateMessagePayload(payload, forceRetranslate = false, option
       lengthRatio:Number(quality.lengthRatio.toFixed(3)),
       warnings:quality.warnings.slice(),
     });
-    // Reject only locally provable unsafe output before cache or DOM commit.
-    // This remains a single-call path: the current source (or prior good cache)
-    // stays visible and no automatic retry is attempted.
-    if (chatTranslationQualityBlocksDisplay(quality, canonicalRecord)) {
+    // Quality findings choose the safe representation; they never discard a
+    // non-empty first response or trigger another request. If alignment is not
+    // trustworthy, store and show the sanitized payload as one Korean fallback.
+    if (chatTranslationQualityNeedsFallback(quality, canonicalRecord)) {
       canonicalFallbackUsed = true;
+      const fallbackRecord = canonicalUnalignedFallbackRecord(rawResult, canonicalPlan, translationEngineKey(), canonicalRecord);
       logDebug({
-        type:'translation-quality-rejected',
+        type:'translation-quality-fallback',
         status:quality.status,
         totalUnits:quality.totalUnits,
         recoveredUnits:quality.recoveredUnits,
         missingUnits:quality.missingUnits,
         warnings:quality.warnings.slice(),
       });
-      result = '';
+      if (fallbackRecord) {
+        canonicalRecord = fallbackRecord;
+        renderedKey = translationCacheKey(settings.chatMode || 'full');
+        result = renderCanonicalTranslation(canonicalRecord, renderedKey);
+      }
     }
   } catch (e) {
     logDebug({ type:'translation-error', engine:translationEngineLabel(), kind, error:e?.message || String(e), sourceLength:String(original || '').length });
