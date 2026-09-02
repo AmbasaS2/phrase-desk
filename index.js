@@ -685,6 +685,7 @@ function cloneCanonicalRecord(record = null) {
   return {
     ...record,
     units:Array.isArray(record.units) ? record.units.map(unit => ({ ...unit })) : [],
+    fallbackAnchors:Array.isArray(record.fallbackAnchors) ? record.fallbackAnchors.map(anchor => ({ ...anchor })) : [],
     groups:Object.fromEntries(Object.entries(record.groups || {}).map(([name, ranges]) => [
       name,
       Array.isArray(ranges) ? ranges.map(range => ({ ...range })) : [],
@@ -2165,6 +2166,68 @@ function sanitizeCanonicalFallback(value = '', plan = null) {
   return cleanCanonicalInternalFormatTokens(out, source).trim();
 }
 
+function canonicalFallbackAnchorsFromIntervals(value = '', plan = null, intervals = []) {
+  const received = String(value || '');
+  const usable = (Array.isArray(intervals) ? intervals : [])
+    .filter(interval => interval?.candidate && !interval?.invalid && interval?.open && interval?.close)
+    .sort((a, b) => a.open.start - b.open.start || a.close.end - b.close.end);
+  const plain = sanitizeCanonicalFallback(received, plan);
+  if (!plain || !usable.length) return { text:plain, anchors:[] };
+
+  const sentinels = usable.map((interval, index) => {
+    let open = `\uE120${index.toString(36)}\uE121`;
+    let close = `\uE122${index.toString(36)}\uE123`;
+    while (received.includes(open) || received.includes(close)) {
+      open += '\uE124';
+      close += '\uE125';
+    }
+    return { interval, open, close };
+  });
+  let staged = received;
+  for (const entry of sentinels.slice().sort((a, b) => b.interval.open.start - a.interval.open.start)) {
+    staged = staged.slice(0, entry.interval.close.start) + entry.close + staged.slice(entry.interval.close.end);
+    staged = staged.slice(0, entry.interval.open.start) + entry.open + staged.slice(entry.interval.open.end);
+  }
+  const cleaned = sanitizeCanonicalFallback(staged, plan);
+  if (!cleaned) return { text:plain, anchors:[] };
+
+  const anchors = [];
+  let text = '';
+  let cursor = 0;
+  for (const entry of sentinels) {
+    const openAt = cleaned.indexOf(entry.open, cursor);
+    const bodyStart = openAt >= cursor ? openAt + entry.open.length : -1;
+    const closeAt = bodyStart >= 0 ? cleaned.indexOf(entry.close, bodyStart) : -1;
+    if (openAt < cursor || closeAt < bodyStart) return { text:plain, anchors:[] };
+    text += cleaned.slice(cursor, openAt);
+    const body = cleaned.slice(bodyStart, closeAt);
+    const leading = body.match(/^\s*/)?.[0].length || 0;
+    const trailing = body.match(/\s*$/)?.[0].length || 0;
+    const coreEnd = trailing ? body.length - trailing : body.length;
+    const core = body.slice(leading, coreEnd);
+    const start = text.length + leading;
+    text += body;
+    const end = start + core.length;
+    anchors.push({ id:String(entry.interval.item?.id || ''), start, end });
+    cursor = closeAt + entry.close.length;
+  }
+  text += cleaned.slice(cursor);
+  if (text !== plain) return { text:plain, anchors:[] };
+  const unitById = new Map(usable.map(interval => [String(interval.item?.id || ''), String(interval.ko || '')]));
+  const valid = anchors.every((anchor, index) => {
+    const previous = anchors[index - 1];
+    return !!anchor.id
+      && Number.isSafeInteger(anchor.start)
+      && Number.isSafeInteger(anchor.end)
+      && anchor.start >= 0
+      && anchor.end > anchor.start
+      && anchor.end <= text.length
+      && (!previous || anchor.start >= previous.end)
+      && text.slice(anchor.start, anchor.end) === unitById.get(anchor.id);
+  });
+  return valid ? { text, anchors } : { text:plain, anchors:[] };
+}
+
 function canonicalUnalignedFallbackRecord(value = '', plan = null, engine = '', seed = null) {
   const source = String(plan?.source || '');
   const items = Array.isArray(plan?.items) ? plan.items : [];
@@ -2181,6 +2244,8 @@ function canonicalUnalignedFallbackRecord(value = '', plan = null, engine = '', 
     complete:false,
     partial:false,
     plainKorean,
+    fallbackKorean:plainKorean,
+    fallbackAnchors:[],
     units:[],
     groups:plan?.groups || {},
     infoRanges:Array.isArray(plan?.infoRanges) ? plan.infoRanges : [],
@@ -2190,16 +2255,6 @@ function canonicalUnalignedFallbackRecord(value = '', plan = null, engine = '', 
     missingGroups:canonicalMissingGroups(items, []),
     generatedAt:Number(seed?.generatedAt || Date.now()),
   };
-}
-
-function canonicalSkeletonGapMatches(actual = '', expected = '') {
-  const received = String(actual || '');
-  const source = String(expected || '');
-  if (received === source) return true;
-  // Whitespace-only skeleton is not translated content. If both sides contain
-  // nothing but ASCII layout whitespace, the renderer can deterministically put
-  // the exact source gap back; punctuation, tags, or text still require equality.
-  return /^[ \t\n]*$/.test(received) && /^[ \t\n]*$/.test(source);
 }
 
 function salvageCanonicalTranslationResult(received = '', plan = null, base = null) {
@@ -2301,42 +2356,15 @@ function salvageCanonicalTranslationResult(received = '', plan = null, base = nu
     }
   }
 
-  // Validate only skeleton edges whose source position is knowable without
-  // crossing a missing unit: outer edges and gaps between consecutive units.
+  // Marker IDs, order, non-overlap, and body validation identify the recovered
+  // source beats. The model-authored gaps are deliberately not trusted: Phrase
+  // Desk restores source punctuation/Markdown locally for aligned views and
+  // keeps the sanitized whole response separately for missing beats.
   const candidates = intervals.filter(interval => interval.candidate && !interval.invalid);
-  const skeletonInvalid = new Set();
-  const first = candidates.find(interval => interval.index === 0);
-  if (first && !canonicalSkeletonGapMatches(response.slice(0, first.open.start), source.slice(0, first.item.start))) skeletonInvalid.add(first.index);
-  const last = candidates.find(interval => interval.index === items.length - 1);
-  if (last && !canonicalSkeletonGapMatches(response.slice(last.close.end), source.slice(last.item.end))) skeletonInvalid.add(last.index);
-  for (let index = 0; index < items.length - 1; index++) {
-    const left = candidates.find(interval => interval.index === index);
-    const right = candidates.find(interval => interval.index === index + 1);
-    if (!left || !right) continue;
-    const actualGap = response.slice(left.close.end, right.open.start);
-    const expectedGap = source.slice(left.item.end, right.item.start);
-    if (!canonicalSkeletonGapMatches(actualGap, expectedGap)) {
-      skeletonInvalid.add(left.index);
-      skeletonInvalid.add(right.index);
-    }
-  }
-  for (const candidate of candidates) {
-    if (skeletonInvalid.has(candidate.index)) candidate.invalid = true;
-  }
-
-  // After the first missing or invalid unit, later bodies may have shifted under
-  // otherwise valid marker IDs. Structure alone cannot prove their semantics, so
-  // salvage only the validated prefix anchored at the beginning of the source.
-  const candidateByIndex = new Map(
-    candidates.filter(candidate => !candidate.invalid).map(candidate => [candidate.index, candidate]),
-  );
-  const safePrefix = [];
-  for (let index = 0; index < items.length; index++) {
-    const candidate = candidateByIndex.get(index);
-    if (!candidate) break;
-    safePrefix.push(candidate);
-  }
-  const recovered = safePrefix.map(({ item, ko }) => ({
+  const recoveredCandidates = candidates
+    .filter(candidate => !candidate.invalid)
+    .sort((a, b) => a.index - b.index);
+  const recovered = recoveredCandidates.map(({ item, ko }) => ({
       id:item.id,
       start:item.start,
       end:item.end,
@@ -2360,7 +2388,12 @@ function salvageCanonicalTranslationResult(received = '', plan = null, base = nu
     missingUnits:Math.max(0, items.length - recovered.length),
     missingGroups:canonicalMissingGroups(items, recovered),
   });
-  aligned.plainKorean = renderCanonicalRange(aligned, 0, aligned.source.length).trim();
+  const fallback = canonicalFallbackAnchorsFromIntervals(response, plan, recoveredCandidates);
+  aligned.fallbackKorean = fullyRecovered ? '' : (fallback.text || base.plainKorean);
+  aligned.fallbackAnchors = fullyRecovered ? [] : fallback.anchors;
+  aligned.plainKorean = fullyRecovered
+    ? renderCanonicalRange(aligned, 0, aligned.source.length).trim()
+    : aligned.fallbackKorean;
   // A fully recovered salvage is complete only when its rebuilt canonical
   // record also passes persisted-record validation. Flipping an invalid full
   // record to partial cannot make its common invariants valid, so fall back to
@@ -2428,7 +2461,7 @@ function parseCanonicalTranslationResult(value = '', plan = null, engine = trans
   for (const item of items) {
     const openAt = received.indexOf(item.openMarker, cursor);
     const expectedOpenAt = expectedPrompt.indexOf(item.openMarker, expectedCursor);
-    if (expectedOpenAt < expectedCursor || received.slice(cursor, openAt) !== expectedPrompt.slice(expectedCursor, expectedOpenAt)) return salvage();
+    if (expectedOpenAt < expectedCursor) return salvage();
     const bodyStart = openAt + item.openMarker.length;
     const closeAt = openAt >= 0 ? received.indexOf(item.closeMarker, bodyStart) : -1;
     const expectedBodyStart = expectedOpenAt + item.openMarker.length;
@@ -2463,7 +2496,6 @@ function parseCanonicalTranslationResult(value = '', plan = null, engine = trans
     cursor = closeAt + item.closeMarker.length;
     expectedCursor = expectedCloseAt + item.closeMarker.length;
   }
-  if (received.slice(cursor) !== expectedPrompt.slice(expectedCursor)) return salvage();
   const complete = Object.assign(base, {
     complete:true,
     partial:false,
@@ -2474,6 +2506,31 @@ function parseCanonicalTranslationResult(value = '', plan = null, engine = trans
   });
   complete.plainKorean = renderCanonicalRange(complete, 0, complete.source.length).trim();
   return complete;
+}
+
+function canonicalPartialFallbackValid(record = null, plan = null) {
+  if (record?.partial !== true) return false;
+  const fallback = String(record?.fallbackKorean || '');
+  if (!fallback || String(record?.plainKorean || '') !== fallback) return false;
+  if (sanitizeCanonicalFallback(fallback, plan) !== fallback) return false;
+  const anchors = Array.isArray(record?.fallbackAnchors) ? record.fallbackAnchors : [];
+  if (!anchors.length) return true;
+  const unitById = new Map((Array.isArray(record?.units) ? record.units : []).map(unit => [String(unit?.id || ''), unit]));
+  const seen = new Set();
+  let cursor = 0;
+  for (const anchor of anchors) {
+    const id = String(anchor?.id || '');
+    const start = Number(anchor?.start);
+    const end = Number(anchor?.end);
+    const unit = unitById.get(id);
+    if (!id || seen.has(id) || !unit
+      || !Number.isSafeInteger(start) || !Number.isSafeInteger(end)
+      || start < cursor || end <= start || end > fallback.length
+      || fallback.slice(start, end) !== String(unit.ko || '')) return false;
+    seen.add(id);
+    cursor = end;
+  }
+  return true;
 }
 
 function canonicalRecordValid(record = null, original = '', engine = '') {
@@ -2510,7 +2567,6 @@ function canonicalRecordValid(record = null, original = '', engine = '') {
     const matched = expectedById.get(String(unit?.id || ''));
     const item = matched?.item;
     if (!item || matched.index <= previousPlanIndex) return false;
-    if (partial && matched.index !== index) return false;
     previousPlanIndex = matched.index;
     if (!unit || !Number.isSafeInteger(unit.start) || !Number.isSafeInteger(unit.end)) return false;
     if (unit.start < 0 || unit.start >= unit.end || unit.end > source.length) return false;
@@ -2558,9 +2614,10 @@ function canonicalRecordValid(record = null, original = '', engine = '') {
   if (!sameRanges(record?.groups?.quote, plan?.groups?.quote, ['id', 'start', 'end', 'bodyStart', 'bodyEnd', 'open', 'close'])) return false;
   if (!sameRanges(record?.infoRanges, plan?.infoRanges, ['start', 'end'])) return false;
   const rendered = renderCanonicalRange(record, 0, source.length).trim();
-  if (rendered !== record.plainKorean) return false;
-  return canonicalUnexpectedInternalMarkerCount(rendered, plan) === 0
-    && canonicalUnexpectedInternalFormatTokenCount(rendered, source) === 0;
+  const persisted = partial ? String(record.fallbackKorean || '') : rendered;
+  if (partial ? !canonicalPartialFallbackValid(record, plan) : rendered !== record.plainKorean) return false;
+  return canonicalUnexpectedInternalMarkerCount(persisted, plan) === 0
+    && canonicalUnexpectedInternalFormatTokenCount(persisted, source) === 0;
 }
 
 function renderCanonicalRange(record = null, start = 0, end = null) {
@@ -2578,6 +2635,70 @@ function renderCanonicalRange(record = null, start = 0, end = null) {
     cursor = unit.end;
   }
   out += source.slice(cursor, to);
+  return out;
+}
+
+function renderCanonicalPartialDialogue(record = null) {
+  const fallback = String(record?.fallbackKorean || record?.plainKorean || '');
+  if (!fallback || record?.partial !== true) return fallback;
+  const plan = createCanonicalTranslationPlan(String(record?.source || ''));
+  if (!canonicalPartialFallbackValid(record, plan)) return fallback;
+  const anchors = Array.isArray(record?.fallbackAnchors) ? record.fallbackAnchors : [];
+  if (!anchors.length) return fallback;
+  const anchorById = new Map(anchors.map(anchor => [String(anchor?.id || ''), anchor]));
+  const recoveredIds = new Set((Array.isArray(record?.units) ? record.units : []).map(unit => String(unit?.id || '')));
+  const outputQuotes = orderedQuotationSpans(fallback);
+  const replacements = [];
+  const usedOutputQuotes = new Set();
+  const hasHumanText = value => /[\p{L}\p{N}]/u.test(String(value || ''));
+
+  for (const quote of Array.isArray(record?.groups?.quote) ? record.groups.quote : []) {
+    const expectedIds = (Array.isArray(plan?.items) ? plan.items : [])
+      .filter(item => Number(item?.quoteId) === Number(quote?.id))
+      .map(item => String(item.id));
+    if (!expectedIds.length || expectedIds.some(id => !recoveredIds.has(id) || !anchorById.has(id))) continue;
+    const quoteAnchors = expectedIds.map(id => anchorById.get(id)).sort((a, b) => a.start - b.start || a.end - b.end);
+    const first = quoteAnchors[0];
+    const last = quoteAnchors[quoteAnchors.length - 1];
+    const containsOnlyExpectedAnchorText = span => {
+      const bodyStart = span.start + String(span.open || '').length;
+      const bodyEnd = span.end - String(span.close || '').length;
+      let cursor = bodyStart;
+      for (const anchor of quoteAnchors) {
+        if (anchor.start < cursor || anchor.end > bodyEnd) return false;
+        if (hasHumanText(fallback.slice(cursor, anchor.start))) return false;
+        cursor = anchor.end;
+      }
+      return !hasHumanText(fallback.slice(cursor, bodyEnd));
+    };
+    const candidates = outputQuotes
+      .map((span, index) => ({ span, index }))
+      .filter(({ span, index }) => !usedOutputQuotes.has(index) && span.start < first.start && span.end > last.end)
+      .filter(({ span }) => !anchors.some(anchor => (
+        !expectedIds.includes(String(anchor.id))
+        && anchor.start < span.end
+        && anchor.end > span.start
+      )))
+      .filter(({ span }) => containsOnlyExpectedAnchorText(span));
+    if (candidates.length !== 1) continue;
+    const { span, index } = candidates[0];
+    const source = String(record?.source || '');
+    const sourceBody = source.slice(Number(quote.bodyStart), Number(quote.bodyEnd));
+    const koreanBody = renderCanonicalRange(record, Number(quote.bodyStart), Number(quote.bodyEnd)).trim();
+    if (!sourceBody || !koreanBody) continue;
+    const separator = /\s$/.test(sourceBody) ? '' : ' ';
+    replacements.push({
+      start:span.start,
+      end:span.end,
+      text:`${quote.open}${sourceBody}${separator}[${koreanBody}]${quote.close}`,
+    });
+    usedOutputQuotes.add(index);
+  }
+
+  let out = fallback;
+  for (const replacement of replacements.sort((a, b) => b.start - a.start || b.end - a.end)) {
+    out = out.slice(0, replacement.start) + replacement.text + out.slice(replacement.end);
+  }
   return out;
 }
 
@@ -2701,6 +2822,12 @@ function canonicalEngineFromKey(key = '') {
 
 function renderCanonicalTranslation(record = null, key = translationCacheKey(settings.chatMode || 'full')) {
   if (!record) return '';
+  const spec = canonicalDisplaySpecFromKey(key);
+  if (record?.partial === true && String(record?.fallbackKorean || '').trim()) {
+    return spec.kind === 'dialogue'
+      ? renderCanonicalPartialDialogue(record)
+      : String(record.fallbackKorean || record.plainKorean || '');
+  }
   const aligned = canonicalRecordAligned(record);
   // Fresh and cached aligned records have already passed per-unit token checks.
   // Do not count-clean their final projections: bilingual/separate modes may
@@ -2711,7 +2838,6 @@ function renderCanonicalTranslation(record = null, key = translationCacheKey(set
     : sanitizeCanonicalFallback(String(value || ''), fallbackPlan);
   if (!aligned) return finish(record.plainKorean || '');
   if (!Array.isArray(record.units) || !record.units.length) return finish(record.source || record.plainKorean || '');
-  const spec = canonicalDisplaySpecFromKey(key);
   if (spec.kind === 'ko') return finish(renderCanonicalRange(record, 0, record.source.length));
   if (spec.kind === 'dialogue') return finish(renderCanonicalDialogue(record));
   if (spec.style === 'separate') {
@@ -2915,6 +3041,19 @@ function chatTranslationQualityNeedsFallback(quality = null, record = null) {
   if (warnings.some(code => fallbackWarnings.has(code))) return true;
   return record?.partial === true
     && Number(quality?.unitCoverage || 0) < CHAT_TRANSLATION_QUALITY_LIMITS.degradedCoverageMin;
+}
+function canonicalQualityNeedsRepresentationFallback(quality = null, record = null, plan = null) {
+  if (!chatTranslationQualityNeedsFallback(quality, record)) return false;
+  const canonicalPlan = plan || createCanonicalTranslationPlan(String(record?.source || ''));
+  // Once every exact PDU is valid, all model-authored material outside those
+  // bodies is untrusted decoration. Quality warnings about such a preamble or
+  // changed skeleton remain diagnostic and must not discard local reconstruction.
+  if (record?.complete === true
+    && canonicalRecordValid(record, String(record?.source || ''), record?.engine)) return false;
+  // A valid partial already carries the sanitized whole response. Its guarded
+  // renderer decides which anchored quotes can be bilingual without data loss.
+  if (record?.partial === true && canonicalPartialFallbackValid(record, canonicalPlan)) return false;
+  return true;
 }
 function buildGoogleDialogueFromWholeTranslation(source = '', korean = '') {
   const src = String(source || '').replace(/\r\n/g, '\n');
@@ -3814,12 +3953,27 @@ function canonicalRecordForState(state = null, preferredKey = '') {
   if (canonicalRecordValid(record, source)) {
     const plan = createCanonicalTranslationPlan(source);
     const quality = analyzeChatTranslationQuality(record, plan, String(record?.plainKorean || ''));
-    if (!chatTranslationQualityNeedsFallback(quality, record)) return record;
+    if (!canonicalQualityNeedsRepresentationFallback(quality, record, plan)) return record;
     return canonicalUnalignedFallbackRecord(record.plainKorean, plan, record.engine, record);
   }
-  // Old gapped partial caches no longer contain the original model payload;
-  // their assembled mixed text cannot be safely demoted after the fact.
-  if (record?.partial === true) return null;
+  // New partial records retain the sanitized whole model response separately.
+  // If only their alignment/anchor metadata is damaged, preserve that payload as
+  // an unaligned Korean fallback. Old gapped partial caches have no such payload
+  // and therefore still cannot be reconstructed safely.
+  if (record?.partial === true) {
+    const fallback = String(record?.fallbackKorean || '');
+    if (record?.schema === 1
+      && source
+      && record?.source === source
+      && record?.sourceHash === hash(source)
+      && fallback.trim()) {
+      const plan = createCanonicalTranslationPlan(source);
+      if (sanitizeCanonicalFallback(fallback, plan) === fallback) {
+        return canonicalUnalignedFallbackRecord(fallback, plan, record.engine, record);
+      }
+    }
+    return null;
+  }
   if (record?.complete === true && Array.isArray(record?.units)
     && record.units.some(unit => !canonicalUnitTranslationUsable(unit?.sourceText, unit?.ko))) return null;
   // Damaged alignment metadata is never trusted as coordinates. Preserve its
@@ -4952,9 +5106,13 @@ async function translateMessagePayload(payload, forceRetranslate = false, option
     // Quality findings choose the safe representation; they never discard a
     // non-empty first response or trigger another request. If alignment is not
     // trustworthy, store and show the sanitized payload as one Korean fallback.
-    if (chatTranslationQualityNeedsFallback(quality, canonicalRecord)) {
+    if (canonicalQualityNeedsRepresentationFallback(quality, canonicalRecord, canonicalPlan)) {
       canonicalFallbackUsed = true;
-      const fallbackRecord = canonicalUnalignedFallbackRecord(rawResult, canonicalPlan, translationEngineKey(), canonicalRecord);
+      const keepPartial = canonicalRecord?.partial === true
+        && canonicalPartialFallbackValid(canonicalRecord, canonicalPlan);
+      const fallbackRecord = keepPartial
+        ? canonicalRecord
+        : canonicalUnalignedFallbackRecord(rawResult, canonicalPlan, translationEngineKey(), canonicalRecord);
       logDebug({
         type:'translation-quality-fallback',
         status:quality.status,
