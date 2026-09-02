@@ -1669,6 +1669,142 @@ function canonicalMarkdownLinkRanges(value = '') {
   return ranges;
 }
 
+function canonicalMarkdownFormatMarkers(value = '') {
+  const source = String(value || '').replace(/\r\n/g, '\n');
+  const markers = [];
+  const occupied = new Set(canonicalInternalFormatTokens(source).map(token => token.toLowerCase()));
+  let tokenIndex = 0;
+  const nextToken = () => {
+    let token = '';
+    do token = `⟦PD_FMT_${(tokenIndex++).toString(36)}⟧`;
+    while (occupied.has(token.toLowerCase()) || source.includes(token));
+    occupied.add(token.toLowerCase());
+    return token;
+  };
+  const emphasis = /(\*{1,3}|_{1,2}|~~)(?=\S)([^\n]*?\S)\1/g;
+  let match;
+  while ((match = emphasis.exec(source))) {
+    const raw = String(match[1] || '');
+    const openStart = match.index;
+    const closeStart = match.index + match[0].length - raw.length;
+    if (!raw || isEscapedSourceChar(source, openStart) || isEscapedSourceChar(source, closeStart)) continue;
+    markers.push({ start:openStart, end:openStart + raw.length, raw, token:nextToken() });
+    markers.push({ start:closeStart, end:closeStart + raw.length, raw, token:nextToken() });
+  }
+  return markers.sort((a, b) => a.start - b.start || a.end - b.end);
+}
+
+function canonicalPromptTextForRange(source = '', start = 0, end = 0, formatMarkers = []) {
+  const from = Math.max(0, Number(start) || 0);
+  const to = Math.max(from, Number(end) || 0);
+  const relevant = (Array.isArray(formatMarkers) ? formatMarkers : [])
+    .filter(marker => marker.start >= from && marker.end <= to)
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+  let text = String(source || '').slice(from, to);
+  for (const marker of relevant.slice().sort((a, b) => b.start - a.start || b.end - a.end)) {
+    const localStart = marker.start - from;
+    const localEnd = marker.end - from;
+    text = text.slice(0, localStart) + marker.token + text.slice(localEnd);
+  }
+  return {
+    text,
+    formatTokens:relevant.map(marker => ({ token:marker.token, raw:marker.raw })),
+  };
+}
+
+function restoreCanonicalItemFormatTokens(value = '', item = null) {
+  let out = String(value || '');
+  for (const entry of Array.isArray(item?.formatTokens) ? item.formatTokens : []) {
+    const token = String(entry?.token || '');
+    if (!token) continue;
+    out = out.replace(token, String(entry?.raw || ''));
+  }
+  return out;
+}
+
+function restoreCanonicalPlanFormatTokens(value = '', plan = null) {
+  let out = String(value || '');
+  for (const item of Array.isArray(plan?.items) ? plan.items : []) {
+    const entries = Array.isArray(item?.formatTokens) ? item.formatTokens : [];
+    for (let index = 0; index < entries.length; index += 2) {
+      const pair = entries.slice(index, index + 2).filter(entry => String(entry?.token || ''));
+      if (!pair.length) continue;
+      const completePair = pair.length === 2 && pair.every(entry => out.split(String(entry.token)).length - 1 === 1);
+      for (const entry of pair) {
+        const token = String(entry.token);
+        out = completePair
+          ? out.replace(token, String(entry?.raw || ''))
+          : out.split(token).join('');
+      }
+    }
+  }
+  return out;
+}
+
+function canonicalRawMarkdownDelimiterTokens(value = '') {
+  const source = String(value || '').replace(/\r\n/g, '\n')
+    .replace(/(?:⟦\s*PD_FMT_[0-9a-z]+\s*⟧|\[\[?\s*PD_FMT_[0-9a-z]+\s*\]?\]|【\s*PD_FMT_[0-9a-z]+\s*】|\{\{\s*PD_FMT_[0-9a-z]+\s*\}\}|<\s*PD_FMT_[0-9a-z]+\s*>|\bPD_FMT_[0-9a-z]+\b)/gi, '');
+  const tokens = [];
+  for (let index = 0; index < source.length; index++) {
+    if (isEscapedSourceChar(source, index)) continue;
+    if (source[index] === '*') {
+      let end = index + 1;
+      while (source[end] === '*') end += 1;
+      tokens.push(source.slice(index, end));
+      index = end - 1;
+    } else if (source[index] === '~' && source[index + 1] === '~') {
+      tokens.push('~~');
+      index += 1;
+    } else if (source[index] === '_') {
+      let end = index + 1;
+      while (source[end] === '_') end += 1;
+      tokens.push(source.slice(index, end));
+      index = end - 1;
+    }
+  }
+  return tokens;
+}
+
+function canonicalMarkdownDelimiterSequenceMatches(actual = '', expected = '') {
+  const received = canonicalRawMarkdownDelimiterTokens(actual);
+  const source = canonicalRawMarkdownDelimiterTokens(expected);
+  return received.length === source.length && received.every((token, index) => token === source[index]);
+}
+
+function cleanCanonicalUnexpectedMarkdownDelimiters(actual = '', expected = '') {
+  const received = String(actual || '');
+  if (canonicalMarkdownDelimiterSequenceMatches(received, expected)) return received;
+  // Generated PD_FMT anchors are the authoritative emphasis structure. When
+  // the source body has no other raw Markdown delimiters, remove only extra
+  // model-authored delimiter runs from this one PDU body before restoration.
+  if (canonicalRawMarkdownDelimiterTokens(expected).length) return received;
+  const protectedTokens = [];
+  let staged = received.replace(/(?:⟦\s*PD_FMT_[0-9a-z]+\s*⟧|\[\[?\s*PD_FMT_[0-9a-z]+\s*\]?\]|【\s*PD_FMT_[0-9a-z]+\s*】|\{\{\s*PD_FMT_[0-9a-z]+\s*\}\}|<\s*PD_FMT_[0-9a-z]+\s*>|\bPD_FMT_[0-9a-z]+\b)/gi, token => {
+    let placeholder = `\uE180${protectedTokens.length.toString(36)}\uE181`;
+    while (received.includes(placeholder)) placeholder += '\uE182';
+    protectedTokens.push({ placeholder, token });
+    return placeholder;
+  });
+  let cleaned = '';
+  for (let index = 0; index < staged.length; index++) {
+    if (!isEscapedSourceChar(staged, index) && staged[index] === '*') {
+      while (staged[index + 1] === '*') index += 1;
+      continue;
+    }
+    if (!isEscapedSourceChar(staged, index) && staged[index] === '_') {
+      while (staged[index + 1] === '_') index += 1;
+      continue;
+    }
+    if (!isEscapedSourceChar(staged, index) && staged[index] === '~' && staged[index + 1] === '~') {
+      while (staged[index + 1] === '~') index += 1;
+      continue;
+    }
+    cleaned += staged[index];
+  }
+  for (const entry of protectedTokens) cleaned = cleaned.replace(entry.placeholder, entry.token);
+  return canonicalMarkdownDelimiterSequenceMatches(cleaned, expected) ? cleaned : received;
+}
+
 function canonicalLiteralMask(value = '', infoRanges = []) {
   const source = String(value || '').replace(/\r\n/g, '\n');
   const mask = sourceStructureMask(source);
@@ -1722,12 +1858,9 @@ function canonicalLiteralMask(value = '', infoRanges = []) {
   const email = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
   while ((match = email.exec(source))) mark(match.index, match.index + match[0].length, true);
 
-  // Keep Markdown emphasis/list delimiters in the local source skeleton.
-  const emphasis = /(\*{1,3}|_{1,2}|~~)([^\n]+?)(\1)/g;
-  while ((match = emphasis.exec(source))) {
-    mark(match.index, match.index + match[1].length, true);
-    mark(match.index + match[0].length - match[3].length, match.index + match[0].length, true);
-  }
+  // Emphasis delimiters are converted to protected PD_FMT tokens inside their
+  // semantic PDU. Marking them literal here would split one sentence into tiny
+  // fragments and invite the model to move Korean syntax across marker bodies.
   const listMarker = /^\s*(?:>{1,3}\s*|#{1,6}\s+|(?:[-*+]|\d+[.)])\s+)/gm;
   while ((match = listMarker.exec(source))) {
     mark(match.index, match.index + match[0].length, true);
@@ -1895,6 +2028,7 @@ function createCanonicalTranslationPlan(value = '') {
       close:span.close,
     }));
   const literalMask = canonicalLiteralMask(source, infoRanges);
+  const formatMarkers = canonicalMarkdownFormatMarkers(source);
   const sentenceProtection = canonicalSentenceProtectionRanges(source, quotes, infoRanges);
   const groups = {
     sentence:canonicalGroupRanges(source, 'sentence', sentenceProtection),
@@ -1929,11 +2063,14 @@ function createCanonicalTranslationPlan(value = '') {
     if (literalMask.slice(start, end).every(Boolean)) continue;
     const id = String(items.length + 1).padStart(4, '0');
     const quote = quotes.find(range => start >= range.bodyStart && end <= range.bodyEnd);
+    const prompt = canonicalPromptTextForRange(source, start, end, formatMarkers);
     items.push({
       id,
       start,
       end,
       sourceText:text,
+      promptText:prompt.text,
+      formatTokens:prompt.formatTokens,
       openMarker:`[[${family}-${id}]]`,
       closeMarker:`[[/${family}-${id}]]`,
       sentenceId:canonicalGroupIdAt(groups.sentence, start, end),
@@ -1948,7 +2085,7 @@ function createCanonicalTranslationPlan(value = '') {
   let cursor = 0;
   for (const item of items) {
     promptSource += source.slice(cursor, item.start);
-    promptSource += item.openMarker + item.sourceText + item.closeMarker;
+    promptSource += item.openMarker + String(item.promptText || item.sourceText) + item.closeMarker;
     cursor = item.end;
   }
   promptSource += source.slice(cursor);
@@ -2135,11 +2272,12 @@ function canonicalRawInternalMarkerCount(value = '', plan = null) {
   return looseFamilyMarkers.length
     + familyResidues.length
     + canonicalUnexpectedInternalMarkerCount(remainder, plan)
-    + canonicalUnexpectedInternalFormatTokenCount(remainder, plan?.source || '');
+    + canonicalUnexpectedInternalFormatTokenCount(remainder, plan?.promptSource || plan?.source || '');
 }
 
 function sanitizeCanonicalFallback(value = '', plan = null) {
   let out = stripCanonicalMarkers(value, plan);
+  out = restoreCanonicalPlanFormatTokens(out, plan);
   const source = String(plan?.source || '');
   // Keep exact source-authored PDU-looking text, but strip any other damaged
   // marker residue from the model's first response. A fallback is allowed to
@@ -2313,15 +2451,19 @@ function salvageCanonicalTranslationResult(received = '', plan = null, base = nu
   for (const interval of intervals) {
     const { item, open, close } = interval;
     const body = response.slice(open.end, close.start);
-    const ko = cleanCanonicalInternalFormatTokens(body, item.sourceText).trim();
+    const promptText = String(item.promptText || item.sourceText || '');
+    const structuralBody = cleanCanonicalUnexpectedMarkdownDelimiters(body, promptText);
+    if (!canonicalMarkdownDelimiterSequenceMatches(structuralBody, promptText)) continue;
+    const tokenizedKo = cleanCanonicalInternalFormatTokens(structuralBody, promptText).trim();
+    const ko = restoreCanonicalItemFormatTokens(tokenizedKo, item).trim();
     if (!ko || !canonicalUnitTranslationUsable(item.sourceText, ko) || selectedFamilyFragment.test(body)) continue;
     const expectedLiterals = canonicalLiteralPduMarkers(item.sourceText);
-    const receivedLiterals = canonicalLiteralPduMarkers(body);
+    const receivedLiterals = canonicalLiteralPduMarkers(structuralBody);
     if (expectedLiterals.length !== receivedLiterals.length
       || expectedLiterals.some((token, markerIndex) => token !== receivedLiterals[markerIndex])
-      || canonicalUnexpectedPduResidueCount(body, item.sourceText, family) > 0) continue;
-    const expectedFormatTokens = canonicalInternalFormatTokens(item.sourceText);
-    const receivedFormatTokens = canonicalInternalFormatTokens(body);
+      || canonicalUnexpectedPduResidueCount(structuralBody, item.sourceText, family) > 0) continue;
+    const expectedFormatTokens = canonicalInternalFormatTokens(promptText);
+    const receivedFormatTokens = canonicalInternalFormatTokens(structuralBody);
     if (expectedFormatTokens.length !== receivedFormatTokens.length
       || expectedFormatTokens.some((token, markerIndex) => token !== receivedFormatTokens[markerIndex])) continue;
     interval.candidate = true;
@@ -2469,17 +2611,21 @@ function parseCanonicalTranslationResult(value = '', plan = null, engine = trans
     if (openAt < cursor || closeAt < bodyStart) return salvage();
     if (expectedCloseAt < expectedBodyStart) return salvage();
     const body = received.slice(bodyStart, closeAt);
+    const promptText = String(item.promptText || item.sourceText || '');
+    const structuralBody = cleanCanonicalUnexpectedMarkdownDelimiters(body, promptText);
     const expectedLiterals = canonicalLiteralPduMarkers(item.sourceText);
-    const receivedLiterals = canonicalLiteralPduMarkers(body);
-    const expectedFormatTokens = canonicalInternalFormatTokens(item.sourceText);
-    const receivedFormatTokens = canonicalInternalFormatTokens(body);
+    const receivedLiterals = canonicalLiteralPduMarkers(structuralBody);
+    const expectedFormatTokens = canonicalInternalFormatTokens(promptText);
+    const receivedFormatTokens = canonicalInternalFormatTokens(structuralBody);
     if (selectedFamilyFragment.test(body)
+      || !canonicalMarkdownDelimiterSequenceMatches(structuralBody, promptText)
       || expectedLiterals.length !== receivedLiterals.length
       || expectedLiterals.some((token, markerIndex) => token !== receivedLiterals[markerIndex])
-      || canonicalUnexpectedPduResidueCount(body, item.sourceText, plan.family) > 0
+      || canonicalUnexpectedPduResidueCount(structuralBody, item.sourceText, plan.family) > 0
       || expectedFormatTokens.length !== receivedFormatTokens.length
       || expectedFormatTokens.some((token, markerIndex) => token !== receivedFormatTokens[markerIndex])) return salvage();
-    const ko = cleanCanonicalInternalFormatTokens(body, item.sourceText).trim();
+    const tokenizedKo = cleanCanonicalInternalFormatTokens(structuralBody, promptText).trim();
+    const ko = restoreCanonicalItemFormatTokens(tokenizedKo, item).trim();
     if (!ko || !canonicalUnitTranslationUsable(item.sourceText, ko)) return salvage();
     translatedUnits.push({
       id:item.id,
@@ -2581,6 +2727,7 @@ function canonicalRecordValid(record = null, original = '', engine = '') {
     const expectedFormatTokens = canonicalInternalFormatTokens(item.sourceText);
     const translatedFormatTokens = canonicalInternalFormatTokens(unit.ko);
     if (selectedFamilyFragment.test(unit.ko)
+      || !canonicalMarkdownDelimiterSequenceMatches(unit.ko, item.sourceText)
       || expectedLiterals.length !== translatedLiterals.length
       || expectedLiterals.some((token, markerIndex) => token !== translatedLiterals[markerIndex])
       || canonicalUnexpectedPduResidueCount(unit.ko, item.sourceText, plan.family) > 0
@@ -3317,6 +3464,7 @@ function canonicalTranslationRules(unitCount = 0) {
     `- Emit exactly ${count} numbered PDU pair${count === 1 ? '' : 's'}; copy every opening and closing marker exactly once, unchanged, in source order.`,
     '- Fill each body once with nonempty natural Korean for only its source beat, using whole-passage/adjacent context for fluent wording. Subject omission or dependent fragments are allowed only when joined text stays clear and faithful.',
     '- Keep each beat’s facts, voice, meaningful punctuation, and conversational function in its own pair; never move or borrow meaning.',
+    '- Copy every PD_FMT token inside a body exactly once, unchanged, and keep each opening/closing token around the Korean corresponding to the source text it enclosed. PD_FMT tokens are protected formatting anchors, not text to translate, explain, delete, or move outside that body.',
     '- Copy everything outside bodies byte-for-byte: quotation, spacing, Markdown, HTML/custom tags, code, placeholders, links, and line/paragraph breaks.',
     '- Silently reread the joined bodies and smooth Korean syntax and rhythm without changing alignment.',
     '- Return only the transformed source with all PDU markers; no label, explanation, analysis, wrapper, or second version.',
