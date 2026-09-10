@@ -25,7 +25,7 @@ const IS_BETA = false;
 const SHOW_DEBUG = true;
 const MAX_TOKENS = 8000;
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.5.2";
+const PD_VERSION = "1.5.3";
 const CHAT_TRANSLATION_QUALITY_LIMITS = Object.freeze({
   partialCoverageMin:0.75,
   degradedCoverageMin:0.25,
@@ -4220,7 +4220,7 @@ function buildPrompt(text, kind, meta = {}) {
     'Natural Korean and voice',
     '- Prefer idiomatic over literal wording when both preserve the facts and effect. Use natural Korean syntax, subject omission, clause order, vocabulary, endings, and rhythm for the genre, relationship, and moment.',
     '- Render ordinary source-language wording fully into natural Korean unless it is a proper noun, established term, code, placeholder, or protected structural token. Commit to one settled Korean rendering rather than leaving draft alternatives or self-corrections in the output.',
-    '- Turn English light-verb, nominal, body-part, and abstract constructions into natural Korean actions, states, results, or relations. Interpret compression, ellipsis, idiom, figures, humor, understatement, rhetoric, challenges, invitations, mock formality, and indirect refusals by whole-scene function.',
+    '- Turn English light-verb, nominal, body-part, and abstract constructions into natural Korean actions, states, results, or relations, using idiomatic Korean wording and collocations rather than word-for-word equivalents when both preserve the same meaning and effect. Interpret compression, ellipsis, idiom, figures, humor, understatement, rhetoric, challenges, invitations, mock formality, and indirect refusals by whole-scene function.',
     '- Match source density: keep brief replies brief, implications implicit, and intentional fragments, repetition, hesitation, and interruption intact.',
     '- Keep speakers distinct in diction, rhythm, formality, intimacy, humor, aggression, vulgarity, emotion, and timing. Preserve speaker-addressee banmal/jondaetmal and deliberate shifts in politeness, distance, mock formality, or hostility.',
     '- Map slang and profanity by supported intensity and function, whether attack, exclamation, panic, frustration, play, habit, or a real break in composure.',
