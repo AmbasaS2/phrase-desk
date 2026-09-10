@@ -25,7 +25,7 @@ const IS_BETA = false;
 const SHOW_DEBUG = true;
 const MAX_TOKENS = 8000;
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.5.1";
+const PD_VERSION = "1.5.2";
 const CHAT_TRANSLATION_QUALITY_LIMITS = Object.freeze({
   partialCoverageMin:0.75,
   degradedCoverageMin:0.25,
@@ -3461,7 +3461,7 @@ function canonicalTranslationRules(unitCount = 0) {
   return [
     'Final output contract: one passage-wide Korean rendering in protected source units',
     '- First understand the whole <source_text>: meaning, causal flow, narration, voices, addressee registers, and emotional/comic timing. PDUs are storage/alignment anchors, not isolated tasks.',
-    `- Emit exactly ${count} numbered PDU pair${count === 1 ? '' : 's'}; copy every opening and closing marker exactly once, unchanged, in source order.`,
+    `- Emit exactly ${count} numbered PDU pair${count === 1 ? '' : 's'}; copy every opening and closing marker exactly once, unchanged, in source order. Treat the translation as complete only after the final closing marker has been emitted.`,
     '- Fill each body once with nonempty natural Korean for only its source beat, using whole-passage/adjacent context for fluent wording. Subject omission or dependent fragments are allowed only when joined text stays clear and faithful.',
     '- Keep each beat’s facts, voice, meaningful punctuation, and conversational function in its own pair; never move or borrow meaning.',
     '- Copy every PD_FMT token inside a body exactly once, unchanged, and keep each opening/closing token around the Korean corresponding to the source text it enclosed. PD_FMT tokens are protected formatting anchors, not text to translate, explain, delete, or move outside that body.',
@@ -4219,15 +4219,17 @@ function buildPrompt(text, kind, meta = {}) {
     '',
     'Natural Korean and voice',
     '- Prefer idiomatic over literal wording when both preserve the facts and effect. Use natural Korean syntax, subject omission, clause order, vocabulary, endings, and rhythm for the genre, relationship, and moment.',
+    '- Render ordinary source-language wording fully into natural Korean unless it is a proper noun, established term, code, placeholder, or protected structural token. Commit to one settled Korean rendering rather than leaving draft alternatives or self-corrections in the output.',
     '- Turn English light-verb, nominal, body-part, and abstract constructions into natural Korean actions, states, results, or relations. Interpret compression, ellipsis, idiom, figures, humor, understatement, rhetoric, challenges, invitations, mock formality, and indirect refusals by whole-scene function.',
     '- Match source density: keep brief replies brief, implications implicit, and intentional fragments, repetition, hesitation, and interruption intact.',
     '- Keep speakers distinct in diction, rhythm, formality, intimacy, humor, aggression, vulgarity, emotion, and timing. Preserve speaker-addressee banmal/jondaetmal and deliberate shifts in politeness, distance, mock formality, or hostility.',
     '- Map slang and profanity by supported intensity and function, whether attack, exclamation, panic, frustration, play, habit, or a real break in composure.',
     '',
     'Meaning and terminology',
-    '- Keep clear the speaker/actor, recipient, object/target, possession, direction/contact, sequence/simultaneity, cause, negation, uncertainty, intensity, and explicitness. Resolve pronouns from allowed evidence; omit subjects only when actor and target stay clear.',
+    '- Keep clear and exact the speaker/actor, recipient, object/target, possessor/possession, direction/contact, sequence/simultaneity, cause, negation, uncertainty, intensity, explicitness, and logical polarity. Resolve pronouns from allowed evidence; omit subjects only when actor and target stay clear.',
+    '- Preserve numbers, quantities, times, comparisons, and conditions exactly as expressed in the source. Keep measurements at the same numeric value and unit; translate unit names naturally when appropriate, but do not approximate, convert, or replace them with a different measure. Preserve distinctions such as “not X” vs. “not only X” and “less” vs. “more.”',
     '- Preserve conversational act and emotional direction (agreement, reluctance, teasing, sarcasm, reassurance, deflection, correction, challenge, threat, refusal), delivery manner, and source-genre/user-preference narration endings.',
-    '- Preserve established proper nouns, titles, nicknames, pet names, address forms, and recurring terms; use an established name or neutral relation when clarity requires.',
+    '- Preserve established proper nouns, titles, nicknames, pet names, address forms, and recurring terms; use established Korean renderings when supplied by allowed evidence, and otherwise keep one consistent rendering throughout the passage.',
     '- Keep neutral references neutral. Use gendered hostility, Korean kinship, or dialect only when the source or explicit preference establishes the fact/effect; never infer it otherwise.',
     '- Never turn neutral you/she/her/girl/woman into 년, 네년, 그년, 이년, 계집, 계집애, 암캐, or another gendered slur. Preserve only explicit source hostility; never intensify/add abuse, and obey terminology restrictions.',
     '',
