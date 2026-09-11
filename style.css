@@ -1948,3 +1948,13 @@ html.pd-bilingual-blur-enabled .mes_block .pd-bilingual-blur.pd-blur-revealed {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
+
+
+/* v1.5.4: active translation spinners remain clickable and act as silent cancel controls. */
+#pd-input-translate.busy,
+#pdb-input-translate.busy,
+.pd-message-translate-btn.busy,
+.pdb-message-translate-btn.busy {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
