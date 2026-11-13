@@ -10,11 +10,12 @@ permissions:
 
 jobs:
   publish:
-    if: github.repository == 'AmbasaS2/phrase-desk' && startsWith(github.event.head_commit.message, 'chore: stage verified Phrase Desk 1.6.0 release')
+    if: >-
+      github.repository == 'AmbasaS2/phrase-desk' && startsWith(github.event.head_commit.message, 'chore: stage verified Phrase Desk 1.6.0 release')
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Fetch exact staging commit and verify its parent
+      - name: Fetch exact staging commit and verify its baseline
         shell: bash
         env:
           STAGING_SHA: ${{ github.sha }}
@@ -23,11 +24,11 @@ jobs:
           git init "$RUNNER_TEMP/phrase-desk-release"
           cd "$RUNNER_TEMP/phrase-desk-release"
           git remote add origin https://github.com/AmbasaS2/phrase-desk.git
-          git fetch --depth=2 origin "$STAGING_SHA"
+          git fetch --depth=3 origin "$STAGING_SHA"
           git checkout --detach FETCH_HEAD
           test "$(git rev-parse HEAD)" = "$STAGING_SHA"
-          test "$(git rev-parse HEAD^)" = '9b236123ccd570a1c296f1c2902d82e713bac1e3'
-          test "$(git diff --name-only HEAD^ HEAD)" = '.github/workflows/phrase-desk-release-once.yml'
+          test "$(git rev-parse HEAD^)" = '2fb3346466293adab36f3ebdadbf990b9bee42e8'
+          test "$(git diff --name-only 9b236123ccd570a1c296f1c2902d82e713bac1e3 HEAD)" = '.github/workflows/phrase-desk-release-once.yml'
       - name: Fetch checksum-pinned public source patch
         shell: bash
         run: |
@@ -44,7 +45,6 @@ jobs:
           cd "$RUNNER_TEMP/phrase-desk-release"
           git apply --check --index "$RUNNER_TEMP/phrase-desk-release.patch"
           git apply --index "$RUNNER_TEMP/phrase-desk-release.patch"
-          # Temporarily exclude this transfer-only workflow from the tree check.
           git rm --cached .github/workflows/phrase-desk-release-once.yml
           test "$(git write-tree)" = 'a5f51ed708ea2eb3be69c5796130fda9e4b3cfae'
           git add .github/workflows/phrase-desk-release-once.yml
@@ -52,7 +52,7 @@ jobs:
           node --experimental-default-type=module --test *.test.mjs
           git diff --cached --check
           python3 - <<'PY'
-          import json,re
+          import json
           from pathlib import Path
           manifest=json.loads(Path('manifest.json').read_text())
           assert manifest['version']=='1.6.0'
