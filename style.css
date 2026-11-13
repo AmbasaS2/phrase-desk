@@ -1511,16 +1511,21 @@ body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal {
 #phrase-desk-settings .pd-checkline {
   display:inline-flex !important;
   align-items:center !important;
-  gap:6px !important;
+  gap:4px !important;
   width:auto !important;
   min-height:20px !important;
   margin:0 !important;
   padding:0 !important;
   font-size:12px !important;
   line-height:1.3 !important;
-  font-weight:600 !important;
-  opacity:.78 !important;
+  font-weight:400 !important;
+  opacity:1 !important;
   cursor:pointer !important;
+}
+/* Leave the native checkbox appearance to SillyTavern's theme. */
+#phrase-desk-settings .pd-checkline > input[type="checkbox"] {
+  flex:0 0 auto !important;
+  margin:0 !important;
 }
 .pd-bilingual-blur {
   display:inline !important;
@@ -1937,9 +1942,15 @@ html.pd-bilingual-blur-enabled .mes_block .pd-bilingual-blur.pd-blur-revealed {
   width: 100% !important;
   margin: 0 !important;
 }
-#phrase-desk-settings .pd-prompt-heading #pd-reset-prompt {
+/* Put reset immediately below the prompt textarea, aligned to the right. */
+#phrase-desk-settings .pd-prompt-actions {
+  display: flex !important;
+  justify-content: flex-end !important;
+  width: 100% !important;
+  margin-top: 4px !important;
+}
+#phrase-desk-settings .pd-prompt-actions #pd-reset-prompt {
   display: inline-flex !important;
-  align-self: flex-end !important;
   flex: 0 0 auto !important;
   width: max-content !important;
   min-width: max-content !important;
