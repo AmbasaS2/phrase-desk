@@ -154,6 +154,31 @@ const bilingualRevealState = new Map();
 const autoTranslatedMessageKeys = new Set();
 // Browser storage is intentionally unused. Message translation caches stay on each chat message.
 
+function promptStatusElement(kind = 'global') {
+  return document.querySelector(kind === 'global' ? '#pd-global-prompt-status' : '#pd-char-prompt-status');
+}
+function setPromptStatus(kind = 'global', state = 'saved') {
+  const element = promptStatusElement(kind);
+  if (!element) return;
+  const labels = { saving:'저장 중…', saved:'자동 저장됨 ✓', error:'저장 실패' };
+  element.textContent = pdT(labels[state] || labels.saved);
+  element.dataset.state = state;
+}
+function refreshPromptSaveStatuses() {
+  const persisted = extension_settings[EXT_NAME] || {};
+  const globalField = document.querySelector('#pd-global-prompt');
+  if (globalField && globalField.value === String(persisted.translationPrompt ?? DEFAULT_TRANSLATION_PROMPT)) setPromptStatus('global', 'saved');
+  const charField = document.querySelector('#pd-char-prompt');
+  const key = currentCharPromptKey();
+  if (charField && key && key === activeCharacterPromptKey
+      && charField.value === String(persisted.characterPrompts?.[key] ?? '')) setPromptStatus('char','saved');
+}
+function markPendingPromptStatusesFailed() {
+  for (const kind of ['global','char']) {
+    const element=promptStatusElement(kind);
+    if (element?.dataset.state === 'saving') setPromptStatus(kind, 'error');
+  }
+}
 function saveSettings(now = false) {
   clearTimeout(saveTimer);
   const run = () => {
@@ -184,7 +209,11 @@ function saveSettings(now = false) {
       characterPromptStoreMigrationPending = false;
       if (now && typeof ctx?.saveSettings === 'function') ctx.saveSettings();
       else ctx?.saveSettingsDebounced?.();
-    } catch (e) { console.error('[Phrase Desk] save failed', e); }
+      refreshPromptSaveStatuses();
+    } catch (e) {
+      console.error('[Phrase Desk] save failed', e);
+      markPendingPromptStatusesFailed();
+    }
   };
   if (now) run(); else saveTimer = setTimeout(run, 700);
 }
@@ -950,6 +979,7 @@ function refreshCharacterPromptField(force = false) {
   activeCharacterPromptKey = key;
   $('#pd-char-name').text(currentChar());
   field.val(currentPrompt());
+  refreshPromptSaveStatuses();
 }
 function noteSource(msgEl=null, msgObj=null) {
   const domName = msgEl ? cleanName($(msgEl).find('.name_text .ch_name, .name_text, .mes_name, .name').first().text()) : '';
@@ -4410,6 +4440,13 @@ function setupSettingsPanel() {
     </div>
   </div>`;
   ($('#extensions_settings2').length ? $('#extensions_settings2') : $('#extensions_settings')).append(html);
+  // Reuse existing prompt auto-save; add feedback only, without new save controls or watchers.
+  const initialStatus = pdT('자동 저장됨 ✓');
+  $('<span>',{ id:'pd-global-prompt-status', class:'pd-prompt-save-status', role:'status', 'aria-live':'polite', text:initialStatus })
+    .attr('data-state','saved').prependTo('#phrase-desk-settings .pd-prompt-actions');
+  $('<div>',{ class:'pd-prompt-actions pd-char-prompt-actions' })
+    .append($('<span>',{ id:'pd-char-prompt-status', class:'pd-prompt-save-status', role:'status', 'aria-live':'polite', text:initialStatus }).attr('data-state','saved'))
+    .insertAfter('#pd-char-prompt');
   $('#pd-profile').val(settings.profile);
   $('#pd-chat-mode').val(settings.chatMode || 'full');
   $('#pd-auto-mode').val(settings.autoMode || 'off');
@@ -4444,8 +4481,8 @@ function setupSettingsPanel() {
   updateBilingualStyleControl();
   updateTranslationEngineControl();
   activeCharacterPromptKey = currentCharPromptKey();
-  $('#pd-global-prompt').on('input', function(){ settings.translationPrompt = $(this).val(); saveSettings(); }).on('change blur', function(){ settings.translationPrompt = $(this).val(); saveSettings(true); });
-  $('#pd-char-prompt').on('focus', function(){ refreshCharacterPromptField(); }).on('input', function(){ if (setCurrentPrompt($(this).val())) saveSettings(); }).on('change blur', function(){ const key = currentCharPromptKey(); if (key && dirtyCharacterPromptNames.has(key)) saveSettings(true); });
+  $('#pd-global-prompt').on('input', function(){ settings.translationPrompt = $(this).val(); setPromptStatus('global','saving'); saveSettings(); }).on('change blur', function(){ settings.translationPrompt = $(this).val(); saveSettings(true); });
+  $('#pd-char-prompt').on('focus', function(){ refreshCharacterPromptField(); }).on('input', function(){ if (setCurrentPrompt($(this).val())) { setPromptStatus('char','saving'); saveSettings(); } }).on('change blur', function(){ const key = currentCharPromptKey(); if (key && dirtyCharacterPromptNames.has(key)) saveSettings(true); });
   $('#pd-clear-chat-cache').on('click', clearCurrentChatTranslationCache);
   $('#pd-open-debug').on('click', () => { $('#pd-debug-panel').toggle(); $('#pd-debug-output').val(debugText()); });
   $('#pd-copy-debug').on('click', (e) => { e.preventDefault(); e.stopPropagation(); copyDebugText(); });

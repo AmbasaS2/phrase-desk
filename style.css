@@ -1945,12 +1945,26 @@ html.pd-bilingual-blur-enabled .mes_block .pd-bilingual-blur.pd-blur-revealed {
 /* Put reset immediately below the prompt textarea, aligned to the right. */
 #phrase-desk-settings .pd-prompt-actions {
   display: flex !important;
-  justify-content: flex-end !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
   width: 100% !important;
   margin-top: 4px !important;
 }
+#phrase-desk-settings .pd-prompt-save-status {
+  display: inline-flex !important;
+  align-items: center !important;
+  color: inherit !important;
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  line-height: 1.35 !important;
+  opacity: .68 !important;
+  white-space: nowrap !important;
+}
 #phrase-desk-settings .pd-prompt-actions #pd-reset-prompt {
   display: inline-flex !important;
+  margin-left: auto !important;
   flex: 0 0 auto !important;
   width: max-content !important;
   min-width: max-content !important;

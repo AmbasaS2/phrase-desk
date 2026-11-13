@@ -1,5 +1,12 @@
 # Phrase Desk changelog
 
+## 2026-11-13 UI follow-up — prompt auto-save indicators
+
+- Added small localized **Saving… / Auto-saved ✓** indicators beneath both the global translation prompt and current-character prompt editors. Existing 700 ms debounced and blur/explicit save behavior is unchanged; no extra save button, observers, or timers.
+- The global reset remains aligned at the bottom right. Indicators update after settings-saving routines run and show an error if a synchronous save fails. Labels are localized in Korean, English, Japanese, French, and Spanish.
+- Verified 24 Node tests and 13 mocked-browser scenarios including Korean/English status transitions, per-character prompt isolation, reset layout and phone-sized viewports. This does not verify disk persistence on the user's installed SillyTavern version.
+- Previous baseline: `17b8e44412b20aea3ffb178c294cd9f697934413`. If the prompt status UI or settings auto-save regresses, revert this update without deleting user prompts, notes, or chats.
+
 ## 2026-11-13 UI follow-up — expression explanation and save review
 
 - Reorganized **Explore Expression** into a clear expression header and individual meaning, nuance, grammar, example, and alternative cards. Long text scrolls independently of the always-visible bottom Save Expression action.

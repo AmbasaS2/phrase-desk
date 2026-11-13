@@ -63,6 +63,8 @@ The **Global Prompt** field contains the complete editable literary instructions
 
 Enabling automatic translation may create a translation request whenever a new message arrives. Connection Profile translation is affected by the selected model and preset.
 
+Both prompt editors continue to save automatically. A small status below each field shows **Saving…** while edits are pending and **Auto-saved ✓** after the existing settings-save routine runs. There is no extra Save button.
+
 The Current Character Prompt is saved by character name rather than by chat. Character cards with exactly the same name share that prompt, and renaming a character may leave the prompt field for the new name empty until you set it again.
 
 ## 🌐 Translation
@@ -326,6 +328,8 @@ It is a good idea to export important Phrase Notebook and study records as a bac
 **전체 프롬프트**에는 추가 지시만이 아니라 실제 기본 번역 문체·말투·품질 지침 전체가 들어 있습니다. `{{target_language}}`는 선택한 번역 언어(입력창 번역에서는 학습 언어)로 바뀝니다. PDU/PD_FMT 보호와 병기 조립 규칙은 내부에서 따로 적용합니다. **기본 프롬프트로 복원**을 누르고 확인하면 이 칸만 기본값으로 돌아가며, 캐릭터 프롬프트·노트·캐시는 유지됩니다. 기존 추가 지시는 첫 업데이트 때 한 번 덧붙여 보존합니다. 구글 간편 번역에는 프롬프트가 적용되지 않습니다.
 
 자동 번역을 켜면 새 메시지가 도착할 때마다 번역 요청이 생길 수 있습니다. 연결 프로필 번역 결과는 선택한 모델과 프리셋의 영향을 받습니다.
+
+두 프롬프트 편집창은 기존처럼 **자동 저장**됩니다. 각 입력창 아래에 작은 상태 표시가 있어 수정 중에는 **저장 중…**, 기존 설정 저장 처리가 실행되면 **자동 저장됨 ✓**로 바뀝니다. 별도의 저장 버튼은 없습니다.
 
 현재 캐릭터 전용 프롬프트는 채팅방이 아니라 캐릭터 이름을 기준으로 저장됩니다. 이름이 완전히 같은 캐릭터 카드는 같은 프롬프트를 공유하며, 캐릭터 이름을 바꾸면 새 이름의 프롬프트 칸은 다시 설정하기 전까지 비어 보일 수 있습니다.
 
