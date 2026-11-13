@@ -2066,7 +2066,7 @@ body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal.pd-explain-modal {
 }
 .pd-explain-modal .pd-explain-meaning p {
   font-size: calc(var(--pd-user-font-size, 13px) + 1px) !important;
-  font-weight: 570 !important;
+  font-weight: 400 !important;
 }
 .pd-explain-modal .pd-explain-example p {
   padding-left: 12px !important;
