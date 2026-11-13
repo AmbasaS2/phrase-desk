@@ -1981,3 +1981,17 @@ html.pd-bilingual-blur-enabled .mes_block .pd-bilingual-blur.pd-blur-revealed {
 .pd-popover .pd-notebook-search > input { flex: 1 1 180px; min-width: 0; }
 .pd-popover .pd-notebook-search > select { flex: 0 1 180px; min-width: 0; max-width: 100%; }
 .pd-popover .pd-note-languages { font-size: .85em; opacity: .7; margin: 4px 0; overflow-wrap: anywhere; }
+
+/* Mobile long-press: prevent native text selection/callout on globe controls only. */
+#pd-input-translate,
+#pd-input-translate *,
+.pd-message-translate-btn,
+.pd-message-translate-btn * {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+  -webkit-user-drag: none !important;
+}
+#pd-input-translate {
+  touch-action: manipulation !important;
+}
