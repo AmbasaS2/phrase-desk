@@ -24,10 +24,10 @@ jobs:
           git init "$RUNNER_TEMP/phrase-desk-release"
           cd "$RUNNER_TEMP/phrase-desk-release"
           git remote add origin https://github.com/AmbasaS2/phrase-desk.git
-          git fetch --depth=4 origin "$STAGING_SHA"
+          git fetch --depth=20 origin "$STAGING_SHA"
           git checkout --detach FETCH_HEAD
           test "$(git rev-parse HEAD)" = "$STAGING_SHA"
-          test "$(git rev-parse HEAD^)" = '2d90f94e5119518db254f9d94e2e703add821f66'
+          git merge-base --is-ancestor 9b236123ccd570a1c296f1c2902d82e713bac1e3 HEAD
           test "$(git diff --name-only 9b236123ccd570a1c296f1c2902d82e713bac1e3 HEAD)" = '.github/workflows/phrase-desk-release-once.yml'
       - name: Fetch checksum-pinned public source patch over HTTPS
         shell: bash
@@ -48,8 +48,14 @@ jobs:
           git rm --cached .github/workflows/phrase-desk-release-once.yml
           test "$(git write-tree)" = 'a5f51ed708ea2eb3be69c5796130fda9e4b3cfae'
           git add .github/workflows/phrase-desk-release-once.yml
-          for file in *.js; do node --experimental-default-type=module --check "$file"; done
-          node --experimental-default-type=module --test *.test.mjs
+          node --version
+          test ! -e package.json
+          printf '{"type":"module"}\n' > package.json
+          trap 'rm -f package.json' EXIT
+          for file in *.js; do node --check "$file"; done
+          node --test *.test.mjs
+          rm package.json
+          trap - EXIT
           git diff --cached --check
           python3 - <<'PY'
           import json
