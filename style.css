@@ -33,23 +33,23 @@
 .pd-message-translate-btn.busy { opacity:.45 !important; pointer-events:none !important; }
 .pd-message-translate-btn.translated { outline:1px solid rgba(95,145,214,.28) !important; background:rgba(95,145,214,.12) !important; }
 
-#phrase-desk-settings,
-#phrase-desk-settings label,
-#phrase-desk-settings select.text_pole,
-#phrase-desk-settings textarea.text_pole,
-#phrase-desk-settings .menu_button { font-family: inherit !important; }
-#phrase-desk-settings .pd-settings-content { font-size: 12px !important; }
 #phrase-desk-settings .pd-setting-row { margin-bottom: 8px !important; }
 #phrase-desk-settings .pd-two { display:grid !important; grid-template-columns: 1fr 1fr !important; gap:8px !important; }
 #phrase-desk-settings label { display:block !important; margin:0 0 4px !important; font-size:12px !important; font-weight:600 !important; opacity:.76 !important; line-height:1.35 !important; }
 #phrase-desk-settings label small { opacity:.62 !important; font-weight:500 !important; margin-left:4px !important; }
+/* Keep only grid sizing; SillyTavern/theme owns form-control appearance. */
 #phrase-desk-settings select.text_pole,
-#phrase-desk-settings textarea.text_pole { width:100% !important; font-size:12px !important; min-height:30px !important; line-height:1.4 !important; margin:0 !important; }
-#phrase-desk-settings textarea.text_pole { resize:vertical !important; }
+#phrase-desk-settings textarea.text_pole,
+#phrase-desk-settings input.text_pole {
+  width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+#phrase-desk-settings textarea.text_pole { resize: vertical !important; }
 #phrase-desk-settings .pd-settings-foot { display:flex !important; align-items:center !important; justify-content:space-between !important; gap:8px !important; margin:8px 0 0 !important; font-size:12px !important; }
-#phrase-desk-settings .pd-settings-foot .menu_button { width:auto !important; min-width:0 !important; margin:0 !important; padding:5px 10px !important; font-size:12px !important; min-height:28px !important; }
+#phrase-desk-settings .pd-settings-foot .menu_button { width:auto !important; min-width:0 !important; margin:0 !important; }
 #phrase-desk-settings .pd-debug-actions { display:flex !important; gap:8px !important; margin:6px 0 !important; }
-#phrase-desk-settings .pd-debug-actions .menu_button { flex:1 1 0 !important; width:auto !important; margin:0 !important; font-size:12px !important; min-height:28px !important; }
+#phrase-desk-settings .pd-debug-actions .menu_button { flex:1 1 0 !important; width:auto !important; margin:0 !important; }
 #pd-debug-output { width:100% !important; margin-top:4px !important; font-size:11px !important; line-height:1.35 !important; }
 
 .pd-input-btn.pd-input-inline,
@@ -1419,7 +1419,6 @@ body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal {
 .pd-context small { display:block !important; opacity:.62 !important; font-size: 11px !important; margin-bottom: 4px !important; }
 .pd-context-list .pd-context + .pd-context { margin-top: 7px !important; }
 
-#phrase-desk-settings #pd-bilingual-style:disabled { opacity:.65 !important; cursor:not-allowed !important; }
 
 #phrase-desk-settings #pd-global-prompt,
 #phrase-desk-settings #pd-char-prompt {
@@ -1430,15 +1429,7 @@ body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal {
   box-sizing: border-box !important;
 }
 
-/* final5/final10: compact opened settings only; do not style the SillyTavern drawer title */
-#phrase-desk-settings .pd-settings-content,
-#phrase-desk-settings .pd-setting-row,
-#phrase-desk-settings label,
-#phrase-desk-settings select.text_pole,
-#phrase-desk-settings textarea.text_pole,
-#phrase-desk-settings .menu_button {
-  font-size: 12px !important;
-}
+/* Keep Phrase Desk settings layout compact; control appearance comes from the host theme. */
 #phrase-desk-settings label {
   margin: 0 0 4px !important;
   line-height: 1.3 !important;
@@ -1455,32 +1446,9 @@ body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal {
 #phrase-desk-settings .pd-two {
   gap: 7px !important;
 }
-#phrase-desk-settings select.text_pole {
-  min-height: 28px !important;
-  height: 28px !important;
-  padding: 3px 6px !important;
-  line-height: 1.25 !important;
-  border-radius: 0 !important;
-  box-sizing: border-box !important;
-}
-#phrase-desk-settings textarea.text_pole {
-  padding: 6px 8px !important;
-  line-height: 1.35 !important;
-  border-radius: 0 !important;
-  box-sizing: border-box !important;
-}
 #phrase-desk-settings .pd-settings-foot {
   gap: 6px !important;
   margin-top: 7px !important;
-  font-size: 12px !important;
-}
-#phrase-desk-settings .pd-settings-foot .menu_button,
-#phrase-desk-settings .pd-debug-actions .menu_button {
-  min-height: 28px !important;
-  padding: 4px 10px !important;
-  border-radius: 0 !important;
-  font-size: 12px !important;
-  font-family: inherit !important;
 }
 #pd-debug-output,
 #pdb-debug-output {
@@ -1723,10 +1691,6 @@ html.pd-bilingual-blur-enabled .mes_block .pd-bilingual-blur.pd-blur-revealed {
 }
 .pd-bilingual-notes.pd-collapsed .pd-bilingual-notes-body {
   display: none !important;
-}
-#phrase-desk-settings #pd-profile:disabled {
-  opacity:.65 !important;
-  cursor:not-allowed !important;
 }
 
 /* v1.3.1: keep ST's animated drawer untouched; style the inner settings shell instead. */
@@ -1983,7 +1947,6 @@ html.pd-bilingual-blur-enabled .mes_block .pd-bilingual-blur.pd-blur-revealed {
   white-space: nowrap !important;
   word-break: keep-all !important;
   writing-mode: horizontal-tb !important;
-  line-height: 1.4 !important;
 }
 #phrase-desk-settings #pd-global-prompt { resize: vertical; min-height: 140px; }
 #phrase-desk-settings .pd-setting-row > div { min-width: 0; }
