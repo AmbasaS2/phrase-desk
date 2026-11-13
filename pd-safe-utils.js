@@ -171,6 +171,16 @@ function normalizeImportedHistory(value, makeId, prefix) {
 
 // Parse and stage imported learning data before callers replace live settings. Unknown
 // fields on valid records are retained; any malformed supported record rejects the import.
+function limitImportedHistoryByLanguage(items, limit) {
+  const counts = new Map();
+  return items.filter(item => {
+    const key = JSON.stringify([item.language || 'en', item.meaningLanguage || 'ko']);
+    const count = (counts.get(key) || 0) + 1;
+    counts.set(key, count);
+    return count <= limit;
+  });
+}
+
 export function normalizePhraseDeskImportPayload(payload, makeId = (prefix = 'item') => `${prefix}_${Date.now()}`) {
   if (!plainRecord(payload)) throw new Error('invalid import root');
   const data = {};
@@ -191,13 +201,13 @@ export function normalizePhraseDeskImportPayload(payload, makeId = (prefix = 'it
   if (quizHistory) {
     data.quizHistory = quizHistory.map(x => normalizeImportedHistory(x, makeId, 'quiz'));
     if (data.quizHistory.some(x => !x)) throw new Error('invalid quizHistory item');
-    data.quizHistory = data.quizHistory.slice(0, 20);
+    data.quizHistory = limitImportedHistoryByLanguage(data.quizHistory, 20);
   }
   const practiceHistory = requireArray('practiceHistory');
   if (practiceHistory) {
     data.practiceHistory = practiceHistory.map(x => normalizeImportedHistory(x, makeId, 'practice'));
     if (data.practiceHistory.some(x => !x)) throw new Error('invalid practiceHistory item');
-    data.practiceHistory = data.practiceHistory.slice(0, 60);
+    data.practiceHistory = limitImportedHistoryByLanguage(data.practiceHistory, 60);
   }
   const hiddenWrongNotes = requireArray('hiddenWrongNotes');
   if (hiddenWrongNotes) data.hiddenWrongNotes = normalizeStringArray(hiddenWrongNotes);

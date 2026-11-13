@@ -1,3 +1,5 @@
+import * as languageHelpers from './pd-language.js';
+import { identityUi } from './test-helpers.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -10,6 +12,10 @@ const helperSource = source.slice(
 assert.ok(helperSource.startsWith('function repeatDifficultyProfile'));
 
 const sandbox = {
+  ...languageHelpers,
+  studyLanguage: () => ({code:"en",name:"English",key:"en"}),
+  pdT: value => value,
+  pdUi: identityUi,
   norm(value = '') { return String(value || '').replace(/\s+/g, ' ').trim(); },
   esc(value = '') {
     return String(value ?? '')
@@ -83,7 +89,7 @@ assert.equal(repeatOccurrenceCount('right now', messages), 2);
 assert.equal(repeatOccurrenceCount('look after', messages), 1);
 assert.equal(repeatOccurrenceCount('', messages), 0);
 
-assert.ok(source.includes('수집할 영어 수준'));
+assert.ok(source.includes('수집할 표현 수준'));
 assert.ok(!source.includes('반복 표현 난이도'));
 assert.ok(source.includes('"basis":"repeated or study_worthy"'));
 assert.ok(source.includes('count < 2 || count > 7'));

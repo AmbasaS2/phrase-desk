@@ -1,10 +1,25 @@
 {
   "name": "🔤 Phrase Desk",
   "display_name": "🔤 Phrase Desk",
-  "version": "1.5.5",
-  "description": "Phrase Desk: English phrase notebook and translation helper",
+  "version": "1.6.0",
+  "description": "Phrase Desk: multilingual roleplay translation, phrase notebook, and language learning",
   "author": "AmbasaS2",
   "homePage": "https://github.com/AmbasaS2",
   "js": "index.js",
-  "css": "style.css"
+  "css": "style.css",
+  "i18n": {
+    "en": "i18n/en.json",
+    "en-us": "i18n/en.json",
+    "en-gb": "i18n/en.json",
+    "ko": "i18n/ko.json",
+    "ko-kr": "i18n/ko.json",
+    "ja": "i18n/ja.json",
+    "ja-jp": "i18n/ja.json",
+    "fr": "i18n/fr.json",
+    "fr-fr": "i18n/fr.json",
+    "fr-ca": "i18n/fr.json",
+    "es": "i18n/es.json",
+    "es-es": "i18n/es.json",
+    "es-mx": "i18n/es.json"
+  }
 }

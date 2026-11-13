@@ -1,3 +1,5 @@
+import * as languageHelpers from './pd-language.js';
+import { identityUi } from './test-helpers.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -14,6 +16,10 @@ const quizHelpers = source.slice(
 assert.ok(quizHelpers.startsWith('function quizStageRules'));
 
 const sandbox = {
+  ...languageHelpers,
+  studyLanguage: () => ({code:"en",name:"English",key:"en"}),
+  pdT: value => value,
+  pdUi: identityUi,
   Math,
   Set,
   Map,
@@ -172,7 +178,7 @@ assert.ok(openQuizSource.includes('quizQuestionCount(configuredCount, sourcePool
 assert.ok(!openQuizSource.includes('sourcePool.length < count'));
 
 const renderQuizSource = source.slice(source.indexOf('function renderQuiz'), source.indexOf('function wrongNoteKey'));
-assert.ok(renderQuizSource.includes("grammar:'표현 순서'"));
+assert.ok(renderQuizSource.includes("grammar:pdT('표현 순서')"));
 assert.ok(!renderQuizSource.includes('뉘앙스·격식'));
 assert.ok(!renderQuizSource.includes('유사 표현 구별'));
 assert.ok(renderQuizSource.includes('readonly'));

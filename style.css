@@ -1958,3 +1958,26 @@ html.pd-bilingual-blur-enabled .mes_block .pd-bilingual-blur.pd-blur-revealed {
   pointer-events: auto !important;
   cursor: pointer !important;
 }
+
+/* v1.6 language controls and editable prompt: extension-scoped, no theme overrides. */
+#phrase-desk-settings .pd-prompt-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+#phrase-desk-settings .pd-prompt-heading label { margin: 0; }
+#phrase-desk-settings #pd-global-prompt { resize: vertical; min-height: 140px; }
+#phrase-desk-settings .pd-setting-row > div { min-width: 0; }
+.pd-modal .pd-language-fields, .pd-popover .pd-notebook-search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.pd-modal .pd-language-fields > label { flex: 1 1 160px; min-width: 0; }
+.pd-modal .pd-language-fields select { width: 100%; min-width: 0; }
+.pd-popover .pd-notebook-search > input { flex: 1 1 180px; min-width: 0; }
+.pd-popover .pd-notebook-search > select { flex: 0 1 180px; min-width: 0; max-width: 100%; }
+.pd-popover .pd-note-languages { font-size: .85em; opacity: .7; margin: 4px 0; overflow-wrap: anywhere; }
