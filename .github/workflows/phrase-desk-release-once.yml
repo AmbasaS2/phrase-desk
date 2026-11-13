@@ -24,17 +24,17 @@ jobs:
           git init "$RUNNER_TEMP/phrase-desk-release"
           cd "$RUNNER_TEMP/phrase-desk-release"
           git remote add origin https://github.com/AmbasaS2/phrase-desk.git
-          git fetch --depth=3 origin "$STAGING_SHA"
+          git fetch --depth=4 origin "$STAGING_SHA"
           git checkout --detach FETCH_HEAD
           test "$(git rev-parse HEAD)" = "$STAGING_SHA"
-          test "$(git rev-parse HEAD^)" = '2fb3346466293adab36f3ebdadbf990b9bee42e8'
+          test "$(git rev-parse HEAD^)" = '2d90f94e5119518db254f9d94e2e703add821f66'
           test "$(git diff --name-only 9b236123ccd570a1c296f1c2902d82e713bac1e3 HEAD)" = '.github/workflows/phrase-desk-release-once.yml'
-      - name: Fetch checksum-pinned public source patch
+      - name: Fetch checksum-pinned public source patch over HTTPS
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --connect-timeout 15 --max-time 60 --retry 1 \
-            'http://149.56.100.231:41181/o4jqWs4sQsfuLZyrqO7hmjwQOgH-dypvJ96SBbcDu2s/release.patch.gz' \
+          curl --fail --silent --show-error --proto '=https' --tlsv1.2 --connect-timeout 15 --max-time 60 --retry 1 \
+            'https://societies-pressed-ice-shark.trycloudflare.com/o4jqWs4sQsfuLZyrqO7hmjwQOgH-dypvJ96SBbcDu2s/release.patch.gz' \
             -o "$RUNNER_TEMP/phrase-desk-release.patch.gz"
           echo 'bc77d65161605f834365708fea5c9de90ab66140a827addfc1484321c0fd0fff  '"$RUNNER_TEMP/phrase-desk-release.patch.gz" | sha256sum --check --strict
           gzip -dc "$RUNNER_TEMP/phrase-desk-release.patch.gz" > "$RUNNER_TEMP/phrase-desk-release.patch"
