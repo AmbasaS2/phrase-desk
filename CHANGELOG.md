@@ -1,5 +1,13 @@
 # Phrase Desk changelog
 
+## 2026-11-13 follow-up — On-demand expression explanation
+
+- Selected text's floating `Aa` now offers **Save Expression** and **Explore Expression**. The input-box Aa quick menu is unchanged.
+- Explore uses one explicit Connection Profile AI request for contextual meaning, nuance, grammar, examples, and alternatives. Saving its result uses the existing notebook without another request. A non-JSON answer is displayed instead of discarded or retried automatically.
+- Korean, English, Japanese, French, and Spanish UI labels were added. Translation alignment, cache, message contents, study-data migration, and character assets are unchanged.
+- Verification: 19 Node regressions passed; browser coverage passed in desktop/mobile sizes, including selection Aa menu, no API request for Save, one request for Explore, saving explanation fields, and untouched chat data.
+- Pre-feature rollback baseline: `1a42c2e2c5a2c1f4c320acfc76daaa102d127f03` (main). Do not delete notebooks or chats to roll back.
+
 ## 1.6.0 — 2026-11-13
 
 ### Changes

@@ -152,7 +152,7 @@ Open Phrase Desk and select `⚙` in the upper-right corner.
 
 **Saving Expressions**
 
-Select source text and choose `Aa → Save Expression` to place it in the form automatically. You can also add an expression directly or save one from input correction and repeated-expression results.
+Select source text in a chat and tap the floating `Aa` to choose **Save Expression** or **Explore Expression**. Saving opens the existing form without an AI call. Exploring makes one explicit Connection Profile request for a contextual meaning, nuance, and relevant grammar; you can then save the result (including its explanation) to the notebook without an additional request. The separate input-box Aa quick menu is unchanged. You can also add an expression directly or save one from input correction and repeated-expression results.
 
 | Save Method | Saved Content |
 |---|---|
@@ -416,7 +416,7 @@ Phrase Desk를 열고 오른쪽 위의 `⚙`을 누릅니다.
 
 **표현 저장**
 
-원문 표현을 드래그한 뒤 `Aa → 표현 저장`을 누르면 선택한 문장이 자동으로 들어갑니다. 직접 추가하거나, 인풋 교정과 반복 표현 찾기 결과에서도 저장할 수 있습니다.
+채팅에서 원문 표현을 드래그한 뒤 나타나는 `Aa`를 누르면 **표현 저장 / 표현 알아보기** 중 선택할 수 있습니다. 표현 저장은 기존 저장창을 열며 AI를 호출하지 않습니다. 표현 알아보기는 선택한 표현과 주변 문맥을 연결 프로필 AI에 한 번 보내 뜻·뉘앙스·문법을 설명받고, 결과창에서 해설과 함께 노트에 저장할 수 있습니다. 저장할 때 별도 AI 호출은 없으며, 입력창 옆 Aa 빠른 메뉴는 그대로입니다. 직접 추가하거나 인풋 교정·반복 표현 찾기 결과에서도 저장할 수 있습니다.
 
 | 저장 방법 | 저장되는 내용 |
 |---|---|

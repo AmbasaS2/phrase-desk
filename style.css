@@ -1986,3 +1986,10 @@ html.pd-bilingual-blur-enabled .mes_block .pd-bilingual-blur.pd-blur-revealed {
 #pd-input-translate {
   touch-action: manipulation !important;
 }
+
+/* Phrase Desk contextual expression explanation, selection Aa only. */
+.pd-modal .pd-explain-source {font-weight:650 !important;overflow-wrap:anywhere !important;margin:6px 0 10px !important;}
+.pd-modal .pd-explain-results {display:grid !important;gap:10px !important;margin:9px 0 13px !important;}
+.pd-modal .pd-explain-item {min-width:0 !important;overflow-wrap:anywhere !important;}
+.pd-modal .pd-explain-item b {display:block !important;margin-bottom:3px !important;}
+.pd-modal .pd-explain-item p {white-space:pre-wrap !important;overflow-wrap:anywhere !important;margin:0 !important;}
