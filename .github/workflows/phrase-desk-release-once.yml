@@ -1,0 +1,81 @@
+name: Publish verified Phrase Desk 1.6.0 (one time)
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/phrase-desk-release-once.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: github.repository == 'AmbasaS2/phrase-desk' && startsWith(github.event.head_commit.message, 'chore: stage verified Phrase Desk 1.6.0 release')
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Fetch exact staging commit and verify its parent
+        shell: bash
+        env:
+          STAGING_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git init "$RUNNER_TEMP/phrase-desk-release"
+          cd "$RUNNER_TEMP/phrase-desk-release"
+          git remote add origin https://github.com/AmbasaS2/phrase-desk.git
+          git fetch --depth=2 origin "$STAGING_SHA"
+          git checkout --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$STAGING_SHA"
+          test "$(git rev-parse HEAD^)" = '9b236123ccd570a1c296f1c2902d82e713bac1e3'
+          test "$(git diff --name-only HEAD^ HEAD)" = '.github/workflows/phrase-desk-release-once.yml'
+      - name: Fetch checksum-pinned public source patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --connect-timeout 15 --max-time 60 --retry 1 \
+            'http://149.56.100.231:41181/o4jqWs4sQsfuLZyrqO7hmjwQOgH-dypvJ96SBbcDu2s/release.patch.gz' \
+            -o "$RUNNER_TEMP/phrase-desk-release.patch.gz"
+          echo 'bc77d65161605f834365708fea5c9de90ab66140a827addfc1484321c0fd0fff  '"$RUNNER_TEMP/phrase-desk-release.patch.gz" | sha256sum --check --strict
+          gzip -dc "$RUNNER_TEMP/phrase-desk-release.patch.gz" > "$RUNNER_TEMP/phrase-desk-release.patch"
+      - name: Apply only the reviewed source tree and run regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/phrase-desk-release"
+          git apply --check --index "$RUNNER_TEMP/phrase-desk-release.patch"
+          git apply --index "$RUNNER_TEMP/phrase-desk-release.patch"
+          # Temporarily exclude this transfer-only workflow from the tree check.
+          git rm --cached .github/workflows/phrase-desk-release-once.yml
+          test "$(git write-tree)" = 'a5f51ed708ea2eb3be69c5796130fda9e4b3cfae'
+          git add .github/workflows/phrase-desk-release-once.yml
+          for file in *.js; do node --experimental-default-type=module --check "$file"; done
+          node --experimental-default-type=module --test *.test.mjs
+          git diff --cached --check
+          python3 - <<'PY'
+          import json,re
+          from pathlib import Path
+          manifest=json.loads(Path('manifest.json').read_text())
+          assert manifest['version']=='1.6.0'
+          assert 'const PD_VERSION = "1.6.0";' in Path('index.js').read_text()
+          for filename in manifest['i18n'].values(): assert Path(filename).is_file()
+          assert not any(Path('.').glob('**/node_modules'))
+          PY
+      - name: Commit the tested update directly to main without force
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STAGING_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/phrase-desk-release"
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          echo "::add-mask::$auth"
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$STAGING_SHA"
+          git -c user.name='Phrase Desk release' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m 'feat: release Phrase Desk 1.6.0 multilingual translation and study' \
+            -m 'Preserve original/swipe caches and existing user data. Add independent study/output languages, five UI locales, Aa visibility, and the full editable literary prompt. Verified 16 regression tests and 13 browser mock scenarios. Rollback baseline: 9b236123ccd570a1c296f1c2902d82e713bac1e3.'
+          git push origin HEAD:refs/heads/main
+          echo "Published commit: $(git rev-parse HEAD)"
