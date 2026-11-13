@@ -1959,6 +1959,11 @@ html.pd-bilingual-blur-enabled .mes_block .pd-bilingual-blur.pd-blur-revealed {
   word-break: keep-all !important;
   writing-mode: horizontal-tb !important;
 }
+#phrase-desk-settings .pd-prompt-warning {
+  display: block !important;
+  margin: 4px 0 8px !important;
+  align-self: stretch !important;
+}
 #phrase-desk-settings #pd-global-prompt { resize: vertical; min-height: 140px; }
 #phrase-desk-settings .pd-setting-row > div { min-width: 0; }
 .pd-modal .pd-language-fields, .pd-popover .pd-notebook-search {
