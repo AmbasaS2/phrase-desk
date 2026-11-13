@@ -6008,27 +6008,59 @@ function parseSelectionExplanation(raw = '') {
   // Keep a usable paid response, even if the model ignored the JSON shape.
   return { meaning:'', nuance:'', grammar:'', example:'', alternatives:'', raw:body.slice(0,3500) };
 }
+function selectionExplanationModalHtml(payload = {}, body = '', footer = '') {
+  return `
+    <div class="pd-explain-header"><h3>${esc(pdT('표현 알아보기'))}</h3></div>
+    <div class="pd-explain-scroll">
+      <div class="pd-explain-hero">
+        <span class="pd-explain-eyebrow">${esc(pdT('표현'))}</span>
+        <div class="pd-explain-phrase">${esc(payload.text || '')}</div>
+      </div>
+      ${body}
+    </div>
+    ${footer ? `<div class="pd-explain-footer">${footer}</div>` : ''}
+    <button class="pd-x" type="button" data-close-modal aria-label="${esc(pdT('닫기'))}">×</button>
+  `;
+}
 async function explainSelectedExpression(payload = {}) {
   if (!selectionPayloadStillCurrent(payload)) {
     toast(pdT('선택한 표현을 더 이상 찾을 수 없습니다.'),'warn');
     return;
   }
   if (!requireProfile()) return;
-  const loading = showModal(`<button class="pd-x" data-close-modal>×</button><h3>${esc(pdT('표현 알아보기'))}</h3><p class="pd-explain-source">${esc(payload.text)}</p><p class="pd-muted-line">${esc(pdT('해설을 준비하고 있습니다…'))}</p>`);
+  const loading = showModal(
+    selectionExplanationModalHtml(payload, `<p class="pd-explain-status">${esc(pdT('해설을 준비하고 있습니다…'))}</p>`),
+    { explainLayout: true },
+  );
   const raw = await callAI(buildSelectionExplainPrompt(payload),2200);
   if (!loading[0]?.isConnected || !selectionPayloadStillCurrent(payload)) return;
   const info = parseSelectionExplanation(raw);
   if (!info) {
-    const modal = showModal(`<button class="pd-x" data-close-modal>×</button><h3>${esc(pdT('표현 알아보기'))}</h3><p>${esc(pdT('해설을 불러오지 못했습니다.'))}</p><div class="pd-submit-actions"><button id="pd-explain-retry" class="pd-primary" type="button">${esc(pdT('다시 시도'))}</button></div>`);
+    const modal = showModal(selectionExplanationModalHtml(
+      payload,
+      `<p class="pd-explain-status">${esc(pdT('해설을 불러오지 못했습니다.'))}</p>`,
+      `<button id="pd-explain-retry" class="pd-primary" type="button">${esc(pdT('다시 시도'))}</button>`,
+    ), { explainLayout: true });
     modal.find('#pd-explain-retry').on('click',()=>explainSelectedExpression(payload));
     return;
   }
-  const fields=[[pdT('뜻'),info.meaning],[pdT('뉘앙스'),info.nuance],
-    [pdT('문법'),info.grammar],[pdT('사용 예시'),info.example],
-    [pdT('다른 표현'),info.alternatives]].filter(([,value])=>!!value);
-  const rows=info.raw ? `<div class="pd-explain-item"><p>${esc(info.raw)}</p></div>`
-    : fields.map(([label,value])=>`<div class="pd-explain-item"><b>${esc(label)}</b><p>${esc(value)}</p></div>`).join('');
-  const modal=showModal(`<button class="pd-x" data-close-modal>×</button><h3>${esc(pdT('표현 알아보기'))}</h3><p class="pd-explain-source">${esc(payload.text)}</p><div class="pd-explain-results">${rows}</div><div class="pd-submit-actions"><button id="pd-explain-save" class="pd-primary" type="button">${esc(pdT('표현 저장'))}</button></div>`);
+  const fields=[
+    ['meaning',pdT('뜻'),info.meaning],
+    ['nuance',pdT('뉘앙스'),info.nuance],
+    ['grammar',pdT('문법'),info.grammar],
+    ['example',pdT('사용 예시'),info.example],
+    ['alternatives',pdT('다른 표현'),info.alternatives],
+  ].filter(([, ,value])=>!!value);
+  const rows = info.raw
+    ? `<section class="pd-explain-item pd-explain-raw"><p>${esc(info.raw)}</p></section>`
+    : fields.map(([kind,label,value])=>
+      `<section class="pd-explain-item pd-explain-${kind}"><div class="pd-explain-item-title">${esc(label)}</div><p>${esc(value)}</p></section>`
+    ).join('');
+  const modal = showModal(selectionExplanationModalHtml(
+    payload,
+    `<div class="pd-explain-results">${rows}</div>`,
+    `<button id="pd-explain-save" type="button" class="pd-primary">${esc(pdT('표현 저장'))}</button>`,
+  ), { explainLayout: true });
   modal.find('#pd-explain-save').on('click',()=>{
     if (!selectionPayloadStillCurrent(payload)) return toast(pdT('선택한 표현을 더 이상 찾을 수 없습니다.'),'warn');
     const explanation=[
@@ -6036,7 +6068,7 @@ async function explainSelectedExpression(payload = {}) {
       info.example ? `${pdT('사용 예시')}: ${info.example}` : '',
       info.raw,
     ].filter(Boolean).join('\n\n');
-    openSaveModal({...payload,meaning:info.meaning||payload.meaning||'',
+    openSaveModal({...payload,fromExplanation:true,meaning:info.meaning||payload.meaning||'',
       explanation,grammar:info.grammar,alternatives:info.alternatives});
   });
 }
@@ -6385,14 +6417,15 @@ function placeModalInViewport(backdrop) {
   set(modal, 'width', `${width}px`);
   set(modal, 'max-width', '100%');
   set(modal, 'max-height', `${maxHeight}px`);
-  set(modal, 'overflow-y', 'auto');
+  set(modal, 'overflow-y', modal.classList.contains('pd-explain-modal') ? 'hidden' : 'auto');
   set(modal, 'margin', 'auto');
   set(modal, 'z-index', '2147483001');
 }
-function showModal(inner) {
+function showModal(inner, options = {}) {
   closeModals();
   keepPhraseDeskOpen(1200);
-  const backdrop = $(`<div class="pd-modal-backdrop pd-viewport-modal"><div class="pd-modal">${inner}</div></div>`);
+  const explainClass = options?.explainLayout === true ? ' pd-explain-modal' : '';
+  const backdrop = $(`<div class="pd-modal-backdrop pd-viewport-modal"><div class="pd-modal${explainClass}">${inner}</div></div>`);
   $('body').append(backdrop);
   const doPlace = () => placeModalInViewport(backdrop[0]);
   requestAnimationFrame(doPlace);
@@ -6454,10 +6487,22 @@ function bindPhraseDeskViewportPlacement() {
 }
 
 function openSaveModal(p={}) {
-  const withExplanation = !!(p.explanation || p.grammar || p.alternatives);
+  const withExplanation = !!(p.fromExplanation || p.explanation || p.grammar || p.alternatives);
   showModal(pdUi`<button class="pd-x" data-close-modal>×</button><h3>표현 저장</h3><div class="pd-language-fields"><label>표현 언어<select id="pd-save-language">${noteLanguageOptions(studyLanguage().key, studyLanguage().name)}</select></label><label>뜻·해설 언어<select id="pd-save-meaning-language">${noteLanguageOptions(targetLanguage().key, targetLanguage().name)}</select></label></div><label>표현</label><textarea id="pd-save-text" rows="2">${esc(p.text||'')}</textarea><label>뜻</label><input id="pd-save-meaning" value="${esc(p.meaning||'')}" placeholder="나중에 AI 교정으로 채울 수 있습니다."><label>문맥</label><textarea id="pd-save-context" rows="3">${esc(p.context||'')}</textarea><label>태그 쉼표로 구분</label><input id="pd-save-tags" placeholder="직접 태그를 입력해주세요."><label>메모</label><textarea id="pd-save-memo" rows="3"></textarea><div class="pd-submit-actions"><button id="pd-save-note" class="pd-primary">저장</button></div>`);
-  if (withExplanation) $('<p class="pd-muted-line"></p>').text(pdT('AI 해설도 노트에 함께 저장됩니다.')).insertBefore($('#pd-save-note').closest('.pd-submit-actions'));
-  $('#pd-save-note').on('click',()=>{ const text=norm($('#pd-save-text').val()); if(!text) return toast(pdT('표현을 입력해주세요.'),'warn'); const tags=($('#pd-save-tags').val()||'').split(',').map(norm).filter(Boolean); addNote({ text, language:$('#pd-save-language').val(), meaningLanguage:$('#pd-save-meaning-language').val(), meaning:$('#pd-save-meaning').val(), context:$('#pd-save-context').val(), memo:$('#pd-save-memo').val(), tags, source:p.source||'', explanation:p.explanation||'', grammar:p.grammar||'', alternatives:p.alternatives||'' }); closeModals(); renderNotebook(); toast(pdT('저장했습니다.'),'success'); });
+  if (withExplanation) {
+    const review = $(`<section class="pd-save-ai-review">
+      <h4>${esc(pdT('AI 해설'))}</h4>
+      <p>${esc(pdT('저장 전에 해설을 확인하고 수정할 수 있습니다.'))}</p>
+      <label for="pd-save-explanation">${esc(pdT('설명'))}</label>
+      <textarea id="pd-save-explanation" rows="4">${esc(p.explanation || '')}</textarea>
+      <label for="pd-save-grammar">${esc(pdT('문법'))}</label>
+      <textarea id="pd-save-grammar" rows="2">${esc(p.grammar || '')}</textarea>
+      <label for="pd-save-alternatives">${esc(pdT('다른 표현'))}</label>
+      <textarea id="pd-save-alternatives" rows="2">${esc(p.alternatives || '')}</textarea>
+    </section>`);
+    review.insertBefore($('#pd-save-note').closest('.pd-submit-actions'));
+  }
+  $('#pd-save-note').on('click',()=>{ const text=norm($('#pd-save-text').val()); if(!text) return toast(pdT('표현을 입력해주세요.'),'warn'); const tags=($('#pd-save-tags').val()||'').split(',').map(norm).filter(Boolean); addNote({ text, language:$('#pd-save-language').val(), meaningLanguage:$('#pd-save-meaning-language').val(), meaning:$('#pd-save-meaning').val(), context:$('#pd-save-context').val(), memo:$('#pd-save-memo').val(), tags, source:p.source||'', explanation:withExplanation ? $('#pd-save-explanation').val() : p.explanation||'', grammar:withExplanation ? $('#pd-save-grammar').val() : p.grammar||'', alternatives:withExplanation ? $('#pd-save-alternatives').val() : p.alternatives||'' }); closeModals(); renderNotebook(); toast(pdT('저장했습니다.'),'success'); });
 }
 
 function openEditNoteModal(id) {

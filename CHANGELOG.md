@@ -1,5 +1,12 @@
 # Phrase Desk changelog
 
+## 2026-11-13 UI follow-up — expression explanation and save review
+
+- Reorganized **Explore Expression** into a clear expression header and individual meaning, nuance, grammar, example, and alternative cards. Long text scrolls independently of the always-visible bottom Save Expression action.
+- When opened from an AI explanation, the existing note-save form now shows editable AI explanation, grammar, and alternatives, while keeping its existing meaning, context, tags, and memo fields. Only the user's final edits are saved; no extra AI calls.
+- Styling is scoped to the explanation modal and conditional AI review section. Other modals, composer Aa, translation, PDU, per-swipe cache, user data, and character prompts are untouched.
+- Localized the new save-review labels in Korean, English, Japanese, French, and Spanish. Verified 21 Node regression tests, 13 headless-browser scenarios across desktop/mobile locales, long-content scrolling with a fixed footer, and AI-to-save edits without extra requests. Previous baseline: `e8bdf7f46aacc71909a38a8de559a528f8d857ef`. Roll back to this commit if the explanation layout or review input behaves unexpectedly; preserve notes/chats.
+
 ## 2026-11-13 follow-up — On-demand expression explanation
 
 - Selected text's floating `Aa` now offers **Save Expression** and **Explore Expression**. The input-box Aa quick menu is unchanged.

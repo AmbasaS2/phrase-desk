@@ -1987,9 +1987,144 @@ html.pd-bilingual-blur-enabled .mes_block .pd-bilingual-blur.pd-blur-revealed {
   touch-action: manipulation !important;
 }
 
-/* Phrase Desk contextual expression explanation, selection Aa only. */
-.pd-modal .pd-explain-source {font-weight:650 !important;overflow-wrap:anywhere !important;margin:6px 0 10px !important;}
-.pd-modal .pd-explain-results {display:grid !important;gap:10px !important;margin:9px 0 13px !important;}
-.pd-modal .pd-explain-item {min-width:0 !important;overflow-wrap:anywhere !important;}
-.pd-modal .pd-explain-item b {display:block !important;margin-bottom:3px !important;}
-.pd-modal .pd-explain-item p {white-space:pre-wrap !important;overflow-wrap:anywhere !important;margin:0 !important;}
+/* Expression explanation only: structured cards and a non-scrolling action footer. */
+body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal.pd-explain-modal {
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  background: var(--pd-bg) !important;
+}
+.pd-explain-modal .pd-explain-header {
+  flex: 0 0 auto !important;
+  padding: 22px 24px 16px !important;
+  border-bottom: 1px solid var(--pd-line) !important;
+}
+.pd-explain-modal .pd-explain-header h3 {
+  margin: 0 40px 0 0 !important;
+  font-size: calc(var(--pd-user-font-size, 13px) + 5px) !important;
+  line-height: 1.25 !important;
+}
+.pd-explain-modal .pd-explain-scroll {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch;
+  padding: 18px 24px 22px !important;
+}
+.pd-explain-modal .pd-explain-hero {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 5px !important;
+  min-width: 0 !important;
+  padding: 18px 20px !important;
+  margin-bottom: 16px !important;
+  border: 1px solid var(--pd-line) !important;
+  border-radius: 17px !important;
+  background: var(--pd-surface) !important;
+}
+.pd-explain-modal .pd-explain-eyebrow {
+  font-size: calc(var(--pd-user-font-size, 13px) - 1px) !important;
+  font-weight: 500 !important;
+  color: var(--pd-muted) !important;
+}
+.pd-explain-modal .pd-explain-phrase {
+  font-size: calc(var(--pd-user-font-size, 13px) + 5px) !important;
+  font-weight: 650 !important;
+  line-height: 1.4 !important;
+  letter-spacing: -.015em !important;
+  overflow-wrap: anywhere !important;
+}
+.pd-explain-modal .pd-explain-results {
+  display: grid !important;
+  gap: 10px !important;
+}
+.pd-explain-modal .pd-explain-item {
+  min-width: 0 !important;
+  padding: 14px 16px !important;
+  border: 1px solid var(--pd-line) !important;
+  border-radius: 14px !important;
+  background: var(--pd-surface) !important;
+  overflow-wrap: anywhere !important;
+}
+.pd-explain-modal .pd-explain-item-title {
+  margin: 0 0 7px !important;
+  font-size: calc(var(--pd-user-font-size, 13px) - 1px) !important;
+  line-height: 1.3 !important;
+  font-weight: 700 !important;
+  color: var(--pd-muted) !important;
+}
+.pd-explain-modal .pd-explain-item p {
+  margin: 0 !important;
+  font-size: var(--pd-user-font-size, 13px) !important;
+  font-weight: 400 !important;
+  line-height: 1.65 !important;
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere !important;
+}
+.pd-explain-modal .pd-explain-meaning p {
+  font-size: calc(var(--pd-user-font-size, 13px) + 1px) !important;
+  font-weight: 570 !important;
+}
+.pd-explain-modal .pd-explain-example p {
+  padding-left: 12px !important;
+  border-left: 2px solid var(--pd-line) !important;
+  font-style: italic !important;
+}
+.pd-explain-modal .pd-explain-status {
+  padding: 14px 2px !important;
+  color: var(--pd-muted) !important;
+  line-height: 1.5 !important;
+  margin: 0 !important;
+}
+.pd-explain-modal .pd-explain-footer {
+  flex: 0 0 auto !important;
+  display: flex !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  gap: 10px !important;
+  min-height: 66px !important;
+  padding: 11px 24px !important;
+  border-top: 1px solid var(--pd-line) !important;
+  background: var(--pd-bg) !important;
+}
+.pd-explain-modal .pd-explain-footer button {
+  min-width: 138px !important;
+  min-height: 42px !important;
+  padding: 10px 18px !important;
+  white-space: nowrap !important;
+}
+.pd-modal .pd-save-ai-review {
+  margin: 18px 0 6px !important;
+  padding: 16px !important;
+  border: 1px solid var(--pd-line) !important;
+  border-radius: 14px !important;
+  background: var(--pd-surface) !important;
+}
+.pd-modal .pd-save-ai-review h4 {
+  margin: 0 0 3px !important;
+  font-size: calc(var(--pd-user-font-size, 13px) + 1px) !important;
+  line-height: 1.4 !important;
+}
+.pd-modal .pd-save-ai-review > p {
+  color: var(--pd-muted) !important;
+  font-size: calc(var(--pd-user-font-size, 13px) - 1px) !important;
+  line-height: 1.45 !important;
+  margin: 0 0 9px !important;
+}
+.pd-modal .pd-save-ai-review textarea {
+  max-width: 100% !important;
+  resize: vertical !important;
+}
+@media (max-width: 600px) {
+  .pd-explain-modal .pd-explain-header { padding: 18px 18px 14px !important; }
+  .pd-explain-modal .pd-explain-scroll { padding: 14px 16px 18px !important; }
+  .pd-explain-modal .pd-explain-hero { padding: 15px 16px !important; }
+  .pd-explain-modal .pd-explain-item { padding: 12px 14px !important; }
+  .pd-explain-modal .pd-explain-footer {
+    padding: 10px 16px max(12px, env(safe-area-inset-bottom)) !important;
+  }
+  .pd-explain-modal .pd-explain-footer button { width: 100% !important; }
+}
