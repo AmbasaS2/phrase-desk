@@ -4576,8 +4576,31 @@ function injectInputButtons() {
   study[0].style.setProperty('display', settings.showInputAa === false ? 'none' : 'inline-flex', 'important');
   return true;
 }
+// Keep Phrase Desk's two controls immediately next to Send, without moving other extensions' buttons.
+function keepInputButtonsBesideSend() {
+  const rightForm = document.getElementById('rightSendForm');
+  const sendButton = document.getElementById('send_but');
+  const translate = document.getElementById('pd-input-translate');
+  const study = document.getElementById('pd-study-open');
+  if (!rightForm || sendButton?.parentElement !== rightForm || !translate || !study) return;
+  if (translate.nextElementSibling === study && study.nextElementSibling === sendButton) return;
+  sendButton.before(translate, study);
+}
 function setupInputButtonsOnce() {
-  const run = () => { try { injectInputButtons(); } catch (e) { console.warn('[Phrase Desk] input buttons skipped', e); } };
+  let observedRightForm = null;
+  let orderObserver = null;
+  const run = () => {
+    try {
+      injectInputButtons();
+      const rightForm = document.getElementById('rightSendForm');
+      if (!rightForm || observedRightForm === rightForm || typeof MutationObserver !== 'function') return;
+      orderObserver?.disconnect();
+      observedRightForm = rightForm;
+      orderObserver = new MutationObserver(keepInputButtonsBesideSend);
+      orderObserver.observe(rightForm, { childList: true });
+      keepInputButtonsBesideSend();
+    } catch (e) { console.warn('[Phrase Desk] input buttons skipped', e); }
+  };
   run();
   setTimeout(run, 250);
   setTimeout(run, 900);
