@@ -4,6 +4,27 @@
 
 You can use message translation on its own, or turn saved expressions into vocabulary notes, quizzes, and response practice in your chosen study language.
 
+
+## 📸 Screenshots
+
+<p align="center">
+  <img src="assets/readme/phrase-desk-bilingual.jpeg" alt="English–Korean bilingual translation in a roleplay message" width="365" />
+</p>
+<p align="center">
+  <img src="assets/readme/phrase-desk-notebook.jpeg" alt="Phrase notebook with saved expressions and context" width="330" />
+  <img src="assets/readme/phrase-desk-quiz.jpeg" alt="Vocabulary quiz based on saved expressions" width="300" />
+</p>
+
+*These English–Korean examples were captured with the Korean UI. The current extension also supports other study and explanation languages; screenshots may differ by version.*
+
+## 📥 Installation and First Steps
+
+1. In SillyTavern, open **Extensions → Install extension** (the option may be under extension management).
+2. Paste \`https://github.com/AmbasaS2/phrase-desk\`, install, and reload the page.
+3. Open **Extensions → Phrase Desk** to choose the translation engine and study/explanation languages.
+4. Use the globe button on a message to translate it. Collecting phrases, quizzes, and answer practice are optional.
+
+
 ## 🌍 Languages (v1.6.0)
 
 The interface follows SillyTavern’s UI language automatically. Korean, English, Japanese, French, and Spanish are included; other UI locales use English labels. This does not restrict which languages can be translated or studied: actual language coverage and quality depend on the selected model or Google Translation.
@@ -269,6 +290,27 @@ It is a good idea to export important Phrase Notebook and study records as a bac
 **Phrase Desk는 여러 언어의 RP를 번역해 읽고, 마음에 드는 표현을 저장해 공부할 수 있는 SillyTavern 확장입니다.**
 
 메시지 번역만 사용할 수도 있고, 저장한 표현으로 어휘 정리 · 쪽지 시험 · 선택한 언어의 답변 연습까지 이어갈 수도 있습니다.
+
+
+## 📸 화면 미리보기
+
+<p align="center">
+  <img src="assets/readme/phrase-desk-bilingual.jpeg" alt="롤플레이 메시지의 영어·한국어 병기 번역" width="365" />
+</p>
+<p align="center">
+  <img src="assets/readme/phrase-desk-notebook.jpeg" alt="저장한 표현과 문맥이 표시되는 표현 노트" width="330" />
+  <img src="assets/readme/phrase-desk-quiz.jpeg" alt="저장한 표현으로 푸는 쪽지시험" width="300" />
+</p>
+
+*사진은 한국어 UI에서 영어·한국어를 사용하는 예시입니다. 현재 확장은 다른 학습·설명 언어도 지원하며, 버전에 따라 화면이 다를 수 있습니다.*
+
+## 📥 설치 및 처음 사용하기
+
+1. SillyTavern의 **확장 프로그램 → 확장 설치** 메뉴를 엽니다. 버전에 따라 확장 관리 메뉴 안에 있을 수 있습니다.
+2. \`https://github.com/AmbasaS2/phrase-desk\`를 붙여넣어 설치하고 새로고침합니다.
+3. **확장 프로그램 → Phrase Desk**에서 번역 엔진, 학습 언어, 번역·설명 언어를 선택합니다.
+4. 메시지의 지구본 버튼으로 번역합니다. 표현 저장·쪽지시험·답변 연습은 필요할 때만 사용해도 됩니다.
+
 
 ## 🌍 언어 설정 (v1.6.0)
 
