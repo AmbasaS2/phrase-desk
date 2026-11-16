@@ -8,7 +8,7 @@ You can use message translation on its own, or turn saved expressions into vocab
 ## 📸 Preview
 
 <p align="center">
-  <a href="assets/readme/phrase-desk-preview.png"><img src="assets/readme/phrase-desk-preview.png" alt="Phrase Desk translation, expression notebook and vocabulary quiz" width="900" /></a>
+  <a href="assets/readme/mobile/phrase-desk-preview-mobile.webp"><img src="assets/readme/mobile/phrase-desk-preview-mobile.webp" alt="Phrase Desk translation, expression notebook and vocabulary quiz" width="900" /></a>
 </p>
 
 *Cropped Korean-UI examples show English–Korean text. Other study and explanation languages are supported; see the complete images below.*
@@ -33,7 +33,7 @@ You can use message translation on its own, or turn saved expressions into vocab
 ## 🧭 From Translation to Practice
 
 <p align="center">
-  <a href="assets/readme/phrase-desk-workflow-guide.png"><img src="assets/readme/phrase-desk-workflow-guide.png" alt="Translate roleplay, save phrases, review them in the notebook, quiz or answer practice" width="860" /></a>
+  <a href="assets/readme/mobile/phrase-desk-workflow-guide-mobile.webp"><img src="assets/readme/mobile/phrase-desk-workflow-guide-mobile.webp" alt="Translate roleplay, save phrases, review them in the notebook, quiz or answer practice" width="860" /></a>
 </p>
 
 Translate messages on their own, or optionally save useful expressions and use them for review. Quizzes run locally without a model API; AI answer practice uses your selected connection profile.
@@ -41,7 +41,7 @@ Translate messages on their own, or optionally save useful expressions and use t
 ## 🌍 Languages (v1.6.0)
 
 <p align="center">
-  <a href="assets/readme/phrase-desk-language-guide.webp"><img src="assets/readme/phrase-desk-language-guide.webp" alt="Phrase Desk language guide: separate study language and translation or explanation language settings" width="860" /></a>
+  <a href="assets/readme/mobile/phrase-desk-language-guide-mobile.webp"><img src="assets/readme/mobile/phrase-desk-language-guide-mobile.webp" alt="Phrase Desk language guide: separate study language and translation or explanation language settings" width="860" /></a>
 </p>
 
 *Feature diagram for v1.6.0, not a settings screenshot. Language changes do not rewrite existing cards or automatically call a model.*
@@ -73,7 +73,7 @@ Set the translation method and related options under **Extensions → Phrase Des
 **Chat Translation**
 
 <p align="center">
-  <a href="assets/readme/phrase-desk-translation-modes.webp"><img src="assets/readme/phrase-desk-translation-modes.webp" alt="Actual example screenshots comparing Translation Only, Full Bilingual and Bilingual Dialogue Only" width="860" /></a>
+  <a href="assets/readme/mobile/phrase-desk-translation-modes-mobile.webp"><img src="assets/readme/mobile/phrase-desk-translation-modes-mobile.webp" alt="Actual example screenshots comparing Translation Only, Full Bilingual and Bilingual Dialogue Only" width="860" /></a>
 </p>
 
 *Earlier English–Korean examples. The current study and translation languages can be set independently.*
@@ -92,7 +92,7 @@ Set the translation method and related options under **Extensions → Phrase Des
 **Bilingual Display**
 
 <p align="center">
-  <a href="assets/readme/phrase-desk-reading-tools.webp"><img src="assets/readme/phrase-desk-reading-tools.webp" alt="Earlier real screenshots of blur meanings, numbered translation notes and expanding notes" width="860" /></a>
+  <a href="assets/readme/mobile/phrase-desk-reading-tools-mobile.webp"><img src="assets/readme/mobile/phrase-desk-reading-tools-mobile.webp" alt="Earlier real screenshots of blur meanings, numbered translation notes and expanding notes" width="860" /></a>
 </p>
 
 *Blur and numbered notes change the way an existing translation is displayed; they do not themselves request a new translation.*
@@ -170,7 +170,7 @@ When a message is displayed in Scene Board format, Phrase Desk preserves its sou
 ## ✍️ Input Correction Before Sending
 
 <p align="center">
-  <a href="assets/readme/phrase-desk-writing-guide.webp"><img src="assets/readme/phrase-desk-writing-guide.webp" alt="Actual earlier screenshots of composer translation, Aa quick menu and before-send input correction" width="860" /></a>
+  <a href="assets/readme/mobile/phrase-desk-writing-guide-mobile.webp"><img src="assets/readme/mobile/phrase-desk-writing-guide-mobile.webp" alt="Actual earlier screenshots of composer translation, Aa quick menu and before-send input correction" width="860" /></a>
 </p>
 
 *These are earlier Korean-UI examples. Input correction is optional; the displayed action names may differ with your UI language.*
@@ -193,7 +193,7 @@ Saving a correction to the Phrase Notebook does not create another API request. 
 ## 📚 Phrase Notebook
 
 <p align="center">
-  <a href="assets/readme/phrase-desk-notebook-guide.webp"><img src="assets/readme/phrase-desk-notebook-guide.webp" alt="Select text and use Aa, review phrases in the notebook, and find repeated-expression candidates" width="860" /></a>
+  <a href="assets/readme/mobile/phrase-desk-notebook-guide-mobile.webp"><img src="assets/readme/mobile/phrase-desk-notebook-guide-mobile.webp" alt="Select text and use Aa, review phrases in the notebook, and find repeated-expression candidates" width="860" /></a>
 </p>
 
 *Earlier screenshots. Saving an expression does not call the model; exploring a phrase or finding repeated-expression candidates does.*
@@ -256,7 +256,7 @@ This does not analyze a sentence you have selected. Phrase Desk presents up to 1
 ## 📝 Study Sheet Mode
 
 <p align="center">
-  <a href="assets/readme/phrase-desk-study-guide.webp"><img src="assets/readme/phrase-desk-study-guide.webp" alt="Real screenshots of the local quiz, AI answer practice and learning calendar" width="860" /></a>
+  <a href="assets/readme/mobile/phrase-desk-study-guide-mobile.webp"><img src="assets/readme/mobile/phrase-desk-study-guide-mobile.webp" alt="Real screenshots of the local quiz, AI answer practice and learning calendar" width="860" /></a>
 </p>
 
 *Earlier examples. Quiz questions and grading are local; AI answer practice uses model requests.*
@@ -300,7 +300,7 @@ You can retake only the expressions in the wrong-answer notebook. Individual wro
 ## 🔌 API Usage
 
 <p align="center">
-  <a href="assets/readme/phrase-desk-api-guide.webp"><img src="assets/readme/phrase-desk-api-guide.webp" alt="Visual guide separating locally processed Phrase Desk functions from those that call a model API" width="860" /></a>
+  <a href="assets/readme/mobile/phrase-desk-api-guide-mobile.webp"><img src="assets/readme/mobile/phrase-desk-api-guide-mobile.webp" alt="Visual guide separating locally processed Phrase Desk functions from those that call a model API" width="860" /></a>
 </p>
 
 *Quick Google Translation needs an internet connection but not your configured model API. Connection Profile features use model calls as described below.*
@@ -350,7 +350,7 @@ It is a good idea to export important Phrase Notebook and study records as a bac
 ## 📸 미리보기
 
 <p align="center">
-  <a href="assets/readme/phrase-desk-preview.png"><img src="assets/readme/phrase-desk-preview.png" alt="프레이즈 데스크 번역·표현 노트·쪽지시험 예시" width="900" /></a>
+  <a href="assets/readme/mobile/phrase-desk-preview-mobile.webp"><img src="assets/readme/mobile/phrase-desk-preview-mobile.webp" alt="프레이즈 데스크 번역·표현 노트·쪽지시험 예시" width="900" /></a>
 </p>
 
 *한국어 UI에서 영한 병기를 사용하는 예시 화면을 크기에 맞춰 일부 잘랐습니다. 다른 학습·설명 언어도 지원하며, 전체 사진은 아래에서 볼 수 있습니다.*
@@ -375,7 +375,7 @@ It is a good idea to export important Phrase Notebook and study records as a bac
 ## 🧭 번역에서 학습까지
 
 <p align="center">
-  <a href="assets/readme/phrase-desk-workflow-guide.png"><img src="assets/readme/phrase-desk-workflow-guide.png" alt="RP 번역, 표현 저장, 표현 노트, 쪽지시험과 AI 답변 연습으로 이어지는 흐름" width="860" /></a>
+  <a href="assets/readme/mobile/phrase-desk-workflow-guide-mobile.webp"><img src="assets/readme/mobile/phrase-desk-workflow-guide-mobile.webp" alt="RP 번역, 표현 저장, 표현 노트, 쪽지시험과 AI 답변 연습으로 이어지는 흐름" width="860" /></a>
 </p>
 
 메시지 번역만 사용해도 되고, 필요할 때 표현을 저장해 복습할 수도 있습니다. 쪽지시험은 모델 API 없이 기기에서 처리하며 AI 답변 연습은 선택한 연결 프로필을 사용합니다.
@@ -383,7 +383,7 @@ It is a good idea to export important Phrase Notebook and study records as a bac
 ## 🌍 언어 설정 (v1.6.0)
 
 <p align="center">
-  <a href="assets/readme/phrase-desk-language-guide.webp"><img src="assets/readme/phrase-desk-language-guide.webp" alt="프레이즈 데스크 학습 언어와 번역·설명 언어 설정의 기능 차이" width="860" /></a>
+  <a href="assets/readme/mobile/phrase-desk-language-guide-mobile.webp"><img src="assets/readme/mobile/phrase-desk-language-guide-mobile.webp" alt="프레이즈 데스크 학습 언어와 번역·설명 언어 설정의 기능 차이" width="860" /></a>
 </p>
 
 *v1.6.0의 기능을 정리한 그림이며 실제 설정 캡처는 아닙니다. 언어 변경만으로 기존 카드 내용을 바꾸거나 모델을 자동 호출하지 않습니다.*
@@ -415,7 +415,7 @@ It is a good idea to export important Phrase Notebook and study records as a bac
 **채팅 번역**
 
 <p align="center">
-  <a href="assets/readme/phrase-desk-translation-modes.webp"><img src="assets/readme/phrase-desk-translation-modes.webp" alt="번역문만, 전체 병기, 대사만 병기 세 가지의 실제 화면 비교" width="860" /></a>
+  <a href="assets/readme/mobile/phrase-desk-translation-modes-mobile.webp"><img src="assets/readme/mobile/phrase-desk-translation-modes-mobile.webp" alt="번역문만, 전체 병기, 대사만 병기 세 가지의 실제 화면 비교" width="860" /></a>
 </p>
 
 *이전 영한 병기 예시 화면입니다. 현재는 학습 언어와 번역·설명 언어를 별도로 선택할 수 있습니다.*
@@ -434,7 +434,7 @@ It is a good idea to export important Phrase Notebook and study records as a bac
 **병기 표시**
 
 <p align="center">
-  <a href="assets/readme/phrase-desk-reading-tools.webp"><img src="assets/readme/phrase-desk-reading-tools.webp" alt="뜻 블러, 번호 주석 팝업, 주석 펼치기 기능의 이전 실제 화면" width="860" /></a>
+  <a href="assets/readme/mobile/phrase-desk-reading-tools-mobile.webp"><img src="assets/readme/mobile/phrase-desk-reading-tools-mobile.webp" alt="뜻 블러, 번호 주석 팝업, 주석 펼치기 기능의 이전 실제 화면" width="860" /></a>
 </p>
 
 *뜻 블러와 번호 주석은 이미 생성된 번역을 보여주는 방식입니다. 보기 방식을 바꾸는 것만으로 새 번역을 요청하지 않습니다.*
@@ -512,7 +512,7 @@ HTML이나 사용자 정의 태그가 있는 메시지는 태그와 속성을 �
 ## ✍️ 보내기 전 입력 교정
 
 <p align="center">
-  <a href="assets/readme/phrase-desk-writing-guide.webp"><img src="assets/readme/phrase-desk-writing-guide.webp" alt="입력창 지구본 번역, Aa 빠른 메뉴, 보내기 전 문장 교정의 실제 예시 화면" width="860" /></a>
+  <a href="assets/readme/mobile/phrase-desk-writing-guide-mobile.webp"><img src="assets/readme/mobile/phrase-desk-writing-guide-mobile.webp" alt="입력창 지구본 번역, Aa 빠른 메뉴, 보내기 전 문장 교정의 실제 예시 화면" width="860" /></a>
 </p>
 
 *이전 버전의 실제 한국어 UI 화면입니다. 입력 교정은 선택 기능이고, 버튼 문구는 현재 화면 언어에 따라 달라질 수 있습니다.*
@@ -535,7 +535,7 @@ HTML이나 사용자 정의 태그가 있는 메시지는 태그와 속성을 �
 ## 📚 표현 노트
 
 <p align="center">
-  <a href="assets/readme/phrase-desk-notebook-guide.webp"><img src="assets/readme/phrase-desk-notebook-guide.webp" alt="표현 드래그와 Aa 메뉴, 표현 노트 카드, 반복 표현 후보 찾기 화면" width="860" /></a>
+  <a href="assets/readme/mobile/phrase-desk-notebook-guide-mobile.webp"><img src="assets/readme/mobile/phrase-desk-notebook-guide-mobile.webp" alt="표현 드래그와 Aa 메뉴, 표현 노트 카드, 반복 표현 후보 찾기 화면" width="860" /></a>
 </p>
 
 *이전 버전 실제 화면입니다. 표현 저장은 모델 호출 없이 처리하고, AI 표현 설명이나 반복 표현 후보 찾기는 연결 프로필을 사용합니다.*
@@ -598,7 +598,7 @@ Phrase Desk를 열고 오른쪽 위의 `⚙`을 누릅니다.
 ## 📝 학습지 모드
 
 <p align="center">
-  <a href="assets/readme/phrase-desk-study-guide.webp"><img src="assets/readme/phrase-desk-study-guide.webp" alt="쪽지시험, AI 답변 연습, 학습 달력의 실제 사용 화면 비교" width="860" /></a>
+  <a href="assets/readme/mobile/phrase-desk-study-guide-mobile.webp"><img src="assets/readme/mobile/phrase-desk-study-guide-mobile.webp" alt="쪽지시험, AI 답변 연습, 학습 달력의 실제 사용 화면 비교" width="860" /></a>
 </p>
 
 *이전 버전의 실제 예시입니다. 쪽지시험의 출제·채점은 로컬에서, AI 답변 연습은 모델 요청으로 진행됩니다.*
@@ -642,7 +642,7 @@ Phrase Desk를 열고 오른쪽 위의 `⚙`을 누릅니다.
 ## 🔌 API 사용 안내
 
 <p align="center">
-  <a href="assets/readme/phrase-desk-api-guide.webp"><img src="assets/readme/phrase-desk-api-guide.webp" alt="프레이즈 데스크에서 모델 API가 필요한 기능과 필요하지 않은 기능 구분" width="860" /></a>
+  <a href="assets/readme/mobile/phrase-desk-api-guide-mobile.webp"><img src="assets/readme/mobile/phrase-desk-api-guide-mobile.webp" alt="프레이즈 데스크에서 모델 API가 필요한 기능과 필요하지 않은 기능 구분" width="860" /></a>
 </p>
 
 *구글 간편 번역은 인터넷 연결이 필요하지만 선택한 연결 프로필의 모델 API는 사용하지 않습니다. 다른 기능별 호출 여부는 아래 표를 참고하세요.*
