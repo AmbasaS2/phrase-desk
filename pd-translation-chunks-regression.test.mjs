@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { splitGoogleChunks, splitCanonicalAIInput } from './pd-translation-chunks.js';
+import { loadPhraseDesk } from './test-helpers.mjs';
 
 const googleJoin = chunks => chunks.map(part => part.text + part.separator).join('');
 const marker = id => '[[PDU-AB-' + String(id).padStart(4, '0') + ']]';
@@ -88,6 +89,34 @@ test('unsupported source plans and single-unit messages use the original request
   assert.deepEqual(splitCanonicalAIInput(plan),[{text:plan.promptSource,unitCount:0}]);
   const oversized = {supported:true,promptSource:marker(1)+'Long'.repeat(12000)+close(1),items:[{openMarker:marker(1),closeMarker:close(1)}]};
   assert.equal(splitCanonicalAIInput(oversized).length,1);
+});
+
+
+test('concatenated long-chat PDU chunks still parse and render with the original source', () => {
+  const api = loadPhraseDesk();
+  const source = Array.from({ length:160 }, (_,i) =>
+    'He crossed the quiet hall and looked through the window at the city. ' + i + '\n\n').join('');
+  const plan = api.createCanonicalTranslationPlan(source);
+  const chunks = splitCanonicalAIInput(plan, 8000);
+  assert.ok(chunks.length > 1);
+  const received = chunks.map(chunk => {
+    let text = chunk.text;
+    for (const item of plan.items) {
+      if (!text.includes(item.openMarker)) continue;
+      const ko = '한국어 ' + '가'.repeat(Math.max(10, Math.floor(item.sourceText.length * 0.6)));
+      text = text.replace(item.openMarker + item.promptText + item.closeMarker,
+        item.openMarker + ko + item.closeMarker);
+    }
+    return text;
+  }).join('');
+  const record = api.parseCanonicalTranslationResult(received, plan, 'profile');
+  assert.equal(record.complete, true);
+  assert.equal(api.canonicalRecordValid(record, source), true);
+  assert.equal(record.source, source);
+  const view = api.renderCanonicalTranslation(record, 'full:by_paragraph:v8:lang:ko');
+  assert.ok(view.includes(source.slice(0, 30)));
+  assert.ok(view.includes('한국어'));
+  assert.doesNotMatch(view, /PDU-|PD_FMT_/);
 });
 
 test('integration remains opt-in by length, uses existing parser and never retries paid AI', () => {
