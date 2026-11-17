@@ -4493,7 +4493,7 @@ function setupTranslationPromptLibrary() {
         '<button id="pd-preset-decision-yes" class="menu_button" type="button">', label(confirmLabel), '</button>',
         '<button class="menu_button" type="button" data-close-modal>', label('취소'), '</button>',
       '</div>',
-    ].join(''));
+    ].join(''), { compactPrompt: true });
     modal.find('#pd-preset-decision-yes').on('click', function() {
       closeModals();
       action();
@@ -4507,7 +4507,7 @@ function setupTranslationPromptLibrary() {
         '<button id="pd-preset-name-confirm" class="menu_button" type="button">', label('저장하기'), '</button>',
         '<button class="menu_button" type="button" data-close-modal>', label('취소'), '</button>',
       '</div>',
-    ].join(''));
+    ].join(''), { compactPrompt: true });
     const field = modal.find('#pd-preset-name');
     const commit = () => {
       const name = String(field.val() || '').trim();
@@ -6706,7 +6706,12 @@ function placeModalInViewport(backdrop) {
   if (!modal) return;
   const v = visibleViewportBox();
   const margin = Math.max(10, Math.min(16, Math.round(Math.min(v.width, v.height) * 0.025)));
-  const width = Math.max(280, Math.min(720, v.width - margin * 2));
+  // Only the prompt name/confirmation dialogs use the compact theme-like width.
+  // Other Phrase Desk modals retain their existing 720px layout.
+  const compactPrompt = modal.classList.contains('pd-preset-compact-modal');
+  const width = compactPrompt
+    ? Math.max(260, Math.min(400, v.width - margin * 2))
+    : Math.max(280, Math.min(720, v.width - margin * 2));
   const maxHeight = Math.max(220, Math.min(760, v.height - margin * 2));
   const set = (el, prop, val) => el.style.setProperty(prop, val, 'important');
   set(backdrop, 'position', 'fixed');
@@ -6739,7 +6744,8 @@ function showModal(inner, options = {}) {
   closeModals();
   keepPhraseDeskOpen(1200);
   const explainClass = options?.explainLayout === true ? ' pd-explain-modal' : '';
-  const backdrop = $(`<div class="pd-modal-backdrop pd-viewport-modal"><div class="pd-modal${explainClass}">${inner}</div></div>`);
+  const compactClass = options?.compactPrompt === true ? ' pd-preset-compact-modal' : '';
+  const backdrop = $(`<div class="pd-modal-backdrop pd-viewport-modal"><div class="pd-modal${explainClass}${compactClass}">${inner}</div></div>`);
   $('body').append(backdrop);
   const doPlace = () => placeModalInViewport(backdrop[0]);
   requestAnimationFrame(doPlace);
