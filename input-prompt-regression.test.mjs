@@ -175,3 +175,28 @@ test('two separate compact prompt editors are ordered input above output, labels
  assert.ok(css.includes('.pd-preset-compact-modal #pd-input-preset-name'));
  assert.ok(css.includes('#pd-input-preset-import-file'));
 });
+
+test('saved custom input is actually sent to the translator, and output selection is not changed',()=>{
+ const seed={translationPromptVersion:1,translationPrompt:'OUTPUT STAYS {{target_language}}',
+  translationPresetVersion:1,translationPresets:[{id:'custom-1',name:'Prior output',text:'OUTPUT STAYS {{target_language}}'}],
+  activeTranslationPresetId:'custom-1',studyLanguage:'en',targetLanguage:'ko'};
+ const api=loadPhraseDesk({seed});
+ const entry=addInputTranslationPrompt(api.settings,'My input style','NATIVE INPUT {{target_language}}',DEFAULT_INPUT_TRANSLATION_PROMPT);
+ assert.ok(entry);
+ const before=api.buildInputTranslationPrompt('지금 뭐 해?');
+ assert.ok(before.startsWith('NATIVE INPUT English'));
+ assert.ok(!before.includes('OUTPUT STAYS'));
+ assert.ok(before.includes('지금 뭐 해?'));
+ api.settings.studyLanguage='fr';
+ const french=api.buildInputTranslationPrompt('봉주르');
+ assert.ok(french.includes('NATIVE INPUT French'));
+ const output=api.buildPrompt('[[PDU-A-0001]]Hi[[/PDU-A-0001]]','canonical',{canonicalUnitCount:1});
+ assert.ok(output.includes('OUTPUT STAYS Korean'));
+ assert.ok(!output.includes('NATIVE INPUT'));
+ assert.equal(api.saveSettings(true),true);
+ const saved=JSON.parse(JSON.stringify(api.sandbox.extension_settings['phrase-desk']));
+ const again=loadPhraseDesk({seed:saved});
+ assert.equal(activeInputTranslationPromptId(again.settings),entry.id);
+ assert.ok(again.buildInputTranslationPrompt('안녕').includes('NATIVE INPUT French'));
+ assert.equal(again.globalPrompt(),'OUTPUT STAYS {{target_language}}');
+});
