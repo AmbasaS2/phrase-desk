@@ -90,15 +90,15 @@ Set the translation method and related options under **Extensions → Phrase Des
 | Setting | Description |
 |---|---|
 | **Correct Input Before Sending** | Shows a suggested sentence and a short explanation before a message in the selected study language is sent. |
-| **Global Prompt** | Edits the complete literary/style translation instructions used for all characters; required formatting contracts remain protected. |
+| **Translation Prompt Library** | Select the built-in default or a named custom prompt. Add, duplicate, rename, delete, and explicitly save custom prompts. |
 | **Show the Input-box Aa Button** | The fourth checkbox shows or hides only the composer quick-menu button. Selection `Aa` and the wand-menu entry remain available. |
 | **Current Character Prompt** | Adds rules needed only for the current character, such as names, gender, forms of address, voice, and proper nouns. |
 
-The **Global Prompt** field contains the complete editable literary instructions, not an extra preference layer. `{{target_language}}` is filled from the selected output language (or study language for composer translation). PDU/PD_FMT protection and bilingual assembly remain internal. **Restore Default Prompt** asks for confirmation and resets only this field; character prompts, cards, and caches are unchanged. Existing additional preferences are appended once during migration and preserved separately. Google Translation does not use prompts.
+The **built-in default prompt** is the only bundled translation style and is read-only. Choose **Duplicate** to experiment with its full text, or **New Prompt** to write your own. Give each custom prompt a name and press **Save** to apply its edited contents. The dropdown immediately remembers the selected prompt across refreshes, browser restarts, and SillyTavern restarts using user settings; unsaved edits do not alter what the AI receives. A warning appears when you switch with unsaved edits. Existing saved full prompts migrate unchanged as **기존 전체 프롬프트** and remain selected. `{{target_language}}` is replaced by the selected output language (or study language for input translation). PDU/PD_FMT protection and bilingual assembly remain internal, and no extra default literary prompt is injected behind a custom prompt. Google Translation does not use prompts.
 
 Enabling automatic translation may create a translation request whenever a new message arrives. Connection Profile translation is affected by the selected model and preset.
 
-Both prompt editors continue to save automatically. A small status below each field shows **Saving…** while edits are pending and **Auto-saved ✓** after the existing settings-save routine runs. There is no extra Save button.
+**Custom translation prompt contents require an explicit Save click.** The selector, names, and new/deleted prompt records are saved immediately; the last selection is restored on reload. The **Current Character Prompt** still auto-saves with its existing **Saving… / Auto-saved ✓** feedback. Switching prompts does not clear caches or automatically retranslate old messages; hold `🌐` to request a fresh translation.
 
 The Current Character Prompt is saved by character name rather than by chat. Character cards with exactly the same name share that prompt, and renaming a character may leave the prompt field for the new name empty until you set it again.
 
@@ -407,15 +407,15 @@ It is a good idea to export important Phrase Notebook and study records as a bac
 | 설정 | 설명 |
 |---|---|
 | **보내기 전 입력 교정** | 학습 언어로 작성한 메시지를 보내기 전에 추천문과 교정 이유를 보여줍니다. |
-| **전체 프롬프트** | 모든 캐릭터에게 적용할 번역 문체·말투·품질 지침 전체를 편집합니다. 내부 형식 규칙은 보호됩니다. |
+| **번역 프롬프트 선택** | 내장 기본 프롬프트 또는 이름 붙인 커스텀 프롬프트를 선택합니다. 새로 만들기, 복제, 이름 변경, 삭제, 저장을 지원합니다. |
 | **입력창 Aa 버튼 표시** | 네 번째 체크 항목입니다. 입력창의 빠른 메뉴 버튼만 숨기거나 표시합니다. 드래그 선택 Aa와 요술봉 메뉴는 유지됩니다. |
 | **현재 캐릭터 전용 프롬프트** | 이름, 성별, 호칭, 말투, 고유명사처럼 현재 캐릭터에게만 필요한 규칙을 적습니다. |
 
-**전체 프롬프트**에는 추가 지시만이 아니라 실제 기본 번역 문체·말투·품질 지침 전체가 들어 있습니다. `{{target_language}}`는 선택한 번역 언어(입력창 번역에서는 학습 언어)로 바뀝니다. PDU/PD_FMT 보호와 병기 조립 규칙은 내부에서 따로 적용합니다. **기본 프롬프트로 복원**을 누르고 확인하면 이 칸만 기본값으로 돌아가며, 캐릭터 프롬프트·노트·캐시는 유지됩니다. 기존 추가 지시는 첫 업데이트 때 한 번 덧붙여 보존합니다. 구글 간편 번역에는 프롬프트가 적용되지 않습니다.
+**배포본에는 기본 번역 프롬프트 하나만 내장**되어 있으며 읽기 전용입니다. 수정하고 싶으면 **복제**하거나 **새 프롬프트**를 만들어 이름을 붙이고, 내용 작성 후 **저장**을 눌러 적용합니다. 커스텀을 선택하면 기본 문학 프롬프트가 몰래 중복 주입되지 않습니다. 기존에 저장한 전체 프롬프트가 기본값과 다르면 첫 업데이트 시 **기존 전체 프롬프트**로 내용 그대로 이관하고 선택 상태도 보존합니다. `{{target_language}}`는 설정한 번역 언어(입력창 번역에는 학습 언어)로 바뀝니다. PDU/PD_FMT 보호와 병기 조립 규칙은 별도의 내부 지침으로 유지됩니다. 구글 간편 번역에는 프롬프트가 적용되지 않습니다.
 
 자동 번역을 켜면 새 메시지가 도착할 때마다 번역 요청이 생길 수 있습니다. 연결 프로필 번역 결과는 선택한 모델과 프리셋의 영향을 받습니다.
 
-두 프롬프트 편집창은 기존처럼 **자동 저장**됩니다. 각 입력창 아래에 작은 상태 표시가 있어 수정 중에는 **저장 중…**, 기존 설정 저장 처리가 실행되면 **자동 저장됨 ✓**로 바뀝니다. 별도의 저장 버튼은 없습니다.
+**커스텀 번역 프롬프트의 내용은 반드시 저장 버튼을 눌러야 반영**됩니다. 선택과 이름 변경·추가·삭제는 즉시 저장되어, 새로고침이나 브라우저·실리태번 재시작 후에도 마지막 선택이 유지됩니다. 저장하지 않은 수정은 AI 번역에 사용되지 않으며 다른 프롬프트를 고르면 확인창이 뜹니다. **캐릭터 전용 프롬프트는 기존대로 자동 저장**됩니다. 프롬프트를 바꿔도 번역 캐시를 지우거나 자동 재번역하지 않으므로, 기존 메시지에 새 지침을 적용하려면 `🌐`을 길게 눌러 재번역합니다.
 
 현재 캐릭터 전용 프롬프트는 채팅방이 아니라 캐릭터 이름을 기준으로 저장됩니다. 이름이 완전히 같은 캐릭터 카드는 같은 프롬프트를 공유하며, 캐릭터 이름을 바꾸면 새 이름의 프롬프트 칸은 다시 설정하기 전까지 비어 보일 수 있습니다.
 

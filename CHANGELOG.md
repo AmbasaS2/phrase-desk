@@ -1,5 +1,16 @@
 # Phrase Desk changelog
 
+## 1.6.1 — 2026-11-17 · Named translation prompt library
+
+- Package exactly one built-in literary translation prompt. It is read-only in settings; users may duplicate it, create named custom prompts, rename, delete, and explicitly Save edited text. No bundled third-party flavor prompts are included.
+- The selected custom/default prompt is recorded immediately in SillyTavern user settings and restored after refresh or restart. Unsaved edits never enter the AI prompt; switching presets with a draft requires confirmation.
+- Existing saved full translation prompts are migrated without rewriting their contents into a selected custom entry named **기존 전체 프롬프트**. The previous `translationPrompt` setting is preserved for compatibility and rollback.
+- Current-character auto-save, PDU/PD_FMT alignment, bilingual layouts, per-swipe caches, Google translation, saved notes and learning data remain unchanged. Switching prompts does not clear caches or trigger API calls.
+- Added a small responsive editor and localized controls in ko/en/ja/fr/es; updated English and Korean instructions.
+- Validation: Node.js 22.22.1 regression suite **42/42 pass** on a temporary isolated checkout; separate simulated selection/unsaved/save/delete interactions passed. This does not claim real SillyTavern/phone/browser validation or a live model comparison.
+- Baseline: `733506e4ab28f394976e7a1b913f57cbca0325d9` (main before this feature). Roll back only extension code if the new prompt manager misbehaves; keep SillyTavern user settings and chat data so saved custom prompts remain available after reinstalling the new release.
+
+
 ## 2026-11-13 UI follow-up — prompt auto-save indicators
 
 - Added small localized **Saving… / Auto-saved ✓** indicators beneath both the global translation prompt and current-character prompt editors. Existing 700 ms debounced and blur/explicit save behavior is unchanged; no extra save button, observers, or timers.
