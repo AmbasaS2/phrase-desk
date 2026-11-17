@@ -85,7 +85,7 @@ function setupUi(seed = {}) {
   const fn = func($,settings,DEFAULT_TRANSLATION_PROMPT,x=>x,x=>x,showModal,()=>{},(text,kind)=>toasts.push([text,kind]),
     () => { saved.push(structuredClone(settings)); return true; },
     () => { const select=get('pd-preset-select'); const editor=get('pd-global-prompt'); const id=select.val(); const target=id==='builtin'?DEFAULT_TRANSLATION_PROMPT:translationPromptPresets(settings).find(e=>e.id===id)?.text; get('pd-preset-save').disabled = id===activeTranslationPromptId(settings) && editor.val()===target; },
-    Blob,URLShim,document,()=>{});
+    Blob,URLShim,document,()=>{},...Object.values(functions));
   fn();
   return {settings,get,saved,toasts,confirm:async()=>get('pd-preset-decision-yes').fire('click'),
     name:async name=>{get('pd-preset-name').val(name);await get('pd-preset-name-confirm').fire('click');},
