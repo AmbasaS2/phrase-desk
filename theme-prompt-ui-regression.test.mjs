@@ -188,14 +188,17 @@ test('prompt toolbar icon sizing follows native SillyTavern theme buttons', () =
 });
 
 test('prompt manager matches native theme density instead of oversized text and spacing', () => {
-  const js=fs.readFileSync(new URL('./index.js',import.meta.url),'utf8');
-  const css=fs.readFileSync(new URL('./style.css',import.meta.url),'utf8');
-  const ui=js.slice(js.indexOf('function setupTranslationPromptLibrary()'),js.indexOf('function setupSettingsPanel()'));
-  assert.match(ui, /'<select id="pd-preset-select" class="margin0"><\\/select>'/);
-  assert.match(ui, /'<textarea id="pd-global-prompt" class="text_pole" rows="5"/);
-  assert.doesNotMatch(ui, /pd-preset-buttons|rows="8"/);
-  assert.match(css, /#phrase-desk-settings \\.pd-translation-preset-row #pd-global-prompt \\{[\\s\\S]*?font-size: 12px !important;[\\s\\S]*?min-height: 96px !important;/);
-  assert.match(css, /#phrase-desk-settings \\.pd-translation-preset-row #pd-preset-select \\{[\\s\\S]*?font-size: 12px !important;/);
-  assert.match(css, /#phrase-desk-settings \\.pd-translation-preset-row #pd-global-prompt-status\\[data-state="builtin"\\] \\{\\s*display: none !important;/);
-  assert.doesNotMatch(css, /min-height: 140px;/);
+  const js = fs.readFileSync(new URL('./index.js', import.meta.url), 'utf8');
+  const css = fs.readFileSync(new URL('./style.css', import.meta.url), 'utf8');
+  const ui = js.slice(js.indexOf('function setupTranslationPromptLibrary()'), js.indexOf('function setupSettingsPanel()'));
+  assert.ok(ui.includes('id="pd-preset-select" class="margin0"'));
+  assert.ok(ui.includes('id="pd-global-prompt" class="text_pole" rows="5"'));
+  assert.ok(!ui.includes('pd-preset-buttons') && !ui.includes('rows="8"'));
+  const blockStart = css.indexOf('#phrase-desk-settings .pd-translation-preset-row #pd-global-prompt {');
+  const block = css.slice(blockStart, css.indexOf('}', blockStart));
+  assert.ok(block.includes('font-size: 12px !important'));
+  assert.ok(block.includes('min-height: 96px !important'));
+  assert.ok(css.includes('#phrase-desk-settings .pd-translation-preset-row #pd-preset-select {\n  font-size: 12px !important'));
+  assert.ok(css.includes('#pd-global-prompt-status[data-state="builtin"] {\n  display: none !important'));
+  assert.ok(!css.includes('min-height: 140px;'));
 });
