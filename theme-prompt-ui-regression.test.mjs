@@ -81,7 +81,8 @@ function setupUi(seed = {}) {
   const showModal = value => { modal = get('modal'); modal.html(value); return modal; };
   const func = new Function('$','settings','DEFAULT_TRANSLATION_PROMPT','esc','pdT','showModal',
     'closeModals','toast','saveSettings','refreshPromptSaveStatuses','Blob','URL','document','setTimeout',
-    ...Object.keys(functions), ui + '\nreturn setupTranslationPromptLibrary');
+    ...Object.keys(functions), script.slice(script.indexOf('function promptLibraryHelp('), script.indexOf('function setupInputTranslationPromptLibrary('))
+      + ui + '\nreturn setupTranslationPromptLibrary');
   const fn = func($,settings,DEFAULT_TRANSLATION_PROMPT,x=>x,x=>x,showModal,()=>{},(text,kind)=>toasts.push([text,kind]),
     () => { saved.push(structuredClone(settings)); return true; },
     () => { const select=get('pd-preset-select'); const editor=get('pd-global-prompt'); const id=select.val(); const target=id==='builtin'?DEFAULT_TRANSLATION_PROMPT:translationPromptPresets(settings).find(e=>e.id===id)?.text; get('pd-preset-save').disabled = id===activeTranslationPromptId(settings) && editor.val()===target; },
@@ -187,9 +188,23 @@ test('prompt toolbar icon sizing follows native SillyTavern theme buttons', () =
   assert.doesNotMatch(section,/34px|32px|flex:\s*0\s+0\s+34px/);
 });
 
+test('output rename preserves active ID, stored bytes and the unsaved draft', async () => {
+  const e=setupUi();
+  await e.get('pd-preset-save-as').fire('click');
+  await e.name('Before');
+  const original=e.settings.translationPresets[0];
+  e.get('pd-global-prompt').val('unsaved draft');
+  await e.get('pd-preset-rename').fire('click');
+  assert.equal(e.get('pd-preset-name').val(),'Before');
+  await e.name('After');
+  assert.deepEqual(e.settings.translationPresets,[{...original,name:'After'}]);
+  assert.equal(e.settings.activeTranslationPresetId,original.id);
+  assert.equal(e.get('pd-global-prompt').val(),'unsaved draft');
+});
+
 test('prompt manager matches native theme density instead of oversized text and spacing', () => {
   const js = fs.readFileSync(new URL('./index.js', import.meta.url), 'utf8');
-  const css = fs.readFileSync(new URL('./style.css', import.meta.url), 'utf8');
+  const css = fs.readFileSync(new URL('./style.css', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
   const ui = js.slice(js.indexOf('function setupTranslationPromptLibrary()'), js.indexOf('function setupSettingsPanel()'));
   assert.ok(ui.includes('id="pd-preset-select" class="margin0"'));
   assert.ok(ui.includes('id="pd-global-prompt" class="text_pole" rows="5"'));

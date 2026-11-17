@@ -310,5 +310,13 @@
   "phraseDesk.bd15a1c9": "Prompt de salida predeterminado",
   "phraseDesk.d91e83d2": "Nombre del nuevo prompt de entrada",
   "phraseDesk.4e4acee1": "Nombre del nuevo prompt de salida",
-  "phraseDesk.ef7e7a54": "Prompt de entrada anterior"
+  "phraseDesk.ef7e7a54": "Prompt de entrada anterior",
+  "phraseDesk.f6371d0e": "Ayuda de la instrucción de traducción de entrada",
+  "phraseDesk.447cc00d": "Ayuda de la instrucción de traducción de salida",
+  "phraseDesk.f6dc99c3": "La instrucción predeterminada es de solo lectura. Guárdala como nueva para editar el estilo. Selecciona la predeterminada para restaurarla.",
+  "phraseDesk.91407d5": "Una instrucción personalizada sustituye las pautas de estilo y puede cambiar la precisión, el tono y la fluidez.",
+  "phraseDesk.5456e3a": "La entrada se traduce al idioma de estudio.",
+  "phraseDesk.ed097f7e": "La salida se traduce al idioma de traducción.",
+  "phraseDesk.c35e9d38": "Phrase Desk fija el idioma y protege el formato obligatorio. Las variables de idioma existentes siguen funcionando y son opcionales.",
+  "phraseDesk.fd43067a": "Cambiar nombre de la instrucción"
 }

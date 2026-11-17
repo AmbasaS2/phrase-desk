@@ -54,11 +54,11 @@ export function chooseInputTranslationPrompt(settings, id, builtinPrompt = '') {
   return true;
 }
 
-function validInputPromptName(settings, name) {
+function validInputPromptName(settings, name, exceptId = '') {
   const value = String(name || '').trim();
   return !!(value && value.length <= 80 && !/[\r\n]/.test(value)
     && !['입력 번역 기본 프롬프트','출력 번역 기본 프롬프트','기본 프롬프트','Default prompt'].includes(value)
-    && !inputTranslationPresets(settings).some(item => item.name.toLocaleLowerCase() === value.toLocaleLowerCase()));
+    && !inputTranslationPresets(settings).some(item => item.id !== exceptId && item.name.toLocaleLowerCase() === value.toLocaleLowerCase()));
 }
 
 export function addInputTranslationPrompt(settings, name, text = '', builtinPrompt = '') {
@@ -71,6 +71,15 @@ export function addInputTranslationPrompt(settings, name, text = '', builtinProm
   settings.inputTranslationPresets = [...entries, entry];
   chooseInputTranslationPrompt(settings, entry.id, builtinPrompt);
   return entry;
+}
+
+export function renameInputTranslationPrompt(settings, id, name) {
+  if (!settings || id === BUILTIN_INPUT_PROMPT_ID || !validInputPromptName(settings, name, id)) return false;
+  const entries = inputTranslationPresets(settings);
+  if (!entries.some(item => item.id === id)) return false;
+  settings.inputTranslationPresets = entries.map(item => item.id === id
+    ? { ...item, name:String(name).trim() } : item);
+  return true;
 }
 
 export function saveInputTranslationPrompt(settings, id, text, builtinPrompt = '') {

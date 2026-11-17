@@ -5,11 +5,11 @@ import { loadPhraseDesk } from './test-helpers.mjs';
 import { DEFAULT_INPUT_TRANSLATION_PROMPT, DEFAULT_TRANSLATION_PROMPT } from './pd-language.js';
 import {
  BUILTIN_INPUT_PROMPT_ID,inputTranslationPresets,activeInputTranslationPromptId,selectedInputTranslationPrompt,
- migrateInputTranslationPresets,chooseInputTranslationPrompt,addInputTranslationPrompt,saveInputTranslationPrompt,
+ migrateInputTranslationPresets,chooseInputTranslationPrompt,addInputTranslationPrompt,renameInputTranslationPrompt,saveInputTranslationPrompt,
  deleteInputTranslationPrompt,exportInputTranslationPromptJSON,parseInputTranslationPromptJSON,uniqueInputTranslationPromptName,
 } from './pd-input-prompt-presets.js';
 const functions={BUILTIN_INPUT_PROMPT_ID,inputTranslationPresets,activeInputTranslationPromptId,
-  selectedInputTranslationPrompt,chooseInputTranslationPrompt,addInputTranslationPrompt,saveInputTranslationPrompt,
+  selectedInputTranslationPrompt,chooseInputTranslationPrompt,addInputTranslationPrompt,renameInputTranslationPrompt,saveInputTranslationPrompt,
   deleteInputTranslationPrompt,exportInputTranslationPromptJSON,parseInputTranslationPromptJSON,uniqueInputTranslationPromptName};
 
 test('old output custom prompt and data survive input migration unchanged',()=>{
@@ -31,7 +31,8 @@ test('old output custom prompt and data survive input migration unchanged',()=>{
 test('input prompt uses dedicated default and target study language; output stays unchanged',()=>{
  const api=loadPhraseDesk({seed:{translationPrompt:'OUTPUT_RULES {{target_language}}',translationPromptVersion:1,studyLanguage:'ja',targetLanguage:'ko'}});
  const input=api.buildInputTranslationPrompt('안녕.');
- assert.ok(input.startsWith('Phrase Desk input translation into Japanese'));
+ assert.ok(input.startsWith('Phrase Desk input translation\n'));
+ assert.ok(input.includes('Translate the current source into Japanese.'));
  assert.ok(input.includes('안녕.'));
  assert.ok(input.includes('Phrase Desk mandatory input-translation contract:'));
  assert.ok(!input.includes('OUTPUT_RULES'));
@@ -117,7 +118,8 @@ function setupInputUi(seed = {}) {
   const showModal = value => { modal = get('modal'); modal.html(value); return modal; };
   const func = new Function('$','settings','DEFAULT_INPUT_TRANSLATION_PROMPT','esc','pdT','showModal',
     'closeModals','toast','saveSettings','refreshPromptSaveStatuses','Blob','URL','document','setTimeout',
-    ...Object.keys(functions), ui + '\nreturn setupInputTranslationPromptLibrary');
+    ...Object.keys(functions), script.slice(script.indexOf('function promptLibraryHelp('), script.indexOf('function setupInputTranslationPromptLibrary('))
+      + ui + '\nreturn setupInputTranslationPromptLibrary');
   const fn = func($,settings,DEFAULT_INPUT_TRANSLATION_PROMPT,x=>x,x=>x,showModal,()=>{},(text,kind)=>toasts.push([text,kind]),
     () => { saved.push(structuredClone(settings)); return true; },
     () => { const select=get('pd-input-preset-select'); const editor=get('pd-input-global-prompt'); const id=select.val(); const target=id==='builtin'?DEFAULT_INPUT_TRANSLATION_PROMPT:inputTranslationPresets(settings).find(e=>e.id===id)?.text; get('pd-input-preset-save').disabled = id===activeInputTranslationPromptId(settings) && editor.val()===target; },
@@ -163,8 +165,22 @@ test('input UI imports, exports, and deletes via identical in-page controls',asy
  assert.equal(inputTranslationPresets(e.settings).length,1);
 });
 
+test('input rename preserves active ID, stored bytes and the unsaved draft', async()=>{
+ const e=setupInputUi();
+ await e.get('pd-input-preset-save-as').fire('click');
+ await e.name('Before');
+ const original=e.settings.inputTranslationPresets[0];
+ e.get('pd-input-global-prompt').val('unsaved draft');
+ await e.get('pd-input-preset-rename').fire('click');
+ assert.equal(e.get('pd-input-preset-name').val(),'Before');
+ await e.name('After');
+ assert.deepEqual(e.settings.inputTranslationPresets,[{...original,name:'After'}]);
+ assert.equal(e.settings.activeInputTranslationPresetId,original.id);
+ assert.equal(e.get('pd-input-global-prompt').val(),'unsaved draft');
+});
+
 test('two separate compact prompt editors are ordered input above output, labels are explicit',()=>{
- const js=fs.readFileSync(new URL('./index.js',import.meta.url),'utf8');
+ const js=fs.readFileSync(new URL('./index.js',import.meta.url),'utf8').replace(/\r\n/g,'\n');
  const css=fs.readFileSync(new URL('./style.css',import.meta.url),'utf8');
  const uiMarkup=js.slice(js.indexOf('function setupSettingsPanel()'),js.indexOf('function setupLanguageControls()',js.indexOf('function setupSettingsPanel()')));
  assert.ok(uiMarkup.indexOf('<textarea id="pd-input-global-prompt"')>=0);

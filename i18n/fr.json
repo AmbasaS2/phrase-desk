@@ -310,5 +310,13 @@
   "phraseDesk.bd15a1c9": "Prompt de sortie par défaut",
   "phraseDesk.d91e83d2": "Nom du nouveau prompt de saisie",
   "phraseDesk.4e4acee1": "Nom du nouveau prompt de sortie",
-  "phraseDesk.ef7e7a54": "Ancien prompt de saisie"
+  "phraseDesk.ef7e7a54": "Ancien prompt de saisie",
+  "phraseDesk.f6371d0e": "Aide du prompt de traduction de saisie",
+  "phraseDesk.447cc00d": "Aide du prompt de traduction de sortie",
+  "phraseDesk.f6dc99c3": "Le prompt par défaut est en lecture seule. Enregistrez une copie pour modifier le style. Sélectionnez le prompt par défaut pour le rétablir.",
+  "phraseDesk.91407d5": "Un prompt personnalisé remplace les consignes de style et peut modifier la précision, le ton et la fluidité.",
+  "phraseDesk.5456e3a": "La saisie est traduite dans la langue étudiée.",
+  "phraseDesk.ed097f7e": "La sortie est traduite dans la langue de traduction.",
+  "phraseDesk.c35e9d38": "Phrase Desk fixe la langue et protège le format requis. Les variables de langue existantes restent compatibles et facultatives.",
+  "phraseDesk.fd43067a": "Renommer le prompt"
 }

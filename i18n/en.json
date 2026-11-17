@@ -310,5 +310,13 @@
   "phraseDesk.bd15a1c9": "Default output translation prompt",
   "phraseDesk.d91e83d2": "Name for the new input translation prompt",
   "phraseDesk.4e4acee1": "Name for the new output translation prompt",
-  "phraseDesk.ef7e7a54": "Previous input translation prompt"
+  "phraseDesk.ef7e7a54": "Previous input translation prompt",
+  "phraseDesk.f6371d0e": "Input translation prompt help",
+  "phraseDesk.447cc00d": "Output translation prompt help",
+  "phraseDesk.f6dc99c3": "The default is read-only. Save it as a new prompt to edit the style freely. Select the default from the list to restore it.",
+  "phraseDesk.91407d5": "A custom prompt replaces the default style instructions and can change accuracy, voice, and fluency.",
+  "phraseDesk.5456e3a": "Input is translated into the study language.",
+  "phraseDesk.ed097f7e": "Output is translated into the translation language.",
+  "phraseDesk.c35e9d38": "Phrase Desk sets the language and protects required formatting. Existing language variables still work and are optional.",
+  "phraseDesk.fd43067a": "Rename prompt"
 }

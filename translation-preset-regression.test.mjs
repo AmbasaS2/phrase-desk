@@ -89,7 +89,7 @@ test('legacy snapshots retain rollback-compatible translationPrompt, with no ext
   assert.equal((rendered.match(/Phrase Desk mandatory output contract:/g) || []).length, 1);
   assert.ok(rendered.includes('PDU'));
   assert.ok(rendered.includes('PD_FMT'));
-  assert.doesNotMatch(rendered, /Phrase Desk literary translation into Korean/);
+  assert.doesNotMatch(rendered, /Phrase Desk literary translation/);
   assert.equal(api.saveSettings(true), true);
   const persisted = api.sandbox.extension_settings['phrase-desk'];
   assert.equal(persisted.translationPrompt, seed.translationPrompt);
@@ -105,7 +105,7 @@ test('switching only affects new AI requests; cache structures remain independen
   assert.ok(custom);
   assert.match(api.buildPrompt('[[PDU-A-0001]]Hi[[/PDU-A-0001]]', 'canonical', { canonicalUnitCount: 1 }), /CUSTOM Korean/);
   chooseTranslationPrompt(settings, BUILTIN_TRANSLATION_PROMPT_ID, DEFAULT_TRANSLATION_PROMPT);
-  assert.match(api.buildPrompt('[[PDU-A-0001]]Hi[[/PDU-A-0001]]', 'canonical', { canonicalUnitCount: 1 }), /Phrase Desk literary translation into Korean/);
+  assert.match(api.buildPrompt('[[PDU-A-0001]]Hi[[/PDU-A-0001]]', 'canonical', { canonicalUnitCount: 1 }), /^Phrase Desk literary translation\n/);
   assert.equal(JSON.stringify(existing), baseline);
 });
 

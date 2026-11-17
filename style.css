@@ -2006,6 +2006,34 @@ html.pd-bilingual-blur-enabled .mes_block .pd-bilingual-blur.pd-blur-revealed {
 #phrase-desk-settings .pd-translation-preset-row .pd-preset-heading label {
   margin: 0 !important;
 }
+#phrase-desk-settings .pd-preset-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+#phrase-desk-settings .pd-translation-preset-row {
+  position: relative;
+}
+#phrase-desk-settings .pd-prompt-help > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 3px 6px;
+}
+#phrase-desk-settings .pd-prompt-help > summary::-webkit-details-marker {
+  display: none;
+}
+#phrase-desk-settings .pd-prompt-help > p {
+  position: absolute;
+  inset-inline: 0;
+  z-index: 2;
+  margin: 0;
+  padding: 8px;
+  background: var(--SmartThemeBlurTintColor);
+  color: var(--SmartThemeBodyColor);
+  border: 1px solid var(--SmartThemeBorderColor);
+  border-radius: 4px;
+}
 #phrase-desk-settings .pd-translation-preset-row .pd-preset-top-actions {
   display: flex !important;
   gap: 3px !important;
