@@ -108,3 +108,47 @@ export function deleteTranslationPrompt(settings, id, builtinPrompt = '') {
   }
   return true;
 }
+
+export function exportTranslationPromptJSON(settings, id, builtinPrompt = '', builtinLabel = 'Default prompt') {
+  const entry = id === BUILTIN_TRANSLATION_PROMPT_ID
+    ? { name: builtinLabel, text: String(builtinPrompt) }
+    : translationPromptPresets(settings).find(item => item.id === id);
+  if (!entry) return null;
+  return JSON.stringify({
+    format: 'phrase-desk-translation-prompt',
+    version: 1,
+    name: entry.name,
+    text: entry.text,
+  }, null, 2);
+}
+
+// Accept only one named prompt. The file is data, never code or app settings.
+export function parseTranslationPromptJSON(raw) {
+  if (typeof raw !== 'string' || raw.length > 400000) return null;
+  let parsed;
+  try { parsed = JSON.parse(raw); } catch { return null; }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)
+    || parsed.format !== 'phrase-desk-translation-prompt' || parsed.version !== 1
+    || typeof parsed.name !== 'string' || typeof parsed.text !== 'string'
+    || !parsed.name.trim() || parsed.name.trim().length > 80
+    || /[\r\n]/.test(parsed.name) || parsed.text.length > 200000) return null;
+  return { name: parsed.name.trim(), text: parsed.text };
+}
+
+export function uniqueTranslationPromptName(settings, name, fallback = 'Imported prompt') {
+  let base = String(name || '').trim().replace(/[\r\n]/g, ' ').slice(0, 80) || fallback;
+  const used = new Set([
+    'default prompt', '기본 프롬프트',
+    ...translationPromptPresets(settings).map(item => item.name.toLocaleLowerCase()),
+  ]);
+  if (!used.has(base.toLocaleLowerCase())) return base;
+  const numbered = base.match(/^(.*) \((\d+)\)$/);
+  const stem = numbered ? numbered[1] : base;
+  const start = numbered ? Math.max(2, Number(numbered[2]) + 1) : 2;
+  for (let number = start; number < 10000; number++) {
+    const suffix = ` (${number})`;
+    const candidate = stem.slice(0, 80 - suffix.length) + suffix;
+    if (!used.has(candidate.toLocaleLowerCase())) return candidate;
+  }
+  return null;
+}

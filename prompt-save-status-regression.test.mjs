@@ -47,7 +47,7 @@ test('only character prompt auto-save failure affects the automatic badge', () =
   assert.equal(character.dataset.state, 'error');
 });
 
-test('preset manager has explicit Save and mobile-scoped layout; character still auto-saves', () => {
+test('theme-style prompt manager keeps explicit Save and character auto-save', () => {
   const js = fs.readFileSync(new URL('./index.js', import.meta.url), 'utf8');
   const css = fs.readFileSync(new URL('./style.css', import.meta.url), 'utf8');
   assert.match(js, /function setupTranslationPromptLibrary\(/);
@@ -56,6 +56,6 @@ test('preset manager has explicit Save and mobile-scoped layout; character still
   assert.match(js, /saveTranslationPrompt\(settings/);
   assert.match(js, /setPromptStatus\('char','saving'\)/);
   assert.doesNotMatch(js, /\$\('#pd-global-prompt'\)\.on\('input', function\(\)\{ settings\.translationPrompt/);
-  assert.match(css, /#phrase-desk-settings \.pd-translation-preset-row \.pd-preset-buttons/);
+  assert.match(css, /#phrase-desk-settings \.pd-translation-preset-row \.pd-preset-selection/);
   assert.match(css, /@media \(max-width: 600px\)/);
 });

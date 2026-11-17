@@ -10,6 +10,7 @@ import {
   BUILTIN_TRANSLATION_PROMPT_ID, translationPromptPresets, activeTranslationPromptId,
   selectedTranslationPrompt, migrateTranslationPromptPresets, chooseTranslationPrompt,
   addTranslationPrompt, renameTranslationPrompt, saveTranslationPrompt, deleteTranslationPrompt,
+  exportTranslationPromptJSON, parseTranslationPromptJSON, uniqueTranslationPromptName,
 } from './pd-prompt-presets.js';
 import { splitGoogleChunks, splitCanonicalAIInput } from './pd-translation-chunks.js';
 
@@ -183,11 +184,15 @@ function refreshPromptSaveStatuses() {
   const persisted = extension_settings[EXT_NAME] || {};
   const globalField = document.querySelector('#pd-global-prompt');
   if (globalField) {
-    const builtin = activeTranslationPromptId(settings) === BUILTIN_TRANSLATION_PROMPT_ID;
-    setPromptStatus('global', builtin ? 'builtin'
-      : globalField.value === globalPrompt() ? 'saved' : 'unsaved');
+    const viewedId = String(document.querySelector('#pd-preset-select')?.value || activeTranslationPromptId(settings));
+    const stored = viewedId === BUILTIN_TRANSLATION_PROMPT_ID
+      ? DEFAULT_TRANSLATION_PROMPT
+      : String(translationPromptPresets(settings).find(item => item.id === viewedId)?.text ?? '');
+    const dirty = viewedId !== activeTranslationPromptId(settings) || globalField.value !== stored;
+    setPromptStatus('global', dirty ? 'unsaved'
+      : viewedId === BUILTIN_TRANSLATION_PROMPT_ID ? 'builtin' : 'saved');
     const save = document.querySelector('#pd-preset-save');
-    if (save) save.disabled = builtin || globalField.value === globalPrompt();
+    if (save) save.disabled = !dirty;
   }
   const charField = document.querySelector('#pd-char-prompt');
   const key = currentCharPromptKey();
@@ -4415,39 +4420,53 @@ function setupTranslationPromptLibrary() {
   const oldEditor = $('#pd-global-prompt');
   if (!oldEditor.length) return;
   const row = oldEditor.closest('.pd-setting-row').addClass('pd-translation-preset-row');
-  const label = text => esc(pdT(text));
+  const label = value => esc(pdT(value));
+  const iconButton = (id, icon, title) =>
+    '<button id="' + id + '" class="menu_button pd-preset-icon-btn" type="button" title="' +
+    label(title) + '" aria-label="' + label(title) + '"><i class="fa-solid ' + icon +
+    '" aria-hidden="true"></i></button>';
+
+  // Match the built-in SillyTavern theme controls: top actions, selector + save/save-as, editor.
   row.html([
-    '<div class="pd-prompt-heading"><label for="pd-preset-select">', label('번역 프롬프트 선택'), '</label></div>',
-    '<select id="pd-preset-select" class="text_pole"></select>',
-    '<div class="pd-preset-buttons">',
-    '<button id="pd-preset-add" class="menu_button" type="button">', label('새 프롬프트'), '</button>',
-    '<button id="pd-preset-copy" class="menu_button" type="button">', label('복제'), '</button>',
-    '<button id="pd-preset-rename" class="menu_button" type="button">', label('이름 변경'), '</button>',
-    '<button id="pd-preset-delete" class="menu_button" type="button">', label('삭제'), '</button>',
+    '<div class="pd-preset-heading"><label for="pd-preset-select">', label('번역 프롬프트'), '</label>',
+    '<div class="pd-preset-top-actions">',
+      iconButton('pd-preset-export', 'fa-file-export', '프롬프트 내보내기'),
+      iconButton('pd-preset-import', 'fa-file-import', '프롬프트 가져오기'),
+      iconButton('pd-preset-delete', 'fa-trash', '프롬프트 삭제'),
+    '</div></div>',
+    '<div class="pd-preset-selection">',
+      '<select id="pd-preset-select" class="text_pole"></select>',
+      iconButton('pd-preset-save', 'fa-floppy-disk', '저장'),
+      iconButton('pd-preset-save-as', 'fa-file-circle-plus', '새 프롬프트로 저장'),
     '</div>',
-    '<small class="pd-setting-help pd-prompt-warning">', label('기본 프롬프트는 읽기 전용입니다. 수정하려면 복제하세요. 커스텀 프롬프트는 저장 버튼을 눌러야 적용됩니다.'), '</small>',
     '<textarea id="pd-global-prompt" class="text_pole" rows="8" spellcheck="false"></textarea>',
-    '<div class="pd-prompt-actions">',
-    '<span id="pd-global-prompt-status" class="pd-prompt-save-status" role="status" aria-live="polite"></span>',
-    '<button id="pd-preset-save" class="menu_button" type="button">', label('저장'), '</button>',
-    '</div>',
+    '<div id="pd-global-prompt-status" class="pd-prompt-save-status" role="status" aria-live="polite"></div>',
+    '<input id="pd-preset-import-file" type="file" accept=".json,application/json" hidden aria-label="',
+    label('프롬프트 가져오기'), '">',
   ].join(''));
 
   const selector = $('#pd-preset-select');
   const editor = $('#pd-global-prompt');
-  const selectedId = () => activeTranslationPromptId(settings);
-  const currentText = () => selectedTranslationPrompt(settings, DEFAULT_TRANSLATION_PROMPT);
-  const isDirty = () => String(editor.val() ?? '') !== currentText();
-  const discardDraft = () => !isDirty() || confirm(pdT('저장되지 않은 변경을 버리고 이동할까요?'));
-  const pendingSnapshot = () => ({
+  let viewedId = activeTranslationPromptId(settings);
+  const savedEntry = id => translationPromptPresets(settings).find(item => item.id === id);
+  const savedBody = id => id === BUILTIN_TRANSLATION_PROMPT_ID
+    ? DEFAULT_TRANSLATION_PROMPT : String(savedEntry(id)?.text ?? '');
+  const changedText = () => String(editor.val() ?? '') !== savedBody(viewedId);
+  const pendingChanges = () => changedText() || viewedId !== activeTranslationPromptId(settings);
+  const snapshot = () => ({
     translationPresets: settings.translationPresets,
     activeTranslationPresetId: settings.activeTranslationPresetId,
     translationPrompt: settings.translationPrompt,
   });
-  const restoreSnapshot = snapshot => Object.assign(settings, snapshot);
-  function persistOrRestore(snapshot) {
+  function persist(previous, restoreId = viewedId, restoreText = String(editor.val() ?? '')) {
     if (saveSettings(true) !== false) return true;
-    restoreSnapshot(snapshot);
+    Object.assign(settings, previous);
+    viewedId = restoreId;
+    refresh();
+    if (viewedId !== BUILTIN_TRANSLATION_PROMPT_ID) {
+      editor.val(restoreText);
+      refreshPromptSaveStatuses();
+    }
     toast(pdT('프롬프트 저장에 실패했습니다.'), 'error');
     return false;
   }
@@ -4458,83 +4477,153 @@ function setupTranslationPromptLibrary() {
     for (const entry of translationPromptPresets(settings)) {
       selector.append($('<option>', { value: entry.id, text: entry.name }));
     }
-    const builtin = selectedId() === BUILTIN_TRANSLATION_PROMPT_ID;
-    selector.val(selectedId());
-    editor.val(currentText()).prop('readOnly', builtin);
-    $('#pd-preset-rename,#pd-preset-delete').prop('disabled', builtin);
+    if (viewedId !== BUILTIN_TRANSLATION_PROMPT_ID && !savedEntry(viewedId)) {
+      viewedId = activeTranslationPromptId(settings);
+    }
+    selector.val(viewedId);
+    editor.val(savedBody(viewedId)).prop('readOnly', viewedId === BUILTIN_TRANSLATION_PROMPT_ID);
+    $('#pd-preset-delete').prop('disabled', viewedId === BUILTIN_TRANSLATION_PROMPT_ID);
     refreshPromptSaveStatuses();
   }
-  function requestName(message, suggested = '', except = '') {
-    const answer = prompt(pdT(message), suggested);
-    if (answer === null) return null;
-    const name = String(answer).trim();
-    const reserved = [pdT('기본 프롬프트'), '기본 프롬프트', 'Default prompt'];
-    const duplicate = translationPromptPresets(settings).some(item =>
-      item.id !== except && item.name.toLocaleLowerCase() === name.toLocaleLowerCase());
-    if (!name || name.length > 80 || /[\r\n]/.test(name)
-      || reserved.some(value => value.toLocaleLowerCase() === name.toLocaleLowerCase()) || duplicate) {
-      toast(pdT('프롬프트 이름은 1~80자이며 중복될 수 없습니다.'), 'warn');
-      return null;
-    }
-    return name;
+  function showDecision(title, message, action, confirmLabel = '확인') {
+    const modal = showModal([
+      '<h3 class="pd-preset-dialog-title">', label(title), '</h3>',
+      '<p class="pd-preset-dialog-message">', label(message), '</p>',
+      '<div class="pd-preset-dialog-actions">',
+        '<button id="pd-preset-decision-yes" class="menu_button" type="button">', label(confirmLabel), '</button>',
+        '<button class="menu_button" type="button" data-close-modal>', label('취소'), '</button>',
+      '</div>',
+    ].join(''));
+    modal.find('#pd-preset-decision-yes').on('click', function() {
+      closeModals();
+      action();
+    });
   }
-  function create(initialText = '', copying = false) {
-    if (!discardDraft()) return;
-    const name = requestName(copying ? '복제할 프롬프트 이름' : '새 프롬프트 이름',
-      copying ? pdT('복사본') : '');
-    if (name === null) return;
-    const before = pendingSnapshot();
-    const added = addTranslationPrompt(settings, name, initialText, DEFAULT_TRANSLATION_PROMPT);
-    if (!added) return toast(pdT('프롬프트를 만들 수 없습니다.'), 'warn');
-    if (!persistOrRestore(before)) return refresh();
-    refresh();
+  function showNameModal(onSave) {
+    const modal = showModal([
+      '<h3 class="pd-preset-dialog-title">', label('새 프롬프트 이름'), '</h3>',
+      '<input id="pd-preset-name" class="text_pole" maxlength="80" type="text" autocomplete="off">',
+      '<div class="pd-preset-dialog-actions">',
+        '<button id="pd-preset-name-confirm" class="menu_button" type="button">', label('저장하기'), '</button>',
+        '<button class="menu_button" type="button" data-close-modal>', label('취소'), '</button>',
+      '</div>',
+    ].join(''));
+    const field = modal.find('#pd-preset-name');
+    const commit = () => {
+      const name = String(field.val() || '').trim();
+      const reserved = [pdT('기본 프롬프트'), '기본 프롬프트', 'Default prompt'];
+      const duplicate = translationPromptPresets(settings).some(item =>
+        item.name.toLocaleLowerCase() === name.toLocaleLowerCase());
+      if (!name || name.length > 80 || /[\r\n]/.test(name) || duplicate
+        || reserved.some(item => item.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+        toast(pdT('프롬프트 이름은 1~80자이며 중복될 수 없습니다.'), 'warn');
+        return;
+      }
+      closeModals();
+      onSave(name);
+    };
+    modal.find('#pd-preset-name-confirm').on('click', commit);
+    field.on('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } });
+    field.trigger('focus');
   }
 
   selector.on('change', function() {
-    const beforeId = selectedId();
-    const next = String(selector.val() || '');
-    if (next === beforeId) return;
-    if (!discardDraft()) { selector.val(beforeId); return; }
-    const before = pendingSnapshot();
-    if (!chooseTranslationPrompt(settings, next, DEFAULT_TRANSLATION_PROMPT)) {
-      selector.val(beforeId);
-      return;
-    }
-    if (!persistOrRestore(before)) return refresh();
-    refresh();
+    const next = String(selector.val() || BUILTIN_TRANSLATION_PROMPT_ID);
+    if (next === viewedId) return;
+    const move = () => { viewedId = next; refresh(); };
+    if (!changedText()) { move(); return; }
+    // A selection must not silently erase a draft; confirm inside the ST page.
+    selector.val(viewedId);
+    showDecision('저장되지 않은 변경', '작성 중인 내용을 버리고 다른 프롬프트로 이동할까요?', move, '이동');
   });
 
   editor.on('input change', refreshPromptSaveStatuses);
-  $('#pd-preset-add').on('click', () => create('', false));
-  $('#pd-preset-copy').on('click', () => create(currentText(), true));
-  $('#pd-preset-rename').on('click', function() {
-    const id = selectedId();
-    if (id === BUILTIN_TRANSLATION_PROMPT_ID || !discardDraft()) return;
-    const entry = translationPromptPresets(settings).find(item => item.id === id);
-    if (!entry) return;
-    const name = requestName('프롬프트 새 이름', entry.name, id);
-    if (name === null || name === entry.name) return;
-    const before = pendingSnapshot();
-    if (!renameTranslationPrompt(settings, id, name)) return;
-    if (!persistOrRestore(before)) return refresh();
-    refresh();
+  $('#pd-preset-save').on('click', function() {
+    if (!pendingChanges()) return;
+    const before = snapshot();
+    if (viewedId !== BUILTIN_TRANSLATION_PROMPT_ID
+      && !saveTranslationPrompt(settings, viewedId, String(editor.val() ?? ''), DEFAULT_TRANSLATION_PROMPT)) return;
+    if (!chooseTranslationPrompt(settings, viewedId, DEFAULT_TRANSLATION_PROMPT)) {
+      Object.assign(settings, before);
+      return;
+    }
+    if (persist(before, viewedId, String(editor.val() ?? ''))) refresh();
+  });
+  $('#pd-preset-save-as').on('click', function() {
+    // Save-as also works with unsaved edits; the previous named entry stays unchanged.
+    const body = String(editor.val() ?? '');
+    const previousViewId = viewedId;
+    showNameModal(name => {
+      const before = snapshot();
+      const entry = addTranslationPrompt(settings, name, body, DEFAULT_TRANSLATION_PROMPT);
+      if (!entry) {
+        toast(pdT('프롬프트를 만들 수 없습니다.'), 'warn');
+        return;
+      }
+      viewedId = entry.id;
+      if (persist(before, previousViewId, body)) refresh();
+    });
   });
   $('#pd-preset-delete').on('click', function() {
-    const id = selectedId();
-    if (id === BUILTIN_TRANSLATION_PROMPT_ID || !discardDraft()) return;
-    if (!confirm(pdT('이 커스텀 프롬프트를 삭제할까요?'))) return;
-    const before = pendingSnapshot();
-    if (!deleteTranslationPrompt(settings, id, DEFAULT_TRANSLATION_PROMPT)) return;
-    if (!persistOrRestore(before)) return refresh();
-    refresh();
+    if (viewedId === BUILTIN_TRANSLATION_PROMPT_ID) return;
+    const id = viewedId;
+    const item = savedEntry(id);
+    if (!item) return;
+    showDecision('프롬프트 삭제', '선택한 커스텀 프롬프트를 삭제할까요?', () => {
+      const before = snapshot();
+      if (!deleteTranslationPrompt(settings, id, DEFAULT_TRANSLATION_PROMPT)) return;
+      viewedId = activeTranslationPromptId(settings);
+      if (persist(before, id)) refresh();
+    }, '삭제');
   });
-  $('#pd-preset-save').on('click', function() {
-    const id = selectedId();
-    if (id === BUILTIN_TRANSLATION_PROMPT_ID) return;
-    const before = pendingSnapshot();
-    if (!saveTranslationPrompt(settings, id, String(editor.val() ?? ''), DEFAULT_TRANSLATION_PROMPT)) return;
-    if (!persistOrRestore(before)) return refresh();
-    refreshPromptSaveStatuses();
+  $('#pd-preset-export').on('click', function() {
+    if (changedText()) {
+      toast(pdT('변경 내용을 먼저 저장하거나 새 프롬프트로 저장해 주세요.'), 'warn');
+      return;
+    }
+    const json = exportTranslationPromptJSON(
+      settings, viewedId, DEFAULT_TRANSLATION_PROMPT, pdT('기본 프롬프트'));
+    if (!json) return;
+    try {
+      const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const file = document.createElement('a');
+      const name = viewedId === BUILTIN_TRANSLATION_PROMPT_ID
+        ? pdT('기본 프롬프트') : savedEntry(viewedId)?.name || 'prompt';
+      file.href = url;
+      file.download = 'phrase-desk-' + String(name).replace(/[^\p{L}\p{N}_ -]/gu, '_').slice(0, 65) + '.json';
+      document.body.appendChild(file);
+      file.click();
+      file.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      toast(pdT('프롬프트 내보내기에 실패했습니다.'), 'error');
+    }
+  });
+
+  $('#pd-preset-import').on('click', () => $('#pd-preset-import-file').trigger('click'));
+  $('#pd-preset-import-file').on('change', async function() {
+    const file = this.files?.[0];
+    $(this).val('');
+    if (!file) return;
+    if (file.size > 1000000) return toast(pdT('JSON 파일이 너무 큽니다.'), 'warn');
+    let record;
+    try { record = parseTranslationPromptJSON(await file.text()); }
+    catch { record = null; }
+    if (!record) return toast(pdT('올바른 프롬프트 JSON 파일이 아닙니다.'), 'warn');
+    const previousViewId = viewedId;
+    const previousBody = String(editor.val() ?? '');
+    const importNow = () => {
+      const before = snapshot();
+      const name = uniqueTranslationPromptName(settings, record.name, pdT('가져온 프롬프트'));
+      const entry = name && addTranslationPrompt(settings, name, record.text, DEFAULT_TRANSLATION_PROMPT);
+      if (!entry) return toast(pdT('프롬프트를 가져오지 못했습니다.'), 'error');
+      viewedId = entry.id;
+      if (persist(before, previousViewId, previousBody)) { refresh(); toast(pdT('프롬프트를 가져왔습니다.'), 'success'); }
+    };
+    if (changedText()) {
+      showDecision('저장되지 않은 변경', '작성 중인 내용을 버리고 프롬프트를 가져올까요?', importNow, '가져오기');
+    } else importNow();
   });
   refresh();
 }
@@ -4564,7 +4653,7 @@ function setupSettingsPanel() {
       <div id="pd-target-custom" class="pd-setting-row pd-two"><div><label>번역 언어 이름</label><input id="pd-target-custom-name" class="text_pole" maxlength="80" value="${esc(settings.targetCustomName || '')}" placeholder="예: Esperanto"></div><div><label>언어 코드 (구글 번역용)</label><input id="pd-target-custom-code" class="text_pole" maxlength="35" value="${esc(settings.targetCustomCode || '')}" placeholder="예: eo"></div></div>
       <div class="pd-setting-help">원문 언어와 관계없이 선택한 언어로 번역합니다. 학습 해설에도 같은 언어가 적용됩니다.</div>
       <div class="pd-setting-row pd-option-row"><label class="pd-checkline"><input id="pd-bilingual-blur" type="checkbox"> <span>병기 번역 뜻 블러 처리</span></label><label class="pd-checkline"><input id="pd-bilingual-notes" type="checkbox"> <span>병기 번역을 주석으로 보기</span></label><label class="pd-checkline"><input id="pd-input-correction" type="checkbox"> <span>보내기 전 입력 교정</span></label><label class="pd-checkline"><input id="pd-show-input-aa" type="checkbox"> <span>입력창 Aa 버튼 표시</span></label></div>
-      <div class="pd-setting-row"><div class="pd-prompt-heading"><label for="pd-global-prompt">전체 프롬프트</label></div><small class="pd-setting-help pd-prompt-warning">프롬프트의 변수나 필수 지시를 수정하면 일부 기능이 정상 작동하지 않을 수 있습니다.</small><textarea id="pd-global-prompt" class="text_pole" rows="8" spellcheck="false">${esc(globalPrompt())}</textarea><div class="pd-prompt-actions"><button id="pd-reset-prompt" type="button" class="menu_button">기본 프롬프트로 복원</button></div></div>
+      <div class="pd-setting-row"><textarea id="pd-global-prompt" class="text_pole" rows="8" spellcheck="false"></textarea></div>
       <div class="pd-setting-row"><label>현재 캐릭터 전용 프롬프트 <small id="pd-char-name">${esc(char)}</small></label><textarea id="pd-char-prompt" class="text_pole" rows="3" placeholder="스펠링, 성별, 호칭, 말투 등 현재 캐릭터 번역에만 참고할 내용을 적어주세요.">${esc(currentPrompt())}</textarea></div>
       <div class="pd-settings-foot"><span><b>${settings.notebook.length}</b>개 표현 저장됨</span><button id="pd-clear-chat-cache" type="button" class="menu_button">이 채팅방 번역 캐시 삭제</button>${SHOW_DEBUG ? pdT('<button id="pd-open-debug" type="button" class="menu_button">🐞 디버그 로그</button>') : ''}</div>
       ${SHOW_DEBUG ? pdUi`<div id="pd-debug-panel" style="display:none;"><div class="pd-debug-actions"><button id="pd-copy-debug" type="button" class="menu_button">로그 복사</button><button id="pd-clear-debug" type="button" class="menu_button">로그 비우기</button></div><textarea id="pd-debug-output" readonly rows="7" placeholder="최근 Phrase Desk 로그가 여기에 표시됩니다.">${esc(debugText())}</textarea></div>` : ''}
