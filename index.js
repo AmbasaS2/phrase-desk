@@ -44,7 +44,7 @@ function normalizeChatMaxTokens(value) {
   return Number.isFinite(amount) && amount > 0 ? Math.min(32768, Math.max(256, Math.round(amount))) : MAX_TOKENS;
 }
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.6.2";
+const PD_VERSION = "1.6.1";
 const CHAT_TRANSLATION_QUALITY_LIMITS = Object.freeze({
   partialCoverageMin:0.75,
   degradedCoverageMin:0.25,
