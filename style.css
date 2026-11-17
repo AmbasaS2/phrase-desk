@@ -2020,21 +2020,23 @@ html.pd-bilingual-blur-enabled .mes_block .pd-bilingual-blur.pd-blur-revealed {
   width: auto !important;
   margin: 0 !important;
 }
+/* Use SillyTavern's own .menu_button dimensions (3px 5px padding, min-content width).
+   Only prevent the surrounding flex row from stretching the five theme-style controls. */
 #phrase-desk-settings .pd-translation-preset-row .pd-preset-icon-btn {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  flex: 0 0 34px !important;
-  width: 34px !important;
-  min-width: 34px !important;
-  max-width: 34px !important;
-  height: 32px !important;
-  min-height: 32px !important;
-  padding: 0 !important;
+  flex: 0 0 auto !important;
+  width: min-content !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 3px 5px !important;
   margin: 0 !important;
+  white-space: nowrap !important;
 }
 #phrase-desk-settings .pd-translation-preset-row .pd-preset-icon-btn i {
-  font-size: 13px !important;
   pointer-events: none !important;
 }
 #phrase-desk-settings .pd-translation-preset-row #pd-global-prompt {
