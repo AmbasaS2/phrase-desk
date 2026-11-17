@@ -32,6 +32,10 @@ const DISPLAY_NAME = "🔤 Phrase Desk";
 const IS_BETA = false;
 const SHOW_DEBUG = true;
 const MAX_TOKENS = 8000;
+function normalizeChatMaxTokens(value) {
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount > 0 ? Math.min(32768, Math.max(256, Math.round(amount))) : MAX_TOKENS;
+}
 const CONTEXT_COUNT = 3;
 const PD_VERSION = "1.6.0";
 const CHAT_TRANSLATION_QUALITY_LIMITS = Object.freeze({
@@ -71,6 +75,7 @@ const ctx = getContext();
 const defaults = {
   profile: '',
   chatMode: 'full',
+  chatMaxTokens: MAX_TOKENS,
   autoMode: 'off',
   bilingualStyle: 'side_sentence',
   bilingualBlur: false,
@@ -107,6 +112,7 @@ const pdDebug = createMemoryDebugLogger();
 delete settings.debugLogs;
 delete settings.promptBackupUpdatedAt;
 settings.fontSize = Number(settings.fontSize || 13);
+settings.chatMaxTokens = normalizeChatMaxTokens(settings.chatMaxTokens);
 settings.quizDifficulty = ['very_easy','easy','normal','hard','expert'].includes(settings.quizDifficulty) ? settings.quizDifficulty : 'normal';
 settings.bilingualStyle = ['side_sentence','below_sentence','by_line','by_paragraph','separate'].includes(settings.bilingualStyle) ? settings.bilingualStyle : 'side_sentence';
 settings.bilingualBlur = !!settings.bilingualBlur;
@@ -4411,7 +4417,7 @@ function setupSettingsPanel() {
   if (!ctx) return;
   const existingSettings = $('#phrase-desk-settings');
   if (existingSettings.length) {
-    if (!existingSettings.find('#pd-global-prompt').length || !existingSettings.find('#pd-clear-chat-cache').length || !existingSettings.find('#pd-bilingual-notes').length || !existingSettings.find('#pd-translation-engine').length || !existingSettings.find('#pd-study-language').length) existingSettings.remove();
+    if (!existingSettings.find('#pd-global-prompt').length || !existingSettings.find('#pd-clear-chat-cache').length || !existingSettings.find('#pd-bilingual-notes').length || !existingSettings.find('#pd-translation-engine').length || !existingSettings.find('#pd-chat-max-tokens').length || !existingSettings.find('#pd-study-language').length) existingSettings.remove();
     else return;
   }
   const opts = [pdT('<option value="">연결 프로필 선택</option>')].concat(profiles().map(p=>`<option value="${esc(p.id)}">${esc(p.name || p.id)}</option>`)).join('');
@@ -4440,6 +4446,14 @@ function setupSettingsPanel() {
     </div>
   </div>`;
   ($('#extensions_settings2').length ? $('#extensions_settings2') : $('#extensions_settings')).append(html);
+  const maxTokensRow = $('<div>', { class:'pd-setting-row pd-two' }).append(
+    $('<div>').append(
+      $('<label>', { for:'pd-chat-max-tokens', text:pdT('채팅 번역 최대 출력 토큰') }),
+      $('<input>', { id:'pd-chat-max-tokens', class:'text_pole', type:'number', min:256, max:32768, step:1, inputmode:'numeric' })
+    ),
+    $('<div>', { class:'pd-setting-help', text:pdT('기본 8,000 · 256~32,768. 새 번역부터 적용되며 모델 한도를 넘으면 요청이 실패할 수 있습니다.') })
+  );
+  $('#pd-translation-engine').closest('.pd-setting-row').after(maxTokensRow);
   // Reuse existing prompt auto-save; add feedback only, without new save controls or watchers.
   const initialStatus = pdT('자동 저장됨 ✓');
   $('<span>',{ id:'pd-global-prompt-status', class:'pd-prompt-save-status', role:'status', 'aria-live':'polite', text:initialStatus })
@@ -4452,6 +4466,7 @@ function setupSettingsPanel() {
   $('#pd-auto-mode').val(settings.autoMode || 'off');
   $('#pd-bilingual-style').val(settings.bilingualStyle || 'side_sentence');
   $('#pd-translation-engine').val(settings.translationEngine || 'profile');
+  $('#pd-chat-max-tokens').val(settings.chatMaxTokens);
   $('#pd-bilingual-blur').prop('checked', !!settings.bilingualBlur);
   $('#pd-bilingual-notes').prop('checked', !!settings.bilingualNotes);
   $('#pd-input-correction').prop('checked', !!settings.inputCorrection);
@@ -4465,8 +4480,10 @@ function setupSettingsPanel() {
   function updateTranslationEngineControl(){
     const google = ($('#pd-translation-engine').val() || settings.translationEngine || 'profile') === 'google';
     $('#pd-profile').prop('disabled', google).attr('title', google ? pdT('구글 간편 번역은 연결 프로필을 사용하지 않습니다.') : pdT('연결 프로필 번역에 사용됩니다.'));
+    $('#pd-chat-max-tokens').prop('disabled', google).attr('title', google ? pdT('구글 간편 번역에는 이 설정이 적용되지 않습니다.') : '');
   }
   $('#pd-profile,#pd-chat-mode,#pd-auto-mode,#pd-bilingual-style,#pd-translation-engine').on('change', (event) => { settings.profile=$('#pd-profile').val(); settings.chatMode=$('#pd-chat-mode').val(); settings.autoMode=$('#pd-auto-mode').val(); settings.bilingualStyle=$('#pd-bilingual-style').val() || 'side_sentence'; settings.translationEngine=$('#pd-translation-engine').val() || 'profile'; saveSettings(); updateBilingualStyleControl(); updateTranslationEngineControl(); const displayModeChanged = event?.currentTarget?.id === 'pd-chat-mode' || event?.currentTarget?.id === 'pd-bilingual-style'; if (displayModeChanged) reapplyVisiblePhraseDeskTranslations(true); });
+  $('#pd-chat-max-tokens').on('change', function(){ settings.chatMaxTokens = normalizeChatMaxTokens(this.value); $(this).val(settings.chatMaxTokens); saveSettings(true); });
   $('#pd-bilingual-blur').on('change', function(){ settings.bilingualBlur = !!this.checked; saveSettings(true); applyBilingualBlurClass(); reapplyVisiblePhraseDeskTranslations(); });
   $('#pd-bilingual-notes').on('change', function(){ settings.bilingualNotes = !!this.checked; saveSettings(true); reapplyVisiblePhraseDeskTranslations(); });
   $('#pd-input-correction').on('change', function(){ settings.inputCorrection = !!this.checked; saveSettings(true); });
@@ -5460,7 +5477,7 @@ async function translateMessagePayload(payload, forceRetranslate = false, option
       rawResult = await translateViaGoogleSimple(sourceForPrompt, googleTargetForKind(), controller?.signal || null);
     } else {
       const basePrompt = buildPrompt(sourceForPrompt, 'canonical', promptMeta);
-      rawResult = await callAI(basePrompt, MAX_TOKENS, { sourceText: sourceForPrompt, preserveNonEmptyResponse: true, signal:controller?.signal || null });
+      rawResult = await callAI(basePrompt, settings.chatMaxTokens, { sourceText: sourceForPrompt, preserveNonEmptyResponse: true, signal:controller?.signal || null });
     }
     if (controller?.signal?.aborted || runId !== messageTranslationRunId) return { status:'skipped', reason:'cancelled' };
     canonicalRecord = parseCanonicalTranslationResult(rawResult, canonicalPlan, translationEngineKey());
