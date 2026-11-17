@@ -4471,7 +4471,7 @@ function setupTranslationPromptLibrary() {
     const reserved = [pdT('기본 프롬프트'), '기본 프롬프트', 'Default prompt'];
     const duplicate = translationPromptPresets(settings).some(item =>
       item.id !== except && item.name.toLocaleLowerCase() === name.toLocaleLowerCase());
-    if (!name || name.length > 80 || /[\\r\\n]/.test(name)
+    if (!name || name.length > 80 || /[\r\n]/.test(name)
       || reserved.some(value => value.toLocaleLowerCase() === name.toLocaleLowerCase()) || duplicate) {
       toast(pdT('프롬프트 이름은 1~80자이며 중복될 수 없습니다.'), 'warn');
       return null;
