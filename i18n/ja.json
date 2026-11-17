@@ -263,5 +263,6 @@
   "phraseDesk.eea2a0c6": "保存に失敗しました",
   "phraseDesk.6ecb5132": "チャット翻訳の最大出力トークン数",
   "phraseDesk.ccaa931f": "モデルの最大出力トークン数を超えると、翻訳リクエストが失敗する場合があります。",
-  "phraseDesk.e9deed62": "Google簡易翻訳にはこの設定は適用されません。"
+  "phraseDesk.e9deed62": "Google簡易翻訳にはこの設定は適用されません。",
+  "phraseDesk.19c1f176": "追加オプション"
 }
