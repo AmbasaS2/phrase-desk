@@ -47,8 +47,25 @@
 }
 #phrase-desk-settings textarea.text_pole { resize: vertical !important; }
 
-/* Token limit matches existing theme-owned Phrase Desk fields. */
-#phrase-desk-settings .pd-chat-token-row { align-items: end !important; }
+/* Keep translation selectors and their hints together; match existing theme-owned fields. */
+#phrase-desk-settings .pd-translation-controls-row { align-items: start !important; }
+#phrase-desk-settings .pd-translation-controls-row .pd-setting-help {
+  display: block !important;
+  margin: 5px 0 0 !important;
+  padding-bottom: 0 !important;
+  align-self: auto !important;
+}
+#phrase-desk-settings .pd-setting-help.pd-language-help {
+  margin: -3px 0 12px !important;
+  padding-bottom: 0 !important;
+}
+#phrase-desk-settings .pd-options-heading { margin-bottom: 4px !important; }
+#phrase-desk-settings .pd-options-heading label { margin-bottom: 0 !important; }
+@media (max-width: 600px) {
+  #phrase-desk-settings .pd-translation-controls-row {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
 #phrase-desk-settings #pd-chat-max-tokens {
   font-variant-numeric: tabular-nums !important;
   appearance: textfield !important;
