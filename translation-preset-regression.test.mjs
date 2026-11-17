@@ -113,12 +113,15 @@ test('interface contains explicit save controls, and built-in variations are not
   const js = fs.readFileSync(new URL('./index.js', import.meta.url), 'utf8');
   const css = fs.readFileSync(new URL('./style.css', import.meta.url), 'utf8');
   assert.match(js, /function setupTranslationPromptLibrary\(/);
-  for (const id of ['pd-preset-select','pd-preset-add','pd-preset-copy','pd-preset-rename','pd-preset-delete','pd-preset-save']) {
+  for (const id of ['pd-preset-select','pd-preset-save','pd-preset-save-as','pd-preset-export','pd-preset-import','pd-preset-delete']) {
     assert.ok(js.includes(id), id);
   }
-  assert.match(js, /\.prop\('readOnly', builtin\)/);
-  assert.match(js, /discardDraft\(\)/);
+  assert.match(js, /\.prop\('readOnly', viewedId === BUILTIN_TRANSLATION_PROMPT_ID\)/);
+  assert.match(js, /showDecision\('저장되지 않은 변경'/);
   assert.match(js, /#pd-preset-save/);
   assert.match(css, /\.pd-translation-preset-row/);
+  assert.doesNotMatch(js.slice(js.indexOf('function setupTranslationPromptLibrary()'),js.indexOf('function setupSettingsPanel()')), /\bprompt\(/);
+  assert.match(js, /showNameModal\(/);
+  assert.match(js, /exportTranslationPromptJSON/);
   assert.doesNotMatch(js, /'미친 한출의 맛'|'김홍진의 맛'|'딥식'|'갈뵈체'/);
 });
