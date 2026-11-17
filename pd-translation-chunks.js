@@ -33,7 +33,17 @@ function preferredGoogleCut(text, hard) {
   if (hard >= text.length) return hard;
   const floor = Math.floor(hard * 0.48);
   const head = text.slice(0, hard);
-  for (const delimiter of ['\n\n', '\n', ' ']) {
+  // Prefer an already complete PDU pair over cutting through its translatable body.
+  const paragraph = head.lastIndexOf('\n\n');
+  if (paragraph >= floor) return paragraph;
+  const completedPairs = head.matchAll(/\[\[\/PDU(?:-[A-Z]+)?-\d{4}\]\]/gu);
+  let pairEnd = -1;
+  for (const token of completedPairs) {
+    const end = token.index + token[0].length;
+    if (end >= floor) pairEnd = end;
+  }
+  if (pairEnd > 0) return pairEnd;
+  for (const delimiter of ['\n', ' ']) {
     const at = head.lastIndexOf(delimiter);
     if (at >= floor) return at;
   }
