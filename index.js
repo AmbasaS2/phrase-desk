@@ -4458,11 +4458,16 @@ function setupTranslationPromptLibrary() {
     activeTranslationPresetId: settings.activeTranslationPresetId,
     translationPrompt: settings.translationPrompt,
   });
-  function persist(previous) {
+  function persist(previous, restoreId = viewedId, restoreText = String(editor.val() ?? '')) {
     if (saveSettings(true) !== false) return true;
     Object.assign(settings, previous);
-    toast(pdT('프롬프트 저장에 실패했습니다.'), 'error');
+    viewedId = restoreId;
     refresh();
+    if (viewedId !== BUILTIN_TRANSLATION_PROMPT_ID) {
+      editor.val(restoreText);
+      refreshPromptSaveStatuses();
+    }
+    toast(pdT('프롬프트 저장에 실패했습니다.'), 'error');
     return false;
   }
   function refresh() {
@@ -4542,11 +4547,12 @@ function setupTranslationPromptLibrary() {
       Object.assign(settings, before);
       return;
     }
-    if (persist(before)) refresh();
+    if (persist(before, viewedId, String(editor.val() ?? ''))) refresh();
   });
   $('#pd-preset-save-as').on('click', function() {
     // Save-as also works with unsaved edits; the previous named entry stays unchanged.
     const body = String(editor.val() ?? '');
+    const previousViewId = viewedId;
     showNameModal(name => {
       const before = snapshot();
       const entry = addTranslationPrompt(settings, name, body, DEFAULT_TRANSLATION_PROMPT);
@@ -4555,7 +4561,7 @@ function setupTranslationPromptLibrary() {
         return;
       }
       viewedId = entry.id;
-      if (persist(before)) refresh();
+      if (persist(before, previousViewId, body)) refresh();
     });
   });
   $('#pd-preset-delete').on('click', function() {
@@ -4567,7 +4573,7 @@ function setupTranslationPromptLibrary() {
       const before = snapshot();
       if (!deleteTranslationPrompt(settings, id, DEFAULT_TRANSLATION_PROMPT)) return;
       viewedId = activeTranslationPromptId(settings);
-      if (persist(before)) refresh();
+      if (persist(before, id)) refresh();
     }, '삭제');
   });
   $('#pd-preset-export').on('click', function() {
@@ -4605,13 +4611,15 @@ function setupTranslationPromptLibrary() {
     try { record = parseTranslationPromptJSON(await file.text()); }
     catch { record = null; }
     if (!record) return toast(pdT('올바른 프롬프트 JSON 파일이 아닙니다.'), 'warn');
+    const previousViewId = viewedId;
+    const previousBody = String(editor.val() ?? '');
     const importNow = () => {
       const before = snapshot();
       const name = uniqueTranslationPromptName(settings, record.name, pdT('가져온 프롬프트'));
       const entry = name && addTranslationPrompt(settings, name, record.text, DEFAULT_TRANSLATION_PROMPT);
       if (!entry) return toast(pdT('프롬프트를 가져오지 못했습니다.'), 'error');
       viewedId = entry.id;
-      if (persist(before)) { refresh(); toast(pdT('프롬프트를 가져왔습니다.'), 'success'); }
+      if (persist(before, previousViewId, previousBody)) { refresh(); toast(pdT('프롬프트를 가져왔습니다.'), 'success'); }
     };
     if (changedText()) {
       showDecision('저장되지 않은 변경', '작성 중인 내용을 버리고 프롬프트를 가져올까요?', importNow, '가져오기');
