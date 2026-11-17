@@ -303,5 +303,12 @@
   "phraseDesk.c2633147": "プロンプトをインポートできませんでした。",
   "phraseDesk.2f4df8b8": "プロンプトをインポートしました。",
   "phraseDesk.eb2da16a": "未保存の編集を破棄してプロンプトをインポートしますか？",
-  "phraseDesk.36b99dd9": "インポート"
+  "phraseDesk.36b99dd9": "インポート",
+  "phraseDesk.e0058ea6": "入力翻訳プロンプト",
+  "phraseDesk.86c5c23b": "出力翻訳プロンプト",
+  "phraseDesk.dcbe837a": "入力翻訳の標準プロンプト",
+  "phraseDesk.bd15a1c9": "出力翻訳の標準プロンプト",
+  "phraseDesk.d91e83d2": "新しい入力翻訳プロンプトの名前",
+  "phraseDesk.4e4acee1": "新しい出力翻訳プロンプトの名前",
+  "phraseDesk.ef7e7a54": "以前の入力翻訳プロンプト"
 }
