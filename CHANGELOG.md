@@ -1,5 +1,13 @@
 # Phrase Desk changelog
 
+## 2026-11-17 UI follow-up — compact prompt name dialogs (v1.6.1 unchanged)
+
+- Fixed the overlarge **Save as New** name window and prompt confirmation windows. The generic Phrase Desk modal previously imposed a 720px viewport width, 18px heading, 34px minimum input height, and oversized padding on these short dialogs.
+- Added a prompt-dialog-only class/viewport width cap of 400px, reduced title to 13px, input height to 26px, buttons to 24px, and padding to 14px 16px. Colors and border use the active SillyTavern theme; shadow removed. Other Phrase Desk modals remain unchanged.
+- Isolated Node.js 22 regression suite: **53/53 passed**. Chromium simulation with the user's provided iRiver Fog Gray Highlighter theme CSS at 320/390/507/1024px showed compact layout without horizontal overflow; simulated CSS is not a live SillyTavern verification.
+- Runtime and manifest both remain **1.6.1**. Roll back to `b7b6775782825408cfcb6e2975092f38a0452f52` if the prompt dialog becomes inaccessible. Never remove user prompts/settings/chats during rollback.
+
+
 ## 2026-11-17 UI follow-up — compact theme-style prompt controls (v1.6.1 unchanged)
 
 - Fixed the oversized five-button prompt toolbar: removed forced 34×32px icon sizing and used SillyTavern's header/action button classes with theme-like minimum-content sizing.

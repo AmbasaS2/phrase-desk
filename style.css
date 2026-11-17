@@ -2264,3 +2264,68 @@ body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal.pd-explain-modal {
   }
   .pd-explain-modal .pd-explain-footer button { width: 100% !important; }
 }
+
+/* Compact name/confirmation dialogs in the translation prompt manager only.
+   Respect the user's SillyTavern/iRiver palette; do not resize other PD modals. */
+body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal.pd-preset-compact-modal {
+  box-sizing: border-box !important;
+  padding: 14px 16px !important;
+  border: 1px solid var(--SmartThemeBorderColor, #bfc1be) !important;
+  border-radius: 10px !important;
+  background: var(--SmartThemeBlurTintColor, #f3f3f0) !important;
+  color: var(--SmartThemeBodyColor, #2f3133) !important;
+  box-shadow: none !important;
+  font-family: inherit !important;
+  font-size: 12px !important;
+}
+body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal.pd-preset-compact-modal h3.pd-preset-dialog-title {
+  margin: 0 0 10px !important;
+  padding: 0 !important;
+  font-family: inherit !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  line-height: 1.3 !important;
+  text-align: center !important;
+}
+body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal.pd-preset-compact-modal #pd-preset-name {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  height: 26px !important;
+  min-height: 26px !important;
+  max-height: 26px !important;
+  margin: 0 !important;
+  padding: 3px 8px !important;
+  border-radius: 5px !important;
+  font-family: inherit !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
+}
+body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal.pd-preset-compact-modal .pd-preset-dialog-message {
+  margin: 0 0 10px !important;
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+  text-align: center !important;
+}
+body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal.pd-preset-compact-modal .pd-preset-dialog-actions {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  margin: 12px 0 0 !important;
+  padding: 0 !important;
+}
+body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal.pd-preset-compact-modal .pd-preset-dialog-actions .menu_button {
+  box-sizing: border-box !important;
+  flex: 0 0 auto !important;
+  width: auto !important;
+  min-width: 0 !important;
+  height: 24px !important;
+  min-height: 24px !important;
+  max-height: 24px !important;
+  margin: 0 !important;
+  padding: 3px 11px !important;
+  border-radius: 5px !important;
+  font-family: inherit !important;
+  font-size: 12px !important;
+  line-height: 1.2 !important;
+}
