@@ -2040,6 +2040,9 @@ html.pd-bilingual-blur-enabled .mes_block .pd-bilingual-blur.pd-blur-revealed {
 #phrase-desk-settings .pd-translation-preset-row #pd-global-prompt {
   margin: 0 !important;
 }
+#phrase-desk-settings #pd-preset-import-file {
+  display: none !important;
+}
 #phrase-desk-settings .pd-translation-preset-row #pd-global-prompt[readonly] {
   opacity: .82 !important;
   cursor: default !important;
