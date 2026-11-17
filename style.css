@@ -46,6 +46,18 @@
   box-sizing: border-box !important;
 }
 #phrase-desk-settings textarea.text_pole { resize: vertical !important; }
+
+/* Token limit matches existing theme-owned Phrase Desk fields. */
+#phrase-desk-settings .pd-chat-token-row { align-items: end !important; }
+#phrase-desk-settings #pd-chat-max-tokens {
+  font-variant-numeric: tabular-nums !important;
+  appearance: textfield !important;
+}
+#phrase-desk-settings #pd-chat-max-tokens::-webkit-inner-spin-button,
+#phrase-desk-settings #pd-chat-max-tokens::-webkit-outer-spin-button {
+  -webkit-appearance: none !important;
+  margin: 0 !important;
+}
 #phrase-desk-settings .pd-settings-foot { display:flex !important; align-items:center !important; justify-content:space-between !important; gap:8px !important; margin:8px 0 0 !important; font-size:12px !important; }
 #phrase-desk-settings .pd-settings-foot .menu_button { width:auto !important; min-width:0 !important; margin:0 !important; }
 #phrase-desk-settings .pd-debug-actions { display:flex !important; gap:8px !important; margin:6px 0 !important; }
