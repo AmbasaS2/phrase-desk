@@ -1,13 +1,13 @@
 # Phrase Desk changelog
 
-## 1.6.2 — 2026-11-17 · SillyTavern theme-style prompt manager
+## 2026-11-17 UI follow-up — theme-style prompt manager (v1.6.1 unchanged)
 
 - Replaced the 1.6.1 six-button preset manager with compact SillyTavern-style controls: header Export JSON / Import JSON / Delete, selector row Save (disk) / Save as New, and the full prompt editor below. Removed the old explanatory warning text and obsolete native browser prompt dialogs.
 - **Save** now commits both the selected prompt and edited text. Selecting a different prompt or typing alone does not affect the active translation prompt or last saved selection. Save as New creates a named copy from the displayed text, including unsaved edits, through an in-page modal. Deletion and discarding unsaved changes use in-page confirmation dialogs.
 - JSON export/import operates on one named prompt with the versioned `phrase-desk-translation-prompt` format; import validates the file, preserves existing prompts, and gives duplicates a unique numbered name.
 - Existing saved prompts, character-specific auto-save, translation caches, PDU/PD_FMT contracts, study data and built-in literary default remain untouched. No third-party translation flavor prompt is bundled, and the separate lean-prompt experiment is not included.
 - Tests: Node.js 22 regression suite **47/47 passed** including direct UI simulation, JSON roundtrips, selection persistence and failure guards. An isolated Chromium toolbar layout probe at 320/375/390/430/1280px showed no overlap or horizontal overflow. This does not validate the user's live SillyTavern, installed theme, browser, or API provider.
-- Rollback to 1.6.1 code baseline `f52e71fcec88e73647ceb64229489b1f1b1ceb10` if needed; preserve user settings, stored custom prompts and chat data.
+- Rollback to the pre-UI-follow-up 1.6.1 code baseline `f52e71fcec88e73647ceb64229489b1f1b1ceb10` if needed; preserve user settings, stored custom prompts and chat data.
 
 
 ## 1.6.1 — 2026-11-17 · Named translation prompt library
