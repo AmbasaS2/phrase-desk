@@ -61,7 +61,9 @@ test('prompt dialog has iRiver-scale title, 26px input, 24px buttons and reduced
 });
 
 test('all compact rules are scoped and translation version remains v1.6.1',()=>{
-  const compactCss=css.slice(css.indexOf('/* Compact name/confirmation dialogs in the translation prompt manager only.'));
+  const start=css.indexOf('/* Compact name/confirmation dialogs in the translation prompt manager only.');
+  const boundary=css.indexOf('/* Input prompt library mirrors the established output prompt controls',start);
+  const compactCss=css.slice(start,boundary>=0?boundary:undefined);
   assert.ok(compactCss);
   const selectors = compactCss.split('\n').filter(line=>line.trim().endsWith(' {'));
   assert.ok(selectors.length>=5);

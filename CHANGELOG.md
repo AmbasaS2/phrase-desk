@@ -1,5 +1,15 @@
 # Phrase Desk changelog
 
+## 2026-11-18 UI follow-up — separate input/output prompt libraries (v1.6.1 unchanged)
+
+- Added **Input Translation Prompt** directly above the existing **Output Translation Prompt**, with matching compact SillyTavern theme-style buttons (Save, Save as New, separate JSON Export/Import, Delete, same name/confirmation dialogs). Dropdown defaults are explicitly named **입력 번역 기본 프롬프트** / **출력 번역 기본 프롬프트** in Korean and translated for en/ja/fr/es.
+- Introduced one read-only, independently authored input default. The input translation builder now uses only the selected input prompt and the existing input technical contract. It **no longer prepends the output literary prompt**. User-message content, prior assistant reply and current-character terminology/register references are still handled as before; input translation remains directed to the study language.
+- Input library persists `inputTranslationPresets`, `activeInputTranslationPresetId`, `inputTranslationPrompt`, and `inputTranslationPresetVersion` in the existing SillyTavern user settings. Old output prompt data and its selected preset remain untouched. The input JSON format is `phrase-desk-input-translation-prompt`, separated from the existing output JSON schema. Saved input/output selections restore independently on refresh/restart.
+- Output default literary text, PDU/PD_FMT contracts, character-prompt auto-save, translation caches, learning features, other settings and the separate lean-prompt experiment remain unchanged.
+- Validation: 61/61 isolated Node.js 22 regression tests passed after implementing the independent input path; tests cover preset migration, input/output isolation, manual Save, Save as New, JSON roundtrips, reload, and output prompt stability. Live SillyTavern/browser/mobile visual validation remains pending.
+- Runtime version and `manifest.json` stay **1.6.1** by user instruction. Rollback baseline: `a766cb496833f5888dc38cc8cea1f00075367de0`. Preserve existing user settings and custom prompts on rollback.
+
+
 ## 2026-11-17 UI follow-up — compact prompt name dialogs (v1.6.1 unchanged)
 
 - Fixed the overlarge **Save as New** name window and prompt confirmation windows. The generic Phrase Desk modal previously imposed a 720px viewport width, 18px heading, 34px minimum input height, and oversized padding on these short dialogs.

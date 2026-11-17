@@ -118,8 +118,9 @@ test('custom prompt replaces literary default but never removes structural contr
   assert.ok(!prompt.includes('Natural language and voice'));
   api.settings.studyLanguage='ja';
   const input=api.buildInputTranslationPrompt('안녕.');
-  assert.ok(input.includes('Use a terse voice in Japanese.'));
-  assert.ok(input.includes('one translation only'));
+  assert.ok(input.includes('Phrase Desk input translation into Japanese'));
+  assert.ok(!input.includes('Use a terse voice'));
+  assert.ok(input.includes('translation only'));
   assert.ok(input.includes('안녕.'));
 });
 

@@ -303,5 +303,12 @@
   "phraseDesk.c2633147": "Could not import the prompt.",
   "phraseDesk.2f4df8b8": "Prompt imported.",
   "phraseDesk.eb2da16a": "Discard unsaved edits and import the prompt?",
-  "phraseDesk.36b99dd9": "Import"
+  "phraseDesk.36b99dd9": "Import",
+  "phraseDesk.e0058ea6": "Input translation prompt",
+  "phraseDesk.86c5c23b": "Output translation prompt",
+  "phraseDesk.dcbe837a": "Default input translation prompt",
+  "phraseDesk.bd15a1c9": "Default output translation prompt",
+  "phraseDesk.d91e83d2": "Name for the new input translation prompt",
+  "phraseDesk.4e4acee1": "Name for the new output translation prompt",
+  "phraseDesk.ef7e7a54": "Previous input translation prompt"
 }

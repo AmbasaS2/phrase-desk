@@ -4,6 +4,7 @@ import * as language from './pd-language.js';
 import * as safe from './pd-safe-utils.js';
 import * as chunks from './pd-translation-chunks.js';
 import * as presets from './pd-prompt-presets.js';
+import * as inputPresets from './pd-input-prompt-presets.js';
 
 export const identityUi = (parts, ...values) => parts.reduce((out, part, i) => out + part + (i < values.length ? values[i] : ''), '');
 export function loadPhraseDesk({ locale = 'ko-KR', seed = {} } = {}) {
@@ -19,7 +20,7 @@ export function loadPhraseDesk({ locale = 'ko-KR', seed = {} } = {}) {
     createElement(){return { innerHTML:'', get textContent(){return this.innerHTML.replace(/<[^>]*>/g,'').replace(/&amp;/g,'&');} };},
   };
   const sandbox = {
-    ...language, ...safe, ...chunks, ...presets, Math, Date, Set, Map, Intl, Uint8Array, URL, AbortController,
+    ...language, ...safe, ...chunks, ...presets, ...inputPresets, Math, Date, Set, Map, Intl, Uint8Array, URL, AbortController,
     console, document, navigator:{language:locale}, window:{SillyTavern:{getContext:()=>context}},
     extension_settings:{'phrase-desk':structuredClone(seed)}, getContext:()=>context,
     getUiLocale:()=>locale, pdT:value=>value, pdUi:identityUi, initPdI18n:async()=>{}, stI18n:{},
