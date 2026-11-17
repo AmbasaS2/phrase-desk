@@ -2035,6 +2035,8 @@ html.pd-bilingual-blur-enabled .mes_block .pd-bilingual-blur.pd-blur-revealed {
   padding: 3px 5px !important;
   margin: 0 !important;
   white-space: nowrap !important;
+  font-size: inherit !important;
+  font-family: inherit !important;
 }
 #phrase-desk-settings .pd-translation-preset-row .pd-preset-icon-btn i {
   pointer-events: none !important;
