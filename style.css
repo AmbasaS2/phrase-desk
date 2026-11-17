@@ -1991,42 +1991,83 @@ html.pd-bilingual-blur-enabled .mes_block .pd-bilingual-blur.pd-blur-revealed {
   opacity: .68 !important;
   white-space: nowrap !important;
 }
-#phrase-desk-settings .pd-translation-preset-row #pd-preset-select {
-  width: 100% !important;
-  min-width: 0 !important;
-}
-#phrase-desk-settings .pd-translation-preset-row .pd-preset-buttons {
-  display: grid !important;
-  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+#phrase-desk-settings .pd-translation-preset-row .pd-preset-heading,
+#phrase-desk-settings .pd-translation-preset-row .pd-preset-selection {
+  display: flex !important;
+  align-items: center !important;
   gap: 6px !important;
-  margin: 8px 0 !important;
-}
-#phrase-desk-settings .pd-translation-preset-row .pd-preset-buttons .menu_button {
   width: 100% !important;
   min-width: 0 !important;
+}
+#phrase-desk-settings .pd-translation-preset-row .pd-preset-heading {
+  justify-content: space-between !important;
+  margin-bottom: 5px !important;
+}
+#phrase-desk-settings .pd-translation-preset-row .pd-preset-heading label {
   margin: 0 !important;
-  padding: 7px 5px !important;
-  white-space: normal !important;
 }
-#phrase-desk-settings .pd-translation-preset-row #pd-preset-save {
-  margin-left: auto !important;
+#phrase-desk-settings .pd-translation-preset-row .pd-preset-top-actions {
+  display: flex !important;
+  gap: 3px !important;
   flex: 0 0 auto !important;
-  width: auto !important;
-  min-width: 75px !important;
 }
-#phrase-desk-settings .pd-prompt-save-status[data-state="unsaved"] {
-  opacity: 1 !important;
-  font-weight: 600 !important;
+#phrase-desk-settings .pd-translation-preset-row .pd-preset-selection {
+  margin-bottom: 8px !important;
+}
+#phrase-desk-settings .pd-translation-preset-row #pd-preset-select {
+  flex: 1 1 0 !important;
+  min-width: 0 !important;
+  width: auto !important;
+  margin: 0 !important;
+}
+#phrase-desk-settings .pd-translation-preset-row .pd-preset-icon-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex: 0 0 34px !important;
+  width: 34px !important;
+  min-width: 34px !important;
+  max-width: 34px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+#phrase-desk-settings .pd-translation-preset-row .pd-preset-icon-btn i {
+  font-size: 13px !important;
+  pointer-events: none !important;
+}
+#phrase-desk-settings .pd-translation-preset-row #pd-global-prompt {
+  margin: 0 !important;
 }
 #phrase-desk-settings .pd-translation-preset-row #pd-global-prompt[readonly] {
   opacity: .82 !important;
   cursor: default !important;
 }
-@media (max-width: 600px) {
-  #phrase-desk-settings .pd-translation-preset-row .pd-preset-buttons {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
+#phrase-desk-settings .pd-translation-preset-row #pd-global-prompt-status {
+  display: block !important;
+  margin-top: 5px !important;
+  min-height: 16px !important;
 }
+#phrase-desk-settings .pd-prompt-save-status[data-state="unsaved"] {
+  opacity: 1 !important;
+  font-weight: 600 !important;
+}
+.pd-modal .pd-preset-dialog-title,
+.pd-modal .pd-preset-dialog-message {
+  text-align: center !important;
+}
+.pd-modal .pd-preset-dialog-title { margin: 0 0 12px !important; }
+.pd-modal .pd-preset-dialog-message { margin: 4px 0 14px !important; }
+.pd-modal #pd-preset-name { width: 100% !important; margin-bottom: 12px !important; }
+.pd-modal .pd-preset-dialog-actions {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-wrap: wrap !important;
+}
+.pd-modal .pd-preset-dialog-actions .menu_button { width: auto !important; min-width: 75px !important; }
 #phrase-desk-settings .pd-prompt-warning {
   display: block !important;
   margin: 4px 0 8px !important;
