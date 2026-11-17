@@ -166,7 +166,9 @@ test('input UI imports, exports, and deletes via identical in-page controls',asy
 test('two separate compact prompt editors are ordered input above output, labels are explicit',()=>{
  const js=fs.readFileSync(new URL('./index.js',import.meta.url),'utf8');
  const css=fs.readFileSync(new URL('./style.css',import.meta.url),'utf8');
- assert.ok(js.indexOf('<textarea id="pd-input-global-prompt"')<js.indexOf('<textarea id="pd-global-prompt"'));
+ const uiMarkup=js.slice(js.indexOf('function setupSettingsPanel()'),js.indexOf('function setupLanguageControls()',js.indexOf('function setupSettingsPanel()')));
+ assert.ok(uiMarkup.indexOf('<textarea id="pd-input-global-prompt"')>=0);
+ assert.ok(uiMarkup.indexOf('<textarea id="pd-input-global-prompt"')<uiMarkup.indexOf('<textarea id="pd-global-prompt"'));
  assert.ok(js.includes('setupInputTranslationPromptLibrary();\n  setupTranslationPromptLibrary();'));
  for(const s of ["label('입력 번역 프롬프트')","label('출력 번역 프롬프트')","pdT('입력 번역 기본 프롬프트')","pdT('출력 번역 기본 프롬프트')"])assert.ok(js.includes(s),s);
  assert.ok(css.includes('#pd-input-global-prompt[readonly]'));
