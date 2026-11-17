@@ -128,5 +128,6 @@ test('integration remains opt-in by length, uses existing parser and never retri
   assert.match(src, /canonicalRecord = parseCanonicalTranslationResult\(rawResult, canonicalPlan, translationEngineKey\(\)\)/);
   assert.match(src, /received\.push\(chunk\.text\)/);
   assert.doesNotMatch(src, /function splitGoogleChunks\(text = ''/);
-  assert.match(src, /const PD_VERSION = "1\.6\.0"/);
+  const manifest = JSON.parse(fs.readFileSync(new URL('./manifest.json', import.meta.url), 'utf8'));
+  assert.ok(src.includes('const PD_VERSION = "' + manifest.version + '"'));
 });
