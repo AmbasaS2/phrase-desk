@@ -263,5 +263,6 @@
   "phraseDesk.eea2a0c6": "Échec de l’enregistrement",
   "phraseDesk.6ecb5132": "Nombre maximal de tokens en sortie pour la traduction du chat",
   "phraseDesk.ccaa931f": "Si la limite de tokens de sortie du modèle est dépassée, la demande de traduction peut échouer.",
-  "phraseDesk.e9deed62": "Ce réglage ne s’applique pas à la traduction rapide de Google."
+  "phraseDesk.e9deed62": "Ce réglage ne s’applique pas à la traduction rapide de Google.",
+  "phraseDesk.19c1f176": "Options supplémentaires"
 }
