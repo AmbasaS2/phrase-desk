@@ -1971,7 +1971,7 @@ html.pd-bilingual-blur-enabled .mes_block .pd-bilingual-blur.pd-blur-revealed {
   width: 100% !important;
   margin: 0 !important;
 }
-/* Put reset immediately below the prompt textarea, aligned to the right. */
+/* Keep preset save and status beneath the textarea; scope controls to Phrase Desk. */
 #phrase-desk-settings .pd-prompt-actions {
   display: flex !important;
   justify-content: space-between !important;
@@ -1991,16 +1991,41 @@ html.pd-bilingual-blur-enabled .mes_block .pd-bilingual-blur.pd-blur-revealed {
   opacity: .68 !important;
   white-space: nowrap !important;
 }
-#phrase-desk-settings .pd-prompt-actions #pd-reset-prompt {
-  display: inline-flex !important;
+#phrase-desk-settings .pd-translation-preset-row #pd-preset-select {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+#phrase-desk-settings .pd-translation-preset-row .pd-preset-buttons {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 6px !important;
+  margin: 8px 0 !important;
+}
+#phrase-desk-settings .pd-translation-preset-row .pd-preset-buttons .menu_button {
+  width: 100% !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 7px 5px !important;
+  white-space: normal !important;
+}
+#phrase-desk-settings .pd-translation-preset-row #pd-preset-save {
   margin-left: auto !important;
   flex: 0 0 auto !important;
-  width: max-content !important;
-  min-width: max-content !important;
-  max-width: 100% !important;
-  white-space: nowrap !important;
-  word-break: keep-all !important;
-  writing-mode: horizontal-tb !important;
+  width: auto !important;
+  min-width: 75px !important;
+}
+#phrase-desk-settings .pd-prompt-save-status[data-state="unsaved"] {
+  opacity: 1 !important;
+  font-weight: 600 !important;
+}
+#phrase-desk-settings .pd-translation-preset-row #pd-global-prompt[readonly] {
+  opacity: .82 !important;
+  cursor: default !important;
+}
+@media (max-width: 600px) {
+  #phrase-desk-settings .pd-translation-preset-row .pd-preset-buttons {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
 }
 #phrase-desk-settings .pd-prompt-warning {
   display: block !important;
