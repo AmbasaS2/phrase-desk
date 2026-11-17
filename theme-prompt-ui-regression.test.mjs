@@ -164,3 +164,25 @@ test('unsaved text switching opens in-page confirmation without altering committ
   assert.equal(env.get('pd-preset-select').val(),'builtin');
   assert.equal(activeTranslationPromptId(env.settings),'custom-1','Need explicit disk Save to activate');
 });
+
+test('prompt toolbar icon sizing follows native SillyTavern theme buttons', () => {
+  const js=fs.readFileSync(new URL('./index.js',import.meta.url),'utf8');
+  const css=fs.readFileSync(new URL('./style.css',import.meta.url),'utf8');
+  const index=js.indexOf('function setupTranslationPromptLibrary()');
+  const ui=js.slice(index,js.indexOf('function setupSettingsPanel()',index));
+  assert.match(ui,/class="menu_button margin0 pd-preset-icon-btn/);
+  assert.match(ui,/header \? ' menu_button_icon' : ''/);
+  for(const name of ['pd-preset-export','pd-preset-import','pd-preset-delete']) {
+    assert.match(ui,new RegExp("iconButton\\('"+name+"'.*true\\)"));
+  }
+  for(const name of ['pd-preset-save','pd-preset-save-as']) {
+    assert.match(ui,new RegExp("iconButton\\('"+name+"'"));
+  }
+  const start=css.indexOf('#phrase-desk-settings .pd-translation-preset-row .pd-preset-icon-btn {');
+  const section=css.slice(start,css.indexOf('}',start)+1);
+  assert.match(section,/width: min-content !important/);
+  assert.match(section,/padding: 3px 5px !important/);
+  assert.match(section,/font-size: inherit !important/);
+  assert.match(section,/font-family: inherit !important/);
+  assert.doesNotMatch(section,/34px|32px|flex:\s*0\s+0\s+34px/);
+});
