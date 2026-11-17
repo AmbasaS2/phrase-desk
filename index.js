@@ -4446,14 +4446,18 @@ function setupSettingsPanel() {
     </div>
   </div>`;
   ($('#extensions_settings2').length ? $('#extensions_settings2') : $('#extensions_settings')).append(html);
-  const maxTokensRow = $('<div>', { class:'pd-setting-row pd-two pd-chat-token-row' }).append(
-    $('<div>').append(
-      $('<label>', { for:'pd-chat-max-tokens', text:pdT('채팅 번역 최대 출력 토큰') }),
-      $('<input>', { id:'pd-chat-max-tokens', class:'text_pole', type:'number', min:256, max:32768, step:1, inputmode:'numeric' })
-    ),
+  // Keep each translation setting with its own description, using the existing two-column layout.
+  const translationRow = $('#pd-translation-engine').closest('.pd-setting-row').addClass('pd-translation-controls-row');
+  translationRow.children('.pd-setting-help').appendTo(translationRow.children('div').first());
+  translationRow.append($('<div>', { class:'pd-translation-token-field' }).append(
+    $('<label>', { for:'pd-chat-max-tokens', text:pdT('채팅 번역 최대 출력 토큰') }),
+    $('<input>', { id:'pd-chat-max-tokens', class:'text_pole', type:'number', min:256, max:32768, step:1, inputmode:'numeric' }),
     $('<div>', { class:'pd-setting-help', text:pdT('모델의 출력 한도를 넘어서면 번역 요청이 실패할 수 있습니다.') })
-  );
-  $('#pd-translation-engine').closest('.pd-setting-row').after(maxTokensRow);
+  ));
+  $('#pd-target-custom').next('.pd-setting-help').addClass('pd-language-help');
+  $('<div>', { class:'pd-setting-row pd-options-heading' })
+    .append($('<label>', { text:pdT('추가 옵션') }))
+    .insertBefore($('#pd-bilingual-blur').closest('.pd-option-row'));
   // Reuse existing prompt auto-save; add feedback only, without new save controls or watchers.
   const initialStatus = pdT('자동 저장됨 ✓');
   $('<span>',{ id:'pd-global-prompt-status', class:'pd-prompt-save-status', role:'status', 'aria-live':'polite', text:initialStatus })
