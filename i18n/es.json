@@ -263,5 +263,6 @@
   "phraseDesk.eea2a0c6": "Error al guardar",
   "phraseDesk.6ecb5132": "Máximo de tokens de salida para traducir el chat",
   "phraseDesk.ccaa931f": "Si se supera el límite de tokens de salida del modelo, la solicitud de traducción puede fallar.",
-  "phraseDesk.e9deed62": "Este ajuste no se aplica a la traducción rápida de Google."
+  "phraseDesk.e9deed62": "Este ajuste no se aplica a la traducción rápida de Google.",
+  "phraseDesk.19c1f176": "Opciones adicionales"
 }
