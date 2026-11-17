@@ -1,5 +1,13 @@
 # Phrase Desk changelog
 
+## 2026-11-17 UI follow-up — native-sized theme icons (v1.6.1 unchanged)
+
+- Corrected five oversized prompt-toolbar buttons: Phrase Desk had forcibly set each icon to 34×32px instead of following SillyTavern's UI theme controls.
+- Match the native theme button classes (icon variant for header actions, ordinary variant for Save/Save As), let font size inherit, and use theme-like minimum-content sizing/padding. Only `index.js`, `style.css`, and the associated regression test were changed.
+- Node.js 22 test suite: 48/48 passed. A synthetic Chromium reference using native `.menu_button` rules measured equal ~25×26px boxes; actual user theme/browser still needs a visual check.
+- Roll back this follow-up to commit `aac6277f84e2fef92619d923c1e0bc75b8f0ae51` if buttons clip or become inaccessible. Keep user prompt settings and chats untouched.
+
+
 ## 2026-11-17 UI follow-up — theme-style prompt manager (v1.6.1 unchanged)
 
 - Replaced the 1.6.1 six-button preset manager with compact SillyTavern-style controls: header Export JSON / Import JSON / Delete, selector row Save (disk) / Save as New, and the full prompt editor below. Removed the old explanatory warning text and obsolete native browser prompt dialogs.
