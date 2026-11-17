@@ -4421,8 +4421,8 @@ function setupTranslationPromptLibrary() {
   if (!oldEditor.length) return;
   const row = oldEditor.closest('.pd-setting-row').addClass('pd-translation-preset-row');
   const label = value => esc(pdT(value));
-  const iconButton = (id, icon, title) =>
-    '<button id="' + id + '" class="menu_button pd-preset-icon-btn" type="button" title="' +
+  const iconButton = (id, icon, title, header = false) =>
+    '<button id="' + id + '" class="menu_button margin0 pd-preset-icon-btn' + (header ? ' menu_button_icon' : '') + '" type="button" title="' +
     label(title) + '" aria-label="' + label(title) + '"><i class="fa-solid ' + icon +
     '" aria-hidden="true"></i></button>';
 
@@ -4430,16 +4430,16 @@ function setupTranslationPromptLibrary() {
   row.html([
     '<div class="pd-preset-heading"><label for="pd-preset-select">', label('번역 프롬프트'), '</label>',
     '<div class="pd-preset-top-actions">',
-      iconButton('pd-preset-export', 'fa-file-export', '프롬프트 내보내기'),
-      iconButton('pd-preset-import', 'fa-file-import', '프롬프트 가져오기'),
-      iconButton('pd-preset-delete', 'fa-trash', '프롬프트 삭제'),
+      iconButton('pd-preset-export', 'fa-file-export', '프롬프트 내보내기', true),
+      iconButton('pd-preset-import', 'fa-file-import', '프롬프트 가져오기', true),
+      iconButton('pd-preset-delete', 'fa-trash', '프롬프트 삭제', true),
     '</div></div>',
     '<div class="pd-preset-selection">',
-      '<select id="pd-preset-select" class="text_pole"></select>',
+      '<select id="pd-preset-select" class="margin0"></select>',
       iconButton('pd-preset-save', 'fa-floppy-disk', '저장'),
       iconButton('pd-preset-save-as', 'fa-file-circle-plus', '새 프롬프트로 저장'),
     '</div>',
-    '<textarea id="pd-global-prompt" class="text_pole" rows="8" spellcheck="false"></textarea>',
+    '<textarea id="pd-global-prompt" class="text_pole" rows="5" spellcheck="false"></textarea>',
     '<div id="pd-global-prompt-status" class="pd-prompt-save-status" role="status" aria-live="polite"></div>',
     '<input id="pd-preset-import-file" type="file" accept=".json,application/json" hidden aria-label="',
     label('프롬프트 가져오기'), '">',
