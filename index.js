@@ -6,6 +6,7 @@ import {
   noteMatchesLanguages, cacheLanguageKey, stripCacheLanguage, migrateLanguageSettings,
 } from './pd-language.js';
 import { pdT, pdUi, initPdI18n, getUiLocale } from './pd-i18n.js';
+import { splitGoogleChunks, splitCanonicalAIInput } from './pd-translation-chunks.js';
 
 import { extension_settings, getContext } from '../../../../scripts/extensions.js';
 import { getRequestHeaders } from '../../../../script.js';
@@ -1199,27 +1200,6 @@ function googleTargetForKind(kind = settings.chatMode || 'full') {
   return language.code;
 }
 
-function splitGoogleChunks(text = '', limit = 4500) {
-  const source = String(text || '');
-  if (source.length <= limit) return [{ text: source, separator: '' }];
-  const chunks = [];
-  let rest = source;
-  while (rest.length > limit) {
-    let cut = rest.lastIndexOf('\n\n', limit);
-    if (cut < limit * 0.45) cut = rest.lastIndexOf('\n', limit);
-    if (cut < limit * 0.45) cut = rest.lastIndexOf(' ', limit);
-    if (cut < limit * 0.45) cut = limit;
-    let separator = '';
-    if (cut < rest.length && /\s/.test(rest[cut])) {
-      const match = rest.slice(cut).match(/^\s+/);
-      separator = match?.[0] || '';
-    }
-    chunks.push({ text: rest.slice(0, cut), separator });
-    rest = rest.slice(cut + separator.length);
-  }
-  if (rest || !chunks.length) chunks.push({ text: rest, separator: '' });
-  return chunks;
-}
 function timeoutSignal(ms = 3500, externalSignal = null) {
   if (typeof AbortController === 'undefined') return { signal: externalSignal || undefined, cancel: () => {} };
   const controller = new AbortController();
@@ -1282,7 +1262,7 @@ async function translateViaGoogleSimple(text = '', target = 'ko', signal = null)
   if (!source.trim()) return '';
   const out = [];
   const startedAt = Date.now();
-  for (const part of splitGoogleChunks(source, 4500)) {
+  for (const part of splitGoogleChunks(source)) {
     if (signal?.aborted) return '';
     const chunk = String(part?.text || '');
     const separator = String(part?.separator || '');
@@ -5480,8 +5460,35 @@ async function translateMessagePayload(payload, forceRetranslate = false, option
       // every visible mode is assembled locally from the single stored record.
       rawResult = await translateViaGoogleSimple(sourceForPrompt, googleTargetForKind(), controller?.signal || null);
     } else {
-      const basePrompt = buildPrompt(sourceForPrompt, 'canonical', promptMeta);
-      rawResult = await callAI(basePrompt, settings.chatMaxTokens, { sourceText: sourceForPrompt, preserveNonEmptyResponse: true, signal:controller?.signal || null });
+      const aiChunks = splitCanonicalAIInput(canonicalPlan, settings.chatMaxTokens);
+      if (aiChunks.length === 1) {
+        // The normal path stays one request; no retry or extra model call is introduced.
+        const basePrompt = buildPrompt(sourceForPrompt, 'canonical', promptMeta);
+        rawResult = await callAI(basePrompt, settings.chatMaxTokens, { sourceText: sourceForPrompt, preserveNonEmptyResponse: true, signal:controller?.signal || null });
+      } else {
+        // Each chunk retains the original passage's unique PDU IDs, so the existing
+        // full-message canonical parser can validate the concatenated first responses.
+        const received = [];
+        let failedParts = 0;
+        for (const chunk of aiChunks) {
+          if (controller?.signal?.aborted || runId !== messageTranslationRunId) return { status:'skipped', reason:'cancelled' };
+          const chunkPrompt = buildPrompt(chunk.text, 'canonical', { ...promptMeta, canonicalUnitCount:chunk.unitCount });
+          const part = await callAI(chunkPrompt, settings.chatMaxTokens, {
+            sourceText:chunk.text, preserveNonEmptyResponse:true, signal:controller?.signal || null,
+          });
+          if (part.trim()) received.push(part);
+          else {
+            failedParts++;
+            // Keep this original span rather than silently dropping it. No paid retry.
+            received.push(chunk.text);
+          }
+        }
+        rawResult = received.join('');
+        logDebug({ type:'chat-long-split', pieces:aiChunks.length, failedParts, sourceLength:sourceForPrompt.length });
+        if (failedParts && !controller?.signal?.aborted) {
+          toast(pdT('긴 메시지의 일부 구간을 번역하지 못했습니다. 받은 번역 결과는 유지합니다.'), 'warn');
+        }
+      }
     }
     if (controller?.signal?.aborted || runId !== messageTranslationRunId) return { status:'skipped', reason:'cancelled' };
     canonicalRecord = parseCanonicalTranslationResult(rawResult, canonicalPlan, translationEngineKey());
