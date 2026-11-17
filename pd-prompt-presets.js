@@ -142,9 +142,12 @@ export function uniqueTranslationPromptName(settings, name, fallback = 'Imported
     ...translationPromptPresets(settings).map(item => item.name.toLocaleLowerCase()),
   ]);
   if (!used.has(base.toLocaleLowerCase())) return base;
-  for (let number = 2; number < 10000; number++) {
+  const numbered = base.match(/^(.*) \((\d+)\)$/);
+  const stem = numbered ? numbered[1] : base;
+  const start = numbered ? Math.max(2, Number(numbered[2]) + 1) : 2;
+  for (let number = start; number < 10000; number++) {
     const suffix = ` (${number})`;
-    const candidate = base.slice(0, 80 - suffix.length) + suffix;
+    const candidate = stem.slice(0, 80 - suffix.length) + suffix;
     if (!used.has(candidate.toLocaleLowerCase())) return candidate;
   }
   return null;
