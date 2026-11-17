@@ -262,6 +262,6 @@
   "phraseDesk.323f5a02": "Enregistré automatiquement ✓",
   "phraseDesk.eea2a0c6": "Échec de l’enregistrement",
   "phraseDesk.6ecb5132": "Nombre maximal de tokens en sortie pour la traduction du chat",
-  "phraseDesk.9f8623ca": "Valeur par défaut : 8 000 · Plage : 256 à 32 768. S’applique aux nouvelles traductions ; dépasser la limite du modèle peut provoquer un échec.",
+  "phraseDesk.ccaa931f": "Si la limite de tokens de sortie du modèle est dépassée, la demande de traduction peut échouer.",
   "phraseDesk.e9deed62": "Ce réglage ne s’applique pas à la traduction rapide de Google."
 }

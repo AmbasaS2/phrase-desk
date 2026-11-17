@@ -262,6 +262,6 @@
   "phraseDesk.323f5a02": "Auto-saved ✓",
   "phraseDesk.eea2a0c6": "Save failed",
   "phraseDesk.6ecb5132": "Max output tokens for chat translation",
-  "phraseDesk.9f8623ca": "Default 8,000 · Range 256–32,768. Applies to new translations; requests may fail above the model's limit.",
+  "phraseDesk.ccaa931f": "If the model's output token limit is exceeded, the translation request may fail.",
   "phraseDesk.e9deed62": "This setting does not apply to Quick Google Translation."
 }

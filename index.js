@@ -4451,7 +4451,7 @@ function setupSettingsPanel() {
       $('<label>', { for:'pd-chat-max-tokens', text:pdT('채팅 번역 최대 출력 토큰') }),
       $('<input>', { id:'pd-chat-max-tokens', class:'text_pole', type:'number', min:256, max:32768, step:1, inputmode:'numeric' })
     ),
-    $('<div>', { class:'pd-setting-help', text:pdT('기본 8,000 · 256~32,768. 새 번역부터 적용되며 모델 한도를 넘으면 요청이 실패할 수 있습니다.') })
+    $('<div>', { class:'pd-setting-help', text:pdT('모델의 출력 한도를 넘어서면 번역 요청이 실패할 수 있습니다.') })
   );
   $('#pd-translation-engine').closest('.pd-setting-row').after(maxTokensRow);
   // Reuse existing prompt auto-save; add feedback only, without new save controls or watchers.
