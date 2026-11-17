@@ -4422,7 +4422,7 @@ function setupTranslationPromptLibrary() {
   const row = oldEditor.closest('.pd-setting-row').addClass('pd-translation-preset-row');
   const label = value => esc(pdT(value));
   const iconButton = (id, icon, title) =>
-    '<button id="' + id + '" class="menu_button pd-preset-icon-btn" type="button" title="' +
+    '<button id="' + id + '" class="menu_button menu_button_icon margin0 pd-preset-icon-btn" type="button" title="' +
     label(title) + '" aria-label="' + label(title) + '"><i class="fa-solid ' + icon +
     '" aria-hidden="true"></i></button>';
 
