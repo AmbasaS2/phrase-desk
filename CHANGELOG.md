@@ -1,11 +1,12 @@
 # Phrase Desk changelog
 
-## 2026-11-17 UI follow-up — native-sized theme icons (v1.6.1 unchanged)
+## 2026-11-17 UI follow-up — compact theme-style prompt controls (v1.6.1 unchanged)
 
-- Corrected five oversized prompt-toolbar buttons: Phrase Desk had forcibly set each icon to 34×32px instead of following SillyTavern's UI theme controls.
-- Match the native theme button classes (icon variant for header actions, ordinary variant for Save/Save As), let font size inherit, and use theme-like minimum-content sizing/padding. Only `index.js`, `style.css`, and the associated regression test were changed.
-- Node.js 22 test suite: 48/48 passed. A synthetic Chromium reference using native `.menu_button` rules measured equal ~25×26px boxes; actual user theme/browser still needs a visual check.
-- Roll back this follow-up to commit `aac6277f84e2fef92619d923c1e0bc75b8f0ae51` if buttons clip or become inaccessible. Keep user prompt settings and chats untouched.
+- Fixed the oversized five-button prompt toolbar: removed forced 34×32px icon sizing and used SillyTavern's header/action button classes with theme-like minimum-content sizing.
+- Matched the prompt selector to SillyTavern's theme selector (`margin0` instead of `text_pole`). Reduced only this prompt manager's textarea from eight to five initial rows, its minimum height from 140px to 96px, and its font size to 12px; tightened the surrounding gaps. The textarea remains vertically resizable.
+- Hid redundant built-in-prompt status text while preserving unsaved/error state feedback. Existing character-specific prompt editor and all other extension settings remain untouched.
+- Verified Node.js 22 regression suite 49/49, syntax checks and unchanged `index.js`/`manifest.json` versions (1.6.1). No live user-theme/mobile render was possible; visual confirmation is still needed.
+- Roll back to `aac6277f84e2fef92619d923c1e0bc75b8f0ae51` if prompt controls become cramped or unreadable. Keep user prompt settings and chat data.
 
 
 ## 2026-11-17 UI follow-up — theme-style prompt manager (v1.6.1 unchanged)
