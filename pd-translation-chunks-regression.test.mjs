@@ -33,6 +33,17 @@ test('Google chunks never cut PDU markers, format markers, macros or HTML tags',
   }
 });
 
+test('Google prefers completed PDU pairs as chunk boundaries', () => {
+  const items = Array.from({ length:40 }, (_,i) =>
+    marker(i+1) + 'Content that should stay together. '.repeat(9) + close(i+1));
+  const source = items.join(' ');
+  const pieces = splitGoogleChunks(source, 1200);
+  assert.equal(googleJoin(pieces), source);
+  for (let i = 0; i < items.length; i++) {
+    assert.equal(pieces.filter(part => part.text.includes(marker(i+1)) && part.text.includes(close(i+1))).length, 1);
+  }
+});
+
 test('Google preserves all original separator whitespace locally', () => {
   const source = 'Sentence one.\n\n' + 'More sentences. '.repeat(370) + '\n\n' + '尾部';
   assert.equal(googleJoin(splitGoogleChunks(source)), source);
