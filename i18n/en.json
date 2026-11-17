@@ -263,5 +263,6 @@
   "phraseDesk.eea2a0c6": "Save failed",
   "phraseDesk.6ecb5132": "Max output tokens for chat translation",
   "phraseDesk.ccaa931f": "If the model's output token limit is exceeded, the translation request may fail.",
-  "phraseDesk.e9deed62": "This setting does not apply to Quick Google Translation."
+  "phraseDesk.e9deed62": "This setting does not apply to Quick Google Translation.",
+  "phraseDesk.19c1f176": "Additional options"
 }
