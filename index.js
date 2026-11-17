@@ -4437,7 +4437,7 @@ function setTextArea(el, value) {
 }
 
 function setupInputTranslationPromptLibrary() {
-  const oldEditor = $('\u0007pd-input-global-prompt');
+  const oldEditor = $('#pd-input-global-prompt');
   if (!oldEditor.length) return;
   const row = oldEditor.closest('.pd-setting-row').addClass('pd-translation-preset-row');
   const label = value => esc(pdT(value));
@@ -4454,19 +4454,19 @@ function setupInputTranslationPromptLibrary() {
       iconButton('pd-input-preset-import', 'fa-file-import', '프롬프트 가져오기', true),
       iconButton('pd-input-preset-delete', 'fa-trash', '프롬프트 삭제', true),
     '</div></div>',
-    '<div class="pd-input-preset-selection">',
+    '<div class="pd-preset-selection">',
       '<select id="pd-input-preset-select" class="margin0"></select>',
       iconButton('pd-input-preset-save', 'fa-floppy-disk', '저장'),
       iconButton('pd-input-preset-save-as', 'fa-file-circle-plus', '새 프롬프트로 저장'),
     '</div>',
-    '<textarea id="pd-global-prompt" class="text_pole" rows="5" spellcheck="false"></textarea>',
+    '<textarea id="pd-input-global-prompt" class="text_pole" rows="5" spellcheck="false"></textarea>',
     '<div id="pd-input-global-prompt-status" class="pd-prompt-save-status" role="status" aria-live="polite"></div>',
     '<input id="pd-input-preset-import-file" type="file" accept=".json,application/json" hidden aria-label="',
     label('프롬프트 가져오기'), '">',
   ].join(''));
 
   const selector = $('#pd-input-preset-select');
-  const editor = $('\u0007pd-input-global-prompt');
+  const editor = $('#pd-input-global-prompt');
   let viewedId = activeInputTranslationPromptId(settings);
   const savedEntry = id => inputTranslationPresets(settings).find(item => item.id === id);
   const savedBody = id => id === BUILTIN_INPUT_PROMPT_ID
