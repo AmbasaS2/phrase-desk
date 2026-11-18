@@ -8801,9 +8801,14 @@ function setupMessageRenderHooks() {
           schedulePhraseDeskRenderDecoration(payload, key);
         }
         if (key === 'CHAT_CHANGED') {
+          const openedChat = liveContext()?.chat;
           setTimeout(() => {
+            // A second chat switch can happen before this delayed hydration runs.
+            if (liveContext()?.chat !== openedChat) return;
+            // SillyTavern already renders persisted extra.display_text. On chat open,
+            // only hydrate buttons for mounted messages; never walk/mutate the full
+            // chat, rematerialize canonical records, or trigger an automatic save.
             queueMessageButtonHydration(document.getElementById('chat') || document);
-            reapplyVisiblePhraseDeskTranslations(true);
           }, 250);
         } else if (key === 'MESSAGE_UPDATED') {
           setTimeout(() => {
@@ -9044,7 +9049,8 @@ async function boot(){
   try{ document.documentElement.style.setProperty('--pd-user-font-size', `${settings.fontSize}px`); }catch{}
   try{ applyBilingualBlurClass(); }catch{}
   try{ setupSettingsPanel(); }catch(e){ console.error('[Phrase Desk] settings failed',e); }
-  try{ reapplyVisiblePhraseDeskTranslations(true); }catch(e){ console.warn('[Phrase Desk] initial translation view skipped', e); }
+  // Startup uses SillyTavern's saved extra.display_text and later button hydration.
+  // Full canonical re-sync on boot is expensive and may save an unchanged chat.
   try{ setupInputButtonsOnce(); }catch(e){ console.error('[Phrase Desk] input failed',e); }
   try{ setupDelegates(); }catch(e){ console.error('[Phrase Desk] handlers failed',e); }
   try{ setupInputCorrectionInterceptors(); }catch(e){ console.error('[Phrase Desk] input correction failed',e); }
