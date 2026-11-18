@@ -1516,17 +1516,32 @@ body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal {
 #pdb-input-translate.busy::before,
 .pd-message-translate-btn.busy::before,
 .pdb-message-translate-btn.busy::before {
-  content: '🌀' !important;
+  content: '\f110' !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
   width: 100% !important;
   height: 100% !important;
+  font-family: "Font Awesome 6 Free", "Font Awesome 5 Free", "FontAwesome" !important;
   font-size: 12px !important;
   line-height: 1 !important;
-  font-weight: 400 !important;
+  font-style: normal !important;
+  font-weight: 900 !important;
+  animation: pd-translation-spinner-turn .9s linear infinite !important;
 }
 
+@keyframes pd-translation-spinner-turn {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #pd-input-translate.busy::before,
+  #pdb-input-translate.busy::before,
+  .pd-message-translate-btn.busy::before,
+  .pdb-message-translate-btn.busy::before {
+    animation: none !important;
+  }
+}
 
 /* v1.1.22: compact translation blur/correction settings and lightweight bilingual blur display. */
 #phrase-desk-settings .pd-option-row {
@@ -1789,13 +1804,14 @@ html.pd-bilingual-blur-enabled .mes_block .pd-bilingual-blur.pd-blur-revealed {
   display: none !important;
 }
 .pd-message-translate-btn.busy::before {
-  content: '🌀' !important;
+  content: '\f110' !important;
   display: inline-block !important;
   width: auto !important;
   height: auto !important;
-  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif !important;
+  font-family: "Font Awesome 6 Free", "Font Awesome 5 Free", "FontAwesome" !important;
   font-size: 1em !important;
-  font-weight: 400 !important;
+  font-style: normal !important;
+  font-weight: 900 !important;
   line-height: 1 !important;
   vertical-align: baseline !important;
 }
