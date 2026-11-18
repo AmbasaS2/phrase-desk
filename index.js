@@ -357,7 +357,7 @@ function isEscapedSourceChar(source = '', index = 0) {
   for (let i = Number(index) - 1; i >= 0 && source[i] === '\\'; i--) slashes += 1;
   return slashes % 2 === 1;
 }
-function sourceStructureMask(value = '') {
+function sourceStructureMask(value = '', inlineCode = null) {
   const source = String(value || '').replace(/\r\n/g, '\n');
   const mask = new Uint8Array(source.length);
   const mark = (from, to) => {
@@ -410,6 +410,9 @@ function sourceStructureMask(value = '') {
       const marker = source.slice(i, runEnd);
       const end = source.indexOf(marker, runEnd);
       if (end >= 0 && !source.slice(runEnd, end).includes('\n')) {
+        if (inlineCode && end > runEnd && source[end + marker.length] !== '`') {
+          inlineCode.push({ start:i, end:end + marker.length, text:source.slice(i, end + marker.length) });
+        }
         mark(i, end + marker.length);
         i = end + marker.length - 1;
       }
@@ -2712,7 +2715,7 @@ function canonicalUnalignedFallbackRecord(value = '', plan = null, engine = '', 
   };
 }
 
-function salvageCanonicalTranslationResult(received = '', plan = null, base = null) {
+function salvageCanonicalTranslationResult(received = '', plan = null, base = null, unsafeUnits = null) {
   const items = Array.isArray(plan?.items) ? plan.items : [];
   if (!plan?.supported || !items.length || !base) return base;
   const response = String(received || '');
@@ -2809,6 +2812,7 @@ function salvageCanonicalTranslationResult(received = '', plan = null, base = nu
 
   for (const interval of intervals) {
     const { item, open, close } = interval;
+    if (unsafeUnits?.has(item.id)) continue;
     let body = response.slice(open.end, close.start);
     for (const token of interval.ignored.slice().sort((a, b) => b.start - a.start)) {
       body = body.slice(0, token.start - open.end) + body.slice(token.end - open.end);
@@ -2906,9 +2910,62 @@ function salvageCanonicalTranslationResult(received = '', plan = null, base = nu
   return aligned;
 }
 
+function canonicalResponseWithDisplacedInlineCode(response, plan) {
+  const items = plan?.items;
+  if (!items?.length || !plan.source.includes('`') || !response.includes('`')) return null;
+  const sourceCode = [];
+  const responseCode = [];
+  sourceStructureMask(plan.source, sourceCode);
+  sourceStructureMask(response, responseCode);
+  const protectedCode = sourceCode.filter(span => items.every(item => span.end <= item.start || item.end <= span.start));
+  if (!protectedCode.length || !responseCode.length) return null;
+
+  const markers = canonicalResponseMarkerTokens(response, plan);
+  const pairs = items.map(item => ({
+    open:markers.find(token => token.raw === item.openMarker),
+    close:markers.find(token => token.raw === item.closeMarker),
+  }));
+  const owner = span => pairs.findIndex(({open, close}) =>
+    open && close && open.end <= span.start && span.end <= close.start);
+  const displaced = responseCode.filter(span => protectedCode.some(original => original.text === span.text) && owner(span) !== -1);
+  if (!displaced.length) return null;
+
+  // A moved code span may carry a particle or other translated wording. Keep
+  // the model's sentence order; aligned rendering would reinsert source code.
+  // Remove a second copy only when the exact adjacent source and response
+  // slots identify it as redundant. Repeated source mentions are distinct.
+  const ordered = markers.length === 2 * items.length && pairs.every(({open, close}, index) =>
+    open === markers[2 * index] && close === markers[2 * index + 1]);
+  const redundant = [];
+  if (ordered) {
+    for (const span of displaced) {
+      const original = sourceCode.filter(code => code.text === span.text);
+      const copies = responseCode.filter(code => code.text === span.text);
+      if (original.length !== 1 || copies.length !== 2) continue;
+      const neighbor = owner(span);
+      const detached = copies.find(code => code !== span);
+      if (owner(detached) !== -1) continue;
+      for (const index of [neighbor - 1, neighbor]) {
+        if (index < 0 || index + 1 >= items.length) continue;
+        const sourceGap = plan.source.slice(items[index].end, items[index + 1].start);
+        const responseGap = response.slice(pairs[index].close.end, pairs[index + 1].open.start);
+        if (sourceGap.includes('\n') || responseGap.includes('\n')) continue;
+        if (sourceGap.trim() === span.text && responseGap.trim() === span.text) redundant.push(detached);
+      }
+    }
+  }
+  let preserved = response;
+  for (const span of redundant.sort((a, b) => b.start - a.start)) {
+    preserved = preserved.slice(0, span.start) + preserved.slice(span.end);
+  }
+  return { text:preserved, unsafeUnits:new Set(displaced.map(span => items[owner(span)].id)) };
+}
+
 function parseCanonicalTranslationResult(value = '', plan = null, engine = translationEngineKey()) {
-  const received = normalizeCanonicalEdgeFormatPairs(String(value || '').replace(/\r\n/g, '\n'), plan);
+  const normalized = normalizeCanonicalEdgeFormatPairs(String(value || '').replace(/\r\n/g, '\n'), plan);
   const items = Array.isArray(plan?.items) ? plan.items : [];
+  const displacedCode = canonicalResponseWithDisplacedInlineCode(normalized, plan);
+  const received = displacedCode?.text ?? normalized;
   const fallback = sanitizeCanonicalFallback(received, plan);
   const base = {
     schema:1,
@@ -2935,7 +2992,8 @@ function parseCanonicalTranslationResult(value = '', plan = null, engine = trans
       ? Object.assign(base, { complete:true, plainKorean:received, missingUnits:0 })
       : base;
   }
-  const salvage = () => salvageCanonicalTranslationResult(received, plan, base);
+  const salvage = () => salvageCanonicalTranslationResult(received, plan, base, displacedCode?.unsafeUnits);
+  if (displacedCode) return salvage();
   const escaped = String(plan.family || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const observed = received.match(new RegExp(`\\[\\[\\/?${escaped}-\\d{4}\\]\\]`, 'g')) || [];
   const expected = items.flatMap(item => [item.openMarker, item.closeMarker]);
@@ -6267,9 +6325,12 @@ async function translateMessagePayload(payload, forceRetranslate = false, option
       canonicalFallbackUsed = true;
       const keepPartial = canonicalRecord?.partial === true
         && canonicalPartialFallbackValid(canonicalRecord, canonicalPlan);
+      const fallbackText = !canonicalRecord?.complete && !canonicalRecord?.partial
+        ? (canonicalRecord?.plainKorean || rawResult)
+        : rawResult;
       const fallbackRecord = keepPartial
         ? canonicalRecord
-        : canonicalUnalignedFallbackRecord(rawResult, canonicalPlan, translationEngineKey(), canonicalRecord);
+        : canonicalUnalignedFallbackRecord(fallbackText, canonicalPlan, translationEngineKey(), canonicalRecord);
       logDebug({
         type:'translation-quality-fallback',
         status:quality.status,
