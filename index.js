@@ -2073,7 +2073,7 @@ function cleanCanonicalUnexpectedMarkdownDelimiters(actual = '', expected = '') 
   return canonicalMarkdownDelimiterSequenceMatches(cleaned, expected) ? cleaned : received;
 }
 
-function canonicalLiteralMask(value = '', infoRanges = []) {
+function canonicalLiteralMask(value = '', infoRanges = [], preciseLinkTails = false) {
   const source = String(value || '').replace(/\r\n/g, '\n');
   const mask = sourceStructureMask(source);
   const mark = (start, end, blocked = true) => {
@@ -2122,7 +2122,11 @@ function canonicalLiteralMask(value = '', infoRanges = []) {
   for (const range of canonicalSourcePduBlocks(source)) mark(range.start, range.end, true);
 
   const rawUrl = /\b(?:https?:\/\/|www\.)[^\s<>"']+/gi;
-  while ((match = rawUrl.exec(source))) mark(match.index, match.index + match[0].length, true);
+  while ((match = rawUrl.exec(source))) {
+    // The Markdown link destination has already been masked. A bare URL match
+    // can overrun its closing parenthesis and hide the following prose.
+    if (!preciseLinkTails || !mask[match.index]) mark(match.index, match.index + match[0].length, true);
+  }
   const email = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
   while ((match = email.exec(source))) mark(match.index, match.index + match[0].length, true);
 
@@ -2715,6 +2719,42 @@ function canonicalUnalignedFallbackRecord(value = '', plan = null, engine = '', 
   };
 }
 
+function canonicalHasTextOutsideUnits(received, plan, placements) {
+  let rawCursor = 0;
+  let sourceCursor = 0;
+  let visible = '';
+  const changedGaps = [];
+  const collectGap = (rawEnd, sourceEnd) => {
+    const gap = received.slice(rawCursor, rawEnd);
+    const expected = plan.source.slice(sourceCursor, sourceEnd);
+    if (gap !== expected && /[\p{L}\p{N}]/u.test(gap)) {
+      const prefix = expected && gap.endsWith(expected) ? gap.slice(0, -expected.length) : gap;
+      const responseLabel = rawCursor === 0
+        && /^\s*(?:translation|translated text|korean translation|번역(?:문| 결과)?)\s*[:：]\s*$/i.test(prefix);
+      if (!responseLabel) changedGaps.push({ start:visible.length, end:visible.length + gap.length });
+    }
+    visible += gap;
+  };
+  for (const [index, placement] of placements.entries()) {
+    const item = plan.items[index];
+    collectGap(placement.start, item.start);
+    visible += placement.text;
+    rawCursor = placement.end;
+    sourceCursor = item.end;
+  }
+  collectGap(received.length, plan.source.length);
+  if (!changedGaps.length) return false;
+
+  // Inspect the marker-free text as a whole so link wrappers, HTML and code
+  // are recognized even when they surround a translated unit.
+  const mask = canonicalLiteralMask(visible, [], true);
+  return changedGaps.some(({ start, end }) => {
+    let prose = '';
+    for (let index = start; index < end; index++) prose += mask[index] ? ' ' : visible[index];
+    return /[\p{L}\p{N}]/u.test(cleanCanonicalInternalFormatTokens(prose));
+  });
+}
+
 function salvageCanonicalTranslationResult(received = '', plan = null, base = null, unsafeUnits = null) {
   const items = Array.isArray(plan?.items) ? plan.items : [];
   if (!plan?.supported || !items.length || !base) return base;
@@ -2887,6 +2927,9 @@ function salvageCanonicalTranslationResult(received = '', plan = null, base = nu
   if (!recovered.length) return base;
   const fullyRecovered = recovered.length === items.length
     && recovered.every((unit, index) => String(unit.id) === String(items[index].id));
+  if (fullyRecovered && canonicalHasTextOutsideUnits(response, plan, recoveredCandidates.map(interval => ({
+    start:interval.open.start, end:interval.close.end, text:interval.ko,
+  })))) return base;
   const aligned = Object.assign({}, base, {
     complete:fullyRecovered,
     partial:!fullyRecovered,
@@ -3018,6 +3061,7 @@ function parseCanonicalTranslationResult(value = '', plan = null, engine = trans
   if (/\[\[\/?PDU-/i.test(unexpectedMarkerRemainder)) return salvage();
 
   const translatedUnits = [];
+  const placements = [];
   let cursor = 0;
   let expectedCursor = 0;
   const expectedPrompt = String(plan.promptSource || '');
@@ -3049,6 +3093,7 @@ function parseCanonicalTranslationResult(value = '', plan = null, engine = trans
     const tokenizedKo = cleanCanonicalInternalFormatTokens(structuralBody, promptText).trim();
     const ko = restoreCanonicalItemFormatTokens(tokenizedKo, item).trim();
     if (!ko || !canonicalUnitTranslationUsable(item.sourceText, ko)) return salvage();
+    placements.push({ start:openAt, end:closeAt + item.closeMarker.length, text:ko });
     translatedUnits.push({
       id:item.id,
       start:item.start,
@@ -3064,6 +3109,7 @@ function parseCanonicalTranslationResult(value = '', plan = null, engine = trans
     cursor = closeAt + item.closeMarker.length;
     expectedCursor = expectedCloseAt + item.closeMarker.length;
   }
+  if (canonicalHasTextOutsideUnits(received, plan, placements)) return base;
   const complete = Object.assign(base, {
     complete:true,
     partial:false,
@@ -3590,9 +3636,8 @@ function chatTranslationQualityNeedsFallback(quality = null, record = null) {
 function canonicalQualityNeedsRepresentationFallback(quality = null, record = null, plan = null) {
   if (!chatTranslationQualityNeedsFallback(quality, record)) return false;
   const canonicalPlan = plan || createCanonicalTranslationPlan(String(record?.source || ''));
-  // Once every exact PDU is valid, all model-authored material outside those
-  // bodies is untrusted decoration. Quality warnings about such a preamble or
-  // changed skeleton remain diagnostic and must not discard local reconstruction.
+  // Complete records have already passed structural and gap-text validation.
+  // Quality warnings about harmless wrappers remain diagnostic.
   if (record?.complete === true
     && canonicalRecordValid(record, String(record?.source || ''), record?.engine)) return false;
   // A valid partial already carries the sanitized whole response. Its guarded
