@@ -17,7 +17,7 @@ function fixture(count = 30, styleCost = 0) {
   const timers = [];
   const messages = [];
   const context = { chat: [] };
-  const stats = { buttons: 0, heavyResolverCalls: 0, styleReads: 0, bodyReads: 0 };
+  const stats = { buttons: 0, heavyResolverCalls: 0, styleReads: 0, bodyReads: 0, ops: [] };
   let clock = 0;
 
   const chatElement = {
@@ -46,7 +46,7 @@ function fixture(count = 30, styleCost = 0) {
       matches: selector => selector === '.tokenCounterDisplay',
       closest: selector => selector === '.mes' ? message
         : selector.includes('.mesAvatarWrapper') || selector.includes('.tokenCounterDisplay') ? label : null,
-      append: btn => { message.button = btn; stats.buttons++; },
+      append: btn => { message.button = btn; stats.buttons++; stats.ops.push('write'); },
     };
     meta.children.push(label);
     return { meta, label };
@@ -106,7 +106,7 @@ function fixture(count = 30, styleCost = 0) {
     pdShouldIncludeHiddenChatRecord: () => true,
     messagePayloadFromTarget: () => { stats.heavyResolverCalls++; return null; },
     liveContext: () => context,
-    getComputedStyle: () => { stats.styleReads++; clock += styleCost; return { display: 'block' }; },
+    getComputedStyle: () => { stats.styleReads++; stats.ops.push('style-read'); clock += styleCost; return { display: 'block' }; },
     pdGlobalState: {},
     MutationObserver,
     requestAnimationFrame: callback => { rafQueue.push(callback); return rafQueue.length; },
@@ -147,6 +147,17 @@ test('30 ready globes mount on the first scheduled frame without polling', () =>
   assert.equal(t.stats.heavyResolverCalls, 0);
   assert.equal(t.stats.bodyReads, 0);
   assert.equal(t.timers.length, 0);
+});
+
+test('one hydration frame reads all anchor styles before writing buttons', () => {
+  const t = fixture(30);
+  t.api.setupMessageButtonObserver();
+  t.step();
+  assert.equal(t.stats.buttons, 30);
+  const firstWrite = t.stats.ops.indexOf('write');
+  assert.equal(firstWrite, 30);
+  assert.ok(t.stats.ops.slice(0, firstWrite).every(op => op === 'style-read'));
+  assert.ok(t.stats.ops.slice(firstWrite).every(op => op === 'write'));
 });
 
 test('many ready messages finish in bounded frames without multi-second timer starvation', () => {

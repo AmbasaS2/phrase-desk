@@ -5894,26 +5894,43 @@ function pdButtonHasSavedTranslation(msg) {
   return !!(store.showing && (store.canonical || (store.translations && Object.keys(store.translations).length)));
 }
 
-function ensureMessageTranslateButton(mes) {
+// Resolve all metadata anchors before inserting any globes in a hydration frame.
+// Mixing getComputedStyle reads with DOM writes can repeatedly force style
+// recalculation in long chats, even when the frame budget is small.
+function pdPrepareMessageTranslateButton(mes) {
   const element = mes?.nodeType === 1 ? mes : mes?.[0];
-  if (!element) return false;
+  if (!element) return null;
   const meta = element.querySelector('.mesAvatarWrapper');
-  if (meta?.querySelector('.pd-message-translate-btn')) return true;
+  if (meta?.querySelector('.pd-message-translate-btn')) return null;
   const payload = pdButtonPayloadForMountedMessage(element);
-  if (!payload?.mes || !payload?.msg) return false;
+  if (!payload?.mes || !payload?.msg) return null;
 
-  // ST may mount the message before filling its metadata labels. Rather than
-  // polling a waiting map every 75ms, let the observer wake ONLY this message
-  // when that metadata is actually inserted or its text becomes available.
+  // ST may mount a message before its metadata is ready. The observer retries
+  // only when that metadata changes; do not poll or synthesize an anchor.
   const anchor = messageInfoAnchor(payload);
-  if (!anchor) return false;
+  if (!anchor) return null;
+  return { element, payload, anchor, translated: pdButtonHasSavedTranslation(payload.msg) };
+}
+function pdMountPreparedMessageTranslateButton(prepared) {
+  if (!prepared) return false;
+  const { element, payload, anchor, translated } = prepared;
+  const meta = element.querySelector('.mesAvatarWrapper');
+  if (!meta) return false;
+  if (meta.querySelector('.pd-message-translate-btn')) return true;
   const btn = $(pdT('<span class="pd-message-translate-btn interactable" aria-label="이 메시지 번역" title="이 메시지 번역 / 길게 눌러 재번역"><span class="pd-message-translate-icon" aria-hidden="true">🌐</span></span>'));
   if (Number.isSafeInteger(payload.idx) && payload.idx >= 0) btn.attr('data-pd-mesid', String(payload.idx));
   btn.toggleClass('pd-message-translate-user', anchor.isUser);
   btn.toggleClass('pd-message-translate-character', !anchor.isUser);
   anchor.target.append(btn);
-  if (pdButtonHasSavedTranslation(payload.msg)) btn.addClass('translated');
+  if (translated) btn.addClass('translated');
   return true;
+}
+function ensureMessageTranslateButton(mes) {
+  const element = mes?.nodeType === 1 ? mes : mes?.[0];
+  if (!element) return false;
+  const meta = element.querySelector('.mesAvatarWrapper');
+  if (meta?.querySelector('.pd-message-translate-btn')) return true;
+  return pdMountPreparedMessageTranslateButton(pdPrepareMessageTranslateButton(element));
 }
 
 const PD_MESSAGE_BUTTON_FRAME_BUDGET_MS = 12;
@@ -5948,6 +5965,10 @@ function pdScheduleButtonHydrationFrame() {
     }
     pdButtonHydrationScopes.clear();
 
+    // Two-phase hydration: finish style reads before any DOM insertion in this
+    // frame. A read/write/read/write sequence can force repeated style flushes
+    // on large chats and visibly stagger globe appearance.
+    const prepared = [];
     let processed = 0;
     while (pdButtonHydrationNodes.size && processed < PD_MESSAGE_BUTTON_FRAME_LIMIT) {
       if (processed && performance.now() - start >= PD_MESSAGE_BUTTON_FRAME_BUDGET_MS) break;
@@ -5955,9 +5976,16 @@ function pdScheduleButtonHydrationFrame() {
       pdButtonHydrationNodes.delete(mes);
       processed++;
       if (!mes?.isConnected || !chatEl.contains(mes)) continue;
-      try { ensureMessageTranslateButton(mes); }
-      catch (error) { console.warn('[Phrase Desk] button hydration skipped', error); }
+      try {
+        const entry = pdPrepareMessageTranslateButton(mes);
+        if (entry) prepared.push(entry);
+      } catch (error) { console.warn('[Phrase Desk] button hydration skipped', error); }
       // Not ready? Drop this attempt. Only a *new metadata/render event* retries.
+    }
+    for (const entry of prepared) {
+      if (!entry.element?.isConnected || !chatEl.contains(entry.element)) continue;
+      try { pdMountPreparedMessageTranslateButton(entry); }
+      catch (error) { console.warn('[Phrase Desk] button hydration skipped', error); }
     }
     if (pdButtonHydrationNodes.size) pdScheduleButtonHydrationFrame();
   });
