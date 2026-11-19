@@ -5799,24 +5799,25 @@ function payloadIsUserMessage(payload) {
   return value === 'true' || value === '1' || $mes.hasClass('is_user') || $mes.hasClass('user_mes');
 }
 function messageInfoAnchor(payload) {
-  const $mes = $(payload?.mes || []);
-  if (!$mes.length) return null;
-  const metaParent = $mes.find('.mesAvatarWrapper').first();
-  if (!metaParent.length) return null;
-
-  const visibleInfo = (selector) => metaParent.children(selector).filter(function() {
-    return $(this).css('display') !== 'none' && norm($(this).text());
-  }).first();
-
+  const mes = payload?.mes;
+  const meta = mes?.querySelector?.('.mesAvatarWrapper');
+  if (!meta) return null;
   const isUser = payloadIsUserMessage(payload);
-  const messageId = visibleInfo('.mesIDDisplay');
-  const tokenCount = visibleInfo('.tokenCounterDisplay');
-  const responseTime = visibleInfo('.mes_timer');
-  const target = isUser
-    ? (messageId.length ? messageId : tokenCount)
-    : (tokenCount.length ? tokenCount : (responseTime.length ? responseTime : messageId));
-  if (!target.length) return null;
-  return { target, isUser };
+  // Consider only one preferred label at a time. The previous implementation
+  // queried all three label classes and read computed styles for each even when
+  // the first visible candidate was sufficient. A DOM-wide scan is not needed.
+  const priorities = isUser
+    ? ['.mesIDDisplay', '.tokenCounterDisplay']
+    : ['.tokenCounterDisplay', '.mes_timer', '.mesIDDisplay'];
+  for (const selector of priorities) {
+    for (const node of meta.children || []) {
+      if (!node.matches?.(selector) || !String(node.textContent || '').trim()) continue;
+      if (node.hidden || node.style?.display === 'none') continue;
+      if (typeof getComputedStyle === 'function' && getComputedStyle(node).display === 'none') continue;
+      return { target: $(node), isUser };
+    }
+  }
+  return null;
 }
 function placeMessageTranslateButton(btn, payload) {
   const anchor = messageInfoAnchor(payload);
@@ -5849,8 +5850,8 @@ function applyPersistedMessageTranslation(payload, btn=null) {
 
   // Hydration only restores button state. It must not decorate or rerender cached messages.
 }
-// Hydration only needs the mounted message ID and its already-saved display state.
-// Keep the full DOM/source resolver for explicit translation, swipes, and edits.
+// Globe creation on chat open must not decode rendered message HTML or
+// recompute translated PDU/PD_FMT output. That work belongs to an explicit click.
 function pdButtonPayloadForMountedMessage(mes) {
   const rawId = String(mes?.getAttribute?.('mesid') ?? mes?.getAttribute?.('data-mesid') ?? '');
   if (!/^\d+$/.test(rawId)) return messagePayloadFromTarget(mes);
@@ -5896,67 +5897,31 @@ function pdButtonHasSavedTranslation(msg) {
 function ensureMessageTranslateButton(mes) {
   const element = mes?.nodeType === 1 ? mes : mes?.[0];
   if (!element) return false;
-  // The globe lives only in SillyTavern metadata, not the potentially huge
-  // message body. Avoid scanning rendered text to check its presence.
   const meta = element.querySelector('.mesAvatarWrapper');
-  if (meta?.querySelector('.pd-message-translate-btn')) {
-    pdButtonWaitingForMetadata.delete(element);
-    return true;
-  }
+  if (meta?.querySelector('.pd-message-translate-btn')) return true;
   const payload = pdButtonPayloadForMountedMessage(element);
   if (!payload?.mes || !payload?.msg) return false;
-  // A message root can mount before the metadata anchor has a visible label.
-  // Avoid layout reads until an appropriate anchor has content.
-  if (!meta || !Array.from(meta.querySelectorAll('.mesIDDisplay, .tokenCounterDisplay, .mes_timer'))
-    .some(anchor => String(anchor.textContent || '').trim())) return false;
+
+  // ST may mount the message before filling its metadata labels. Rather than
+  // polling a waiting map every 75ms, let the observer wake ONLY this message
+  // when that metadata is actually inserted or its text becomes available.
+  const anchor = messageInfoAnchor(payload);
+  if (!anchor) return false;
   const btn = $(pdT('<span class="pd-message-translate-btn interactable" aria-label="이 메시지 번역" title="이 메시지 번역 / 길게 눌러 재번역"><span class="pd-message-translate-icon" aria-hidden="true">🌐</span></span>'));
   if (Number.isSafeInteger(payload.idx) && payload.idx >= 0) btn.attr('data-pd-mesid', String(payload.idx));
-  if (!placeMessageTranslateButton(btn, payload)) return false;
+  btn.toggleClass('pd-message-translate-user', anchor.isUser);
+  btn.toggleClass('pd-message-translate-character', !anchor.isUser);
+  anchor.target.append(btn);
   if (pdButtonHasSavedTranslation(payload.msg)) btn.addClass('translated');
-  pdButtonWaitingForMetadata.delete(element);
   return true;
 }
 
-const PD_MESSAGE_BUTTON_FRAME_BUDGET_MS = 10;
-const PD_MESSAGE_BUTTON_FRAME_LIMIT = 64;
-const PD_MESSAGE_BUTTON_SCOPE_LIMIT = 32;
-const PD_MESSAGE_BUTTON_RETRY_DELAY_MS = 75;
-const PD_MESSAGE_BUTTON_RETRY_LIMIT = 80;
-const pdButtonWaitingForMetadata = new Map();
-let pdButtonRetryTimer = null;
+const PD_MESSAGE_BUTTON_FRAME_BUDGET_MS = 12;
+const PD_MESSAGE_BUTTON_FRAME_LIMIT = 96;
 const pdButtonHydrationNodes = new Set();
 const pdButtonHydrationScopes = new Set();
 let hydrateRaf = 0;
 let pdButtonHydrationChatRef = null;
-
-function pdClearButtonRetryQueue() {
-  pdButtonWaitingForMetadata.clear();
-  if (pdButtonRetryTimer !== null) clearTimeout(pdButtonRetryTimer);
-  pdButtonRetryTimer = null;
-}
-
-function pdSchedulePendingMetadataRetry() {
-  if (pdButtonRetryTimer !== null || !pdButtonWaitingForMetadata.size) return;
-  pdButtonRetryTimer = setTimeout(() => {
-    pdButtonRetryTimer = null;
-    const chatEl = document.getElementById('chat') || document.getElementById('chat_container');
-    if (!chatEl || liveContext()?.chat !== pdButtonHydrationChatRef) {
-      pdClearButtonRetryQueue();
-      return;
-    }
-    for (const [mes, attempts] of pdButtonWaitingForMetadata) {
-      if (!mes?.isConnected || !chatEl.contains(mes) || attempts >= PD_MESSAGE_BUTTON_RETRY_LIMIT) {
-        pdButtonWaitingForMetadata.delete(mes);
-        continue;
-      }
-      // Only one pending retry per message, even if metadata events also fire.
-      pdButtonWaitingForMetadata.set(mes, attempts + 1);
-      pdButtonHydrationNodes.add(mes);
-    }
-    if (pdButtonHydrationNodes.size) pdScheduleButtonHydrationFrame();
-    if (pdButtonWaitingForMetadata.size) pdSchedulePendingMetadataRetry();
-  }, PD_MESSAGE_BUTTON_RETRY_DELAY_MS);
-}
 
 function pdScheduleButtonHydrationFrame() {
   if (hydrateRaf) return;
@@ -5968,27 +5933,21 @@ function pdScheduleButtonHydrationFrame() {
     if (liveContext()?.chat !== pdButtonHydrationChatRef) {
       pdButtonHydrationNodes.clear();
       pdButtonHydrationScopes.clear();
-      pdClearButtonRetryQueue();
       return;
     }
     const chatEl = document.getElementById('chat') || document.getElementById('chat_container');
     if (!chatEl) return;
     const start = performance.now();
-    // Large chat mounts can contain hundreds of separate subtrees. Draining
-    // only one pending scope per frame starves pagination/full hydration.
-    let scanned = 0;
-    while (pdButtonHydrationScopes.size && scanned < PD_MESSAGE_BUTTON_SCOPE_LIMIT) {
-      if (scanned && performance.now() - start >= PD_MESSAGE_BUTTON_FRAME_BUDGET_MS / 2) break;
-      const scope = pdButtonHydrationScopes.values().next().value;
-      pdButtonHydrationScopes.delete(scope);
-      scanned++;
+    // Discover mounted messages once. Individual future metadata updates are
+    // handled by the observer, NOT by re-scanning all 431 chat messages.
+    for (const scope of pdButtonHydrationScopes) {
       if (scope === chatEl || (scope?.isConnected && chatEl.contains(scope))) {
         if (scope.matches?.('.mes')) pdButtonHydrationNodes.add(scope);
         else scope.querySelectorAll?.('.mes').forEach(mes => pdButtonHydrationNodes.add(mes));
       }
     }
-    // After discovery, inject with bounded work. Most messages now use the
-    // cheap numeric-mesid path; the time budget protects unusually costly DOM.
+    pdButtonHydrationScopes.clear();
+
     let processed = 0;
     while (pdButtonHydrationNodes.size && processed < PD_MESSAGE_BUTTON_FRAME_LIMIT) {
       if (processed && performance.now() - start >= PD_MESSAGE_BUTTON_FRAME_BUDGET_MS) break;
@@ -5996,16 +5955,14 @@ function pdScheduleButtonHydrationFrame() {
       pdButtonHydrationNodes.delete(mes);
       processed++;
       if (!mes?.isConnected || !chatEl.contains(mes)) continue;
-      try {
-        if (!ensureMessageTranslateButton(mes)) {
-          if (!pdButtonWaitingForMetadata.has(mes)) pdButtonWaitingForMetadata.set(mes, 0);
-          pdSchedulePendingMetadataRetry();
-        }
-      } catch (error) { console.warn('[Phrase Desk] message button hydration skipped', error); }
+      try { ensureMessageTranslateButton(mes); }
+      catch (error) { console.warn('[Phrase Desk] button hydration skipped', error); }
+      // Not ready? Drop this attempt. Only a *new metadata/render event* retries.
     }
-    if (pdButtonHydrationNodes.size || pdButtonHydrationScopes.size) pdScheduleButtonHydrationFrame();
+    if (pdButtonHydrationNodes.size) pdScheduleButtonHydrationFrame();
   });
 }
+
 function queueMessageButtonHydration(scope = document) {
   const chatEl = document.getElementById('chat') || document.getElementById('chat_container');
   if (!chatEl) return;
@@ -6014,12 +5971,10 @@ function queueMessageButtonHydration(scope = document) {
     pdButtonHydrationChatRef = currentChat;
     pdButtonHydrationNodes.clear();
     pdButtonHydrationScopes.clear();
-    pdClearButtonRetryQueue();
   }
   const target = scope === document ? chatEl : (scope?.nodeType ? scope : scope?.[0]);
   if (!target) return;
   if (target === chatEl) {
-    // One chat-root scan subsumes any pending nested scopes.
     pdButtonHydrationScopes.clear();
     pdButtonHydrationScopes.add(chatEl);
   } else if (target.matches?.('.mes')) {
@@ -6060,51 +6015,47 @@ function setupMessageButtonObserver() {
   if (pdGlobalState.messageButtonObserver && pdGlobalState.messageButtonObserverTarget === chatEl) return;
   try { pdGlobalState.messageButtonObserver?.disconnect?.(); } catch {}
 
-  const observer = new MutationObserver((mutations) => {
-    const affectedMessages = new Set();
-    const addedScopes = new Set();
+  const observer = new MutationObserver(mutations => {
+    const affected = new Set();
+    const scopes = new Set();
     for (const mutation of mutations) {
       const target = mutation.target?.nodeType === 1 ? mutation.target : mutation.target?.parentElement;
-      const targetMessage = target?.closest?.('.mes');
-      const inMetadata = !!(targetMessage && target?.closest?.('.mesIDDisplay, .tokenCounterDisplay, .mes_timer, .mesAvatarWrapper'));
-      // Inserting Phrase Desk's own globe changes the metadata DOM. Never
-      // re-queue a button just because the observer saw its own append.
-      const addedElements = Array.from(mutation.addedNodes || []).filter(node => node?.nodeType === 1);
-      const ownButtonOnly = addedElements.length > 0 && addedElements.every(node =>
-        node.matches?.('.pd-message-translate-btn')
-        || node.closest?.('.pd-message-translate-btn'));
-      if (inMetadata && !ownButtonOnly) affectedMessages.add(targetMessage);
-      if (mutation.type === 'characterData' && inMetadata) affectedMessages.add(targetMessage);
+      const owner = target?.closest?.('.mes');
+      const inMetadata = !!(owner && target?.closest?.('.mesAvatarWrapper, .mesIDDisplay, .tokenCounterDisplay, .mes_timer'));
+      const added = Array.from(mutation.addedNodes || []).filter(node => node?.nodeType === 1);
+      const ownButtonOnly = added.length && added.every(node =>
+        node.matches?.('.pd-message-translate-btn') || node.closest?.('.pd-message-translate-btn'));
+      // Ignore our own append, otherwise newly-created globes wake the
+      // observer again and unnecessarily re-queue already-mounted messages.
+      if (inMetadata && mutation.type === 'characterData') affected.add(owner);
+      if (inMetadata && mutation.type === 'childList' && added.length && !ownButtonOnly) affected.add(owner);
 
-      for (const node of addedElements) {
+      for (const node of added) {
         if (node.matches?.('.pd-message-translate-btn') || node.closest?.('.pd-message-translate-btn')) continue;
-        if (node.matches?.('.mes')) affectedMessages.add(node);
-        else if (targetMessage) {
-          if (node.matches?.('.mesIDDisplay, .tokenCounterDisplay, .mes_timer, .mesAvatarWrapper')
-            || node.querySelector?.('.mesIDDisplay, .tokenCounterDisplay, .mes_timer')) affectedMessages.add(targetMessage);
-        } else if (node.querySelector?.('.mes')) addedScopes.add(node);
+        if (node.matches?.('.mes')) {
+          affected.add(node);
+        } else if (owner) {
+          if (node.matches?.('.mesAvatarWrapper, .mesIDDisplay, .tokenCounterDisplay, .mes_timer') ||
+              node.querySelector?.('.mesIDDisplay, .tokenCounterDisplay, .mes_timer')) affected.add(owner);
+        } else if (node.querySelector?.('.mes')) {
+          scopes.add(node);
+        }
       }
-      if (targetMessage) {
+      if (owner) {
         for (const node of mutation.removedNodes || []) {
           if (node?.nodeType !== 1) continue;
-          if (node.matches?.('.pd-message-translate-btn') || node.querySelector?.('.pd-message-translate-btn')) {
-            affectedMessages.add(targetMessage);
-          }
+          if (node.matches?.('.pd-message-translate-btn') || node.querySelector?.('.pd-message-translate-btn')) affected.add(owner);
         }
       }
     }
-    affectedMessages.forEach(mes => queueMessageButtonHydration(mes));
-    addedScopes.forEach(scope => queueMessageButtonHydration(scope));
+    for (const mes of affected) queueMessageButtonHydration(mes);
+    for (const scope of scopes) queueMessageButtonHydration(scope);
   });
-  // Metadata labels may arrive after wrappers mount. Watch text changes too.
   observer.observe(chatEl, { childList: true, characterData: true, subtree: true });
   pdGlobalState.messageButtonObserver = observer;
   pdGlobalState.messageButtonObserverTarget = chatEl;
-  // Defer even the initial scan: opening a chat must not synchronously create
-  // every translation button before the first paint.
   hydrateMessageTranslateButtons(chatEl);
 }
-
 function messageIndexForPayload(payload) {
   const raw = payload?.idx ?? payload?.mes?.getAttribute?.('mesid') ?? payload?.mes?.dataset?.mesid;
   if (raw === undefined || raw === null || String(raw).trim() === '') return -1;
