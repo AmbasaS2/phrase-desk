@@ -103,13 +103,13 @@ function fixture(count = 30) {
 }
 
 test('initially defers injection and handles large message lists in bounded batches', () => {
-  const t = fixture(43);
+  const t = fixture(143);
   t.api.setupMessageButtonObserver();
   assert.equal(t.metrics.added, 0, 'chat open must not synchronously inject all buttons');
   t.step();
-  assert.equal(t.metrics.added, 16, 'one frame is limited to sixteen messages');
+  assert.equal(t.metrics.added, 64, 'one frame is limited to sixty-four cheap message buttons');
   t.flush();
-  assert.equal(t.metrics.added, 43);
+  assert.equal(t.metrics.added, 143);
   assert.equal(t.metrics.slowResolverCalls, 0, 'normal numeric mesid must bypass heavy resolver');
 });
 
@@ -205,10 +205,34 @@ test('chat reference changes invalidate pending old-chat hydration work', () => 
   assert.equal(t.metrics.slowResolverCalls, 0);
 });
 
+test('own globe DOM insertions do not schedule redundant observer work', () => {
+  const t = fixture(1);
+  t.api.setupMessageButtonObserver();
+  t.flush();
+  const message = t.messages[0];
+  const meta = {
+    nodeType: 1,
+    closest(selector) {
+      if (selector === '.mes') return message;
+      if (selector.includes('.mesIDDisplay')) return meta;
+      return null;
+    },
+  };
+  const ownButton = {
+    nodeType: 1,
+    matches: selector => selector === '.pd-message-translate-btn',
+    closest: () => null,
+  };
+  t.observers[0].callback([{ target: meta, addedNodes: [ownButton], removedNodes: [] }]);
+  assert.equal(t.rafQueue.length, 0, 'injecting a globe must not re-enqueue itself');
+  assert.equal(t.metrics.added, 1);
+});
+
 test('no full chat sync or chat write is introduced by hydration', () => {
   assert.doesNotMatch(hydrationSource, /synchronizeStoredCanonicalViews\(/);
   assert.doesNotMatch(hydrationSource, /persistChatCache\(/);
   assert.doesNotMatch(hydrationSource, /saveChat(Debounced)?\(/);
   assert.match(hydrationSource, /pdButtonHydrationScopes/);
-  assert.match(hydrationSource, /PD_MESSAGE_BUTTON_FRAME_BUDGET_MS = 8/);
+  assert.match(hydrationSource, /PD_MESSAGE_BUTTON_FRAME_BUDGET_MS = 10/);
+  assert.match(hydrationSource, /PD_MESSAGE_BUTTON_SCOPE_LIMIT = 32/);
 });
