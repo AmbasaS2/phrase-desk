@@ -6022,13 +6022,16 @@ function setupMessageButtonObserver() {
       const target = mutation.target?.nodeType === 1 ? mutation.target : mutation.target?.parentElement;
       const owner = target?.closest?.('.mes');
       const inMetadata = !!(owner && target?.closest?.('.mesAvatarWrapper, .mesIDDisplay, .tokenCounterDisplay, .mes_timer'));
-      const added = Array.from(mutation.addedNodes || []).filter(node => node?.nodeType === 1);
-      const ownButtonOnly = added.length && added.every(node =>
-        node.matches?.('.pd-message-translate-btn') || node.closest?.('.pd-message-translate-btn'));
-      // Ignore our own append, otherwise newly-created globes wake the
-      // observer again and unnecessarily re-queue already-mounted messages.
+      const allAdded = Array.from(mutation.addedNodes || []);
+      const added = allAdded.filter(node => node?.nodeType === 1);
+      const ownButtonOnly = allAdded.length > 0 && allAdded.every(node =>
+        node?.nodeType === 1 && (
+          node.matches?.('.pd-message-translate-btn') || node.closest?.('.pd-message-translate-btn')));
+      // Ignore our own append, but treat newly inserted TEXT nodes as real
+      // metadata updates: setting textContent on an empty label fires childList,
+      // not characterData, in Chromium and Safari.
       if (inMetadata && mutation.type === 'characterData') affected.add(owner);
-      if (inMetadata && mutation.type === 'childList' && added.length && !ownButtonOnly) affected.add(owner);
+      if (inMetadata && mutation.type === 'childList' && allAdded.length && !ownButtonOnly) affected.add(owner);
 
       for (const node of added) {
         if (node.matches?.('.pd-message-translate-btn') || node.closest?.('.pd-message-translate-btn')) continue;
