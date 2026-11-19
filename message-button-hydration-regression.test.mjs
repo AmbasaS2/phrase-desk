@@ -183,6 +183,24 @@ test('late metadata text mounts globe only when the metadata event arrives', () 
   assert.equal(t.stats.buttons, 1);
 });
 
+test('fresh metadata text node wakes globe without polling', () => {
+  const t = fixture(1);
+  const message = t.messages[0];
+  message.metadata.label.textContent = '';
+  t.api.setupMessageButtonObserver();
+  t.flush();
+  assert.equal(t.stats.buttons, 0);
+  message.metadata.label.textContent = '15 tokens';
+  t.observers[0].callback([{
+    type: 'childList', target: message.metadata.label,
+    addedNodes: [{ nodeType: 3, parentElement: message.metadata.label }],
+    removedNodes: [],
+  }]);
+  t.flush();
+  assert.equal(t.stats.buttons, 1);
+  assert.equal(t.timers.length, 0);
+});
+
 test('late metadata wrapper mounts globe from its insertion event', () => {
   const t = fixture(1);
   const message = t.messages[0];
