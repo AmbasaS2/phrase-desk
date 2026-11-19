@@ -16,6 +16,7 @@ function fixture(count = 30) {
   const observers = [];
   const metrics = { slowResolverCalls: 0, added: 0 };
   let nextRafId = 1;
+  const timers = new Map();
   const messages = [];
   const chat = [];
 
@@ -32,14 +33,21 @@ function fixture(count = 30) {
   const context = { chat };
   const addMessage = (msg = { is_user: false, mes: 'hello world' }) => {
     const index = messages.length;
+    const meta = {
+      querySelector: selector => selector === '.pd-message-translate-btn' ? element.button : null,
+      querySelectorAll: selector => selector.includes('.mesIDDisplay') && element.metadataReady
+        ? [{ textContent: String(index + 1) }] : [],
+    };
     const element = {
       nodeType: 1,
       isConnected: true,
       index,
+      metadataReady: true,
       button: null,
       matches: selector => selector === '.mes',
       getAttribute: name => name === 'mesid' ? String(index) : null,
-      querySelector: selector => selector === '.pd-message-translate-btn' ? element.button : null,
+      querySelector: selector => selector === '.mesAvatarWrapper' ? meta
+        : selector === '.pd-message-translate-btn' ? element.button : null,
       querySelectorAll: () => [],
       closest: selector => selector === '.mes' ? element : null,
     };
@@ -81,8 +89,8 @@ function fixture(count = 30) {
     MutationObserver,
     requestAnimationFrame: callback => { rafQueue.push(callback); return nextRafId++; },
     performance: { now: () => 0 },
-    setTimeout,
-    clearTimeout,
+    setTimeout: (fn, _delay) => { const id = nextRafId++; timers.set(id, fn); return id; },
+    clearTimeout: id => { timers.delete(id); },
     console,
   };
   vm.createContext(sandbox);
@@ -99,7 +107,11 @@ function fixture(count = 30) {
       step();
     }
   };
-  return { api: sandbox.api, root, context, messages, addMessage, step, flush, rafQueue, observers, metrics };
+  const advanceTimer = () => {
+    const [id, fn] = timers.entries().next().value || [];
+    if (fn) { timers.delete(id); fn(); }
+  };
+  return { api: sandbox.api, root, context, messages, addMessage, step, flush, rafQueue, observers, timers, advanceTimer, metrics };
 }
 
 test('initially defers injection and handles large message lists in bounded batches', () => {
@@ -192,6 +204,41 @@ test('unresolved incoming swipe is not given a premature button; completed swipe
   t.api.queueMessageButtonHydration(t.messages[0]);
   t.flush();
   assert.ok(t.messages[0].button);
+});
+
+test('late metadata anchor is retried promptly instead of silently dropped', () => {
+  const t = fixture(1);
+  const message = t.messages[0];
+  message.metadataReady = false;
+  t.api.setupMessageButtonObserver();
+  t.flush();
+  assert.equal(message.button, null);
+  assert.equal(t.timers.size, 1, 'missing metadata must schedule bounded retry');
+  message.metadataReady = true;
+  t.advanceTimer();
+  t.flush();
+  assert.ok(message.button);
+  assert.equal(t.metrics.added, 1);
+});
+
+test('late metadata text mutation immediately hydrates the waiting message', () => {
+  const t = fixture(1);
+  const message = t.messages[0];
+  message.metadataReady = false;
+  t.api.setupMessageButtonObserver();
+  t.flush();
+  const textNode = { nodeType: 3, parentElement: {
+    closest(selector) {
+      if (selector === '.mes') return message;
+      if (selector.includes('.mesIDDisplay')) return this;
+      return null;
+    },
+  } };
+  message.metadataReady = true;
+  t.observers[0].callback([{ type: 'characterData', target: textNode, addedNodes: [], removedNodes: [] }]);
+  t.flush();
+  assert.ok(message.button);
+  assert.equal(t.metrics.added, 1);
 });
 
 test('chat reference changes invalidate pending old-chat hydration work', () => {
