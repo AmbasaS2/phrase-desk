@@ -5896,23 +5896,67 @@ function pdButtonHasSavedTranslation(msg) {
 function ensureMessageTranslateButton(mes) {
   const element = mes?.nodeType === 1 ? mes : mes?.[0];
   if (!element) return false;
-  if (element.querySelector('.pd-message-translate-btn')) return true;
+  // The globe lives only in SillyTavern metadata, not the potentially huge
+  // message body. Avoid scanning rendered text to check its presence.
+  const meta = element.querySelector('.mesAvatarWrapper');
+  if (meta?.querySelector('.pd-message-translate-btn')) {
+    pdButtonWaitingForMetadata.delete(element);
+    return true;
+  }
   const payload = pdButtonPayloadForMountedMessage(element);
   if (!payload?.mes || !payload?.msg) return false;
+  // A message root can mount before the metadata anchor has a visible label.
+  // Avoid layout reads until an appropriate anchor has content.
+  if (!meta || !Array.from(meta.querySelectorAll('.mesIDDisplay, .tokenCounterDisplay, .mes_timer'))
+    .some(anchor => String(anchor.textContent || '').trim())) return false;
   const btn = $(pdT('<span class="pd-message-translate-btn interactable" aria-label="이 메시지 번역" title="이 메시지 번역 / 길게 눌러 재번역"><span class="pd-message-translate-icon" aria-hidden="true">🌐</span></span>'));
   if (Number.isSafeInteger(payload.idx) && payload.idx >= 0) btn.attr('data-pd-mesid', String(payload.idx));
   if (!placeMessageTranslateButton(btn, payload)) return false;
   if (pdButtonHasSavedTranslation(payload.msg)) btn.addClass('translated');
+  pdButtonWaitingForMetadata.delete(element);
   return true;
 }
 
 const PD_MESSAGE_BUTTON_FRAME_BUDGET_MS = 10;
 const PD_MESSAGE_BUTTON_FRAME_LIMIT = 64;
 const PD_MESSAGE_BUTTON_SCOPE_LIMIT = 32;
+const PD_MESSAGE_BUTTON_RETRY_DELAY_MS = 75;
+const PD_MESSAGE_BUTTON_RETRY_LIMIT = 80;
+const pdButtonWaitingForMetadata = new Map();
+let pdButtonRetryTimer = null;
 const pdButtonHydrationNodes = new Set();
 const pdButtonHydrationScopes = new Set();
 let hydrateRaf = 0;
 let pdButtonHydrationChatRef = null;
+
+function pdClearButtonRetryQueue() {
+  pdButtonWaitingForMetadata.clear();
+  if (pdButtonRetryTimer !== null) clearTimeout(pdButtonRetryTimer);
+  pdButtonRetryTimer = null;
+}
+
+function pdSchedulePendingMetadataRetry() {
+  if (pdButtonRetryTimer !== null || !pdButtonWaitingForMetadata.size) return;
+  pdButtonRetryTimer = setTimeout(() => {
+    pdButtonRetryTimer = null;
+    const chatEl = document.getElementById('chat') || document.getElementById('chat_container');
+    if (!chatEl || liveContext()?.chat !== pdButtonHydrationChatRef) {
+      pdClearButtonRetryQueue();
+      return;
+    }
+    for (const [mes, attempts] of pdButtonWaitingForMetadata) {
+      if (!mes?.isConnected || !chatEl.contains(mes) || attempts >= PD_MESSAGE_BUTTON_RETRY_LIMIT) {
+        pdButtonWaitingForMetadata.delete(mes);
+        continue;
+      }
+      // Only one pending retry per message, even if metadata events also fire.
+      pdButtonWaitingForMetadata.set(mes, attempts + 1);
+      pdButtonHydrationNodes.add(mes);
+    }
+    if (pdButtonHydrationNodes.size) pdScheduleButtonHydrationFrame();
+    if (pdButtonWaitingForMetadata.size) pdSchedulePendingMetadataRetry();
+  }, PD_MESSAGE_BUTTON_RETRY_DELAY_MS);
+}
 
 function pdScheduleButtonHydrationFrame() {
   if (hydrateRaf) return;
@@ -5924,6 +5968,7 @@ function pdScheduleButtonHydrationFrame() {
     if (liveContext()?.chat !== pdButtonHydrationChatRef) {
       pdButtonHydrationNodes.clear();
       pdButtonHydrationScopes.clear();
+      pdClearButtonRetryQueue();
       return;
     }
     const chatEl = document.getElementById('chat') || document.getElementById('chat_container');
@@ -5951,8 +5996,12 @@ function pdScheduleButtonHydrationFrame() {
       pdButtonHydrationNodes.delete(mes);
       processed++;
       if (!mes?.isConnected || !chatEl.contains(mes)) continue;
-      try { ensureMessageTranslateButton(mes); }
-      catch (error) { console.warn('[Phrase Desk] message button hydration skipped', error); }
+      try {
+        if (!ensureMessageTranslateButton(mes)) {
+          if (!pdButtonWaitingForMetadata.has(mes)) pdButtonWaitingForMetadata.set(mes, 0);
+          pdSchedulePendingMetadataRetry();
+        }
+      } catch (error) { console.warn('[Phrase Desk] message button hydration skipped', error); }
     }
     if (pdButtonHydrationNodes.size || pdButtonHydrationScopes.size) pdScheduleButtonHydrationFrame();
   });
@@ -5965,6 +6014,7 @@ function queueMessageButtonHydration(scope = document) {
     pdButtonHydrationChatRef = currentChat;
     pdButtonHydrationNodes.clear();
     pdButtonHydrationScopes.clear();
+    pdClearButtonRetryQueue();
   }
   const target = scope === document ? chatEl : (scope?.nodeType ? scope : scope?.[0]);
   if (!target) return;
@@ -6024,6 +6074,7 @@ function setupMessageButtonObserver() {
         node.matches?.('.pd-message-translate-btn')
         || node.closest?.('.pd-message-translate-btn'));
       if (inMetadata && !ownButtonOnly) affectedMessages.add(targetMessage);
+      if (mutation.type === 'characterData' && inMetadata) affectedMessages.add(targetMessage);
 
       for (const node of addedElements) {
         if (node.matches?.('.pd-message-translate-btn') || node.closest?.('.pd-message-translate-btn')) continue;
@@ -6045,7 +6096,8 @@ function setupMessageButtonObserver() {
     affectedMessages.forEach(mes => queueMessageButtonHydration(mes));
     addedScopes.forEach(scope => queueMessageButtonHydration(scope));
   });
-  observer.observe(chatEl, { childList: true, subtree: true });
+  // Metadata labels may arrive after wrappers mount. Watch text changes too.
+  observer.observe(chatEl, { childList: true, characterData: true, subtree: true });
   pdGlobalState.messageButtonObserver = observer;
   pdGlobalState.messageButtonObserverTarget = chatEl;
   // Defer even the initial scan: opening a chat must not synchronously create
