@@ -135,6 +135,34 @@ test('repeated observer notifications do not create duplicate buttons', () => {
   assert.equal(t.metrics.added, 5);
 });
 
+test('replaced metadata row restores a missing button on an existing message', () => {
+  const t = fixture(1);
+  t.api.setupMessageButtonObserver();
+  t.flush();
+  const message = t.messages[0];
+  message.button = null;
+  const metadata = {
+    nodeType: 1,
+    closest: selector => selector === '.mes' ? message
+      : selector.includes('.mesIDDisplay') ? metadata : null,
+  };
+  t.observers[0].callback([{ target: metadata, addedNodes: [], removedNodes: [] }]);
+  t.flush();
+  assert.ok(message.button);
+  assert.equal(t.metrics.added, 2);
+});
+
+test('inactive Phrase Desk cache does not claim another extension display', () => {
+  const t = fixture(1);
+  t.context.chat[0].extra = {
+    display_text: 'foreign text',
+    phraseDesk: { activeKey: 'abc', variants: { abc: { showing: false, translations: { full: 'old text' } } } },
+  };
+  t.api.setupMessageButtonObserver();
+  t.flush();
+  assert.ok(!t.messages[0].button.classes.has('translated'));
+});
+
 test('saved translation badge is recovered without canonical rendering or chat mutation', () => {
   const t = fixture(1);
   const root = { activeKey: 'abc', variants: { abc: { showing: true, activeMode: 'ko', translations: { ko: '번역문' } } } };
