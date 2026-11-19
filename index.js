@@ -5906,8 +5906,9 @@ function ensureMessageTranslateButton(mes) {
   return true;
 }
 
-const PD_MESSAGE_BUTTON_FRAME_BUDGET_MS = 8;
-const PD_MESSAGE_BUTTON_FRAME_LIMIT = 16;
+const PD_MESSAGE_BUTTON_FRAME_BUDGET_MS = 10;
+const PD_MESSAGE_BUTTON_FRAME_LIMIT = 64;
+const PD_MESSAGE_BUTTON_SCOPE_LIMIT = 32;
 const pdButtonHydrationNodes = new Set();
 const pdButtonHydrationScopes = new Set();
 let hydrateRaf = 0;
@@ -5927,17 +5928,22 @@ function pdScheduleButtonHydrationFrame() {
     }
     const chatEl = document.getElementById('chat') || document.getElementById('chat_container');
     if (!chatEl) return;
-    // Discover descendants only once per queued subtree, not inside every
-    // MutationObserver notification. This also covers "load previous messages".
-    const scope = pdButtonHydrationScopes.values().next().value;
-    if (scope) {
+    const start = performance.now();
+    // Large chat mounts can contain hundreds of separate subtrees. Draining
+    // only one pending scope per frame starves pagination/full hydration.
+    let scanned = 0;
+    while (pdButtonHydrationScopes.size && scanned < PD_MESSAGE_BUTTON_SCOPE_LIMIT) {
+      if (scanned && performance.now() - start >= PD_MESSAGE_BUTTON_FRAME_BUDGET_MS / 2) break;
+      const scope = pdButtonHydrationScopes.values().next().value;
       pdButtonHydrationScopes.delete(scope);
-      if (scope === chatEl || (scope.isConnected && chatEl.contains(scope))) {
+      scanned++;
+      if (scope === chatEl || (scope?.isConnected && chatEl.contains(scope))) {
         if (scope.matches?.('.mes')) pdButtonHydrationNodes.add(scope);
         else scope.querySelectorAll?.('.mes').forEach(mes => pdButtonHydrationNodes.add(mes));
       }
     }
-    const start = performance.now();
+    // After discovery, inject with bounded work. Most messages now use the
+    // cheap numeric-mesid path; the time budget protects unusually costly DOM.
     let processed = 0;
     while (pdButtonHydrationNodes.size && processed < PD_MESSAGE_BUTTON_FRAME_LIMIT) {
       if (processed && performance.now() - start >= PD_MESSAGE_BUTTON_FRAME_BUDGET_MS) break;
@@ -5962,8 +5968,15 @@ function queueMessageButtonHydration(scope = document) {
   }
   const target = scope === document ? chatEl : (scope?.nodeType ? scope : scope?.[0]);
   if (!target) return;
-  if (target.matches?.('.mes')) pdButtonHydrationNodes.add(target);
-  else pdButtonHydrationScopes.add(target);
+  if (target === chatEl) {
+    // One chat-root scan subsumes any pending nested scopes.
+    pdButtonHydrationScopes.clear();
+    pdButtonHydrationScopes.add(chatEl);
+  } else if (target.matches?.('.mes')) {
+    pdButtonHydrationNodes.add(target);
+  } else if (!pdButtonHydrationScopes.has(chatEl)) {
+    pdButtonHydrationScopes.add(target);
+  }
   pdScheduleButtonHydrationFrame();
 }
 function hydrateMessageTranslateButtons(scope = document) {
@@ -6003,21 +6016,26 @@ function setupMessageButtonObserver() {
     for (const mutation of mutations) {
       const target = mutation.target?.nodeType === 1 ? mutation.target : mutation.target?.parentElement;
       const targetMessage = target?.closest?.('.mes');
-      // A swipe can rebuild just the metadata row, not the message root.
-      if (targetMessage && target?.closest?.('.mesIDDisplay, .tokenCounterDisplay, .mes_timer, .mesAvatarWrapper')) {
-        affectedMessages.add(targetMessage);
-      }
-      for (const node of mutation.addedNodes || []) {
-        if (node.nodeType !== 1) continue;
+      const inMetadata = !!(targetMessage && target?.closest?.('.mesIDDisplay, .tokenCounterDisplay, .mes_timer, .mesAvatarWrapper'));
+      // Inserting Phrase Desk's own globe changes the metadata DOM. Never
+      // re-queue a button just because the observer saw its own append.
+      const addedElements = Array.from(mutation.addedNodes || []).filter(node => node?.nodeType === 1);
+      const ownButtonOnly = addedElements.length > 0 && addedElements.every(node =>
+        node.matches?.('.pd-message-translate-btn')
+        || node.closest?.('.pd-message-translate-btn'));
+      if (inMetadata && !ownButtonOnly) affectedMessages.add(targetMessage);
+
+      for (const node of addedElements) {
+        if (node.matches?.('.pd-message-translate-btn') || node.closest?.('.pd-message-translate-btn')) continue;
         if (node.matches?.('.mes')) affectedMessages.add(node);
         else if (targetMessage) {
           if (node.matches?.('.mesIDDisplay, .tokenCounterDisplay, .mes_timer, .mesAvatarWrapper')
-              || node.querySelector?.('.mesIDDisplay, .tokenCounterDisplay, .mes_timer')) affectedMessages.add(targetMessage);
+            || node.querySelector?.('.mesIDDisplay, .tokenCounterDisplay, .mes_timer')) affectedMessages.add(targetMessage);
         } else if (node.querySelector?.('.mes')) addedScopes.add(node);
       }
       if (targetMessage) {
         for (const node of mutation.removedNodes || []) {
-          if (node.nodeType !== 1) continue;
+          if (node?.nodeType !== 1) continue;
           if (node.matches?.('.pd-message-translate-btn') || node.querySelector?.('.pd-message-translate-btn')) {
             affectedMessages.add(targetMessage);
           }
