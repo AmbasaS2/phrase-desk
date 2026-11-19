@@ -5943,10 +5943,10 @@ function pdScheduleButtonHydrationFrame() {
       if (processed && performance.now() - start >= PD_MESSAGE_BUTTON_FRAME_BUDGET_MS) break;
       const mes = pdButtonHydrationNodes.values().next().value;
       pdButtonHydrationNodes.delete(mes);
+      processed++;
       if (!mes?.isConnected || !chatEl.contains(mes)) continue;
       try { ensureMessageTranslateButton(mes); }
       catch (error) { console.warn('[Phrase Desk] message button hydration skipped', error); }
-      processed++;
     }
     if (pdButtonHydrationNodes.size || pdButtonHydrationScopes.size) pdScheduleButtonHydrationFrame();
   });
