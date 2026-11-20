@@ -22,6 +22,10 @@ import { splitGoogleChunks, splitCanonicalAIInput } from './pd-translation-chunk
 
 import { extension_settings, getContext } from '../../../../scripts/extensions.js';
 import { getRequestHeaders } from '../../../../script.js';
+import {
+  PD_LEARNING_KEYS, PD_LEARNING_STORAGE_FORMAT, PD_LEARNING_FILE_PATH,
+  createPhraseDeskLearningStore, pickLearningData, hasLearningData,
+} from './pd-learning-storage.js';
 import { SlashCommand } from '../../../../scripts/slash-commands/SlashCommand.js';
 import { ARGUMENT_TYPE, SlashCommandNamedArgument } from '../../../../scripts/slash-commands/SlashCommandArgument.js';
 import { SlashCommandParser } from '../../../../scripts/slash-commands/SlashCommandParser.js';
@@ -50,7 +54,7 @@ function normalizeChatMaxTokens(value) {
   return Number.isFinite(amount) && amount > 0 ? Math.min(32768, Math.max(256, Math.round(amount))) : MAX_TOKENS;
 }
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.6.1";
+const PD_VERSION = "1.6.2";
 const CHAT_TRANSLATION_QUALITY_LIMITS = Object.freeze({
   partialCoverageMin:0.75,
   degradedCoverageMin:0.25,
@@ -153,6 +157,19 @@ const dirtyCharacterPromptNames = new Set();
 let characterPromptStoreMigrationPending = false;
 let characterPromptStoreHydrated = false;
 let chatCacheSaveTimer = null;
+// Legacy mode is retained for isolated older test harnesses; actual browser
+// boot must hydrate the server file before registering study UI handlers.
+let learningMode = 'legacy';
+let learningStore = null;
+let learningRevision = 0;
+let learningBackupPath = '';
+let learningSaveQueue = Promise.resolve();
+let learningQueuedWrite = null;
+let learningWriteActive = false;
+let learningWriteSequence = 0;
+let learningCommittedSequence = 0;
+let learningStorageWarningShown = false;
+let learningImportBusy = false;
 let selectionPayload = null;
 let lastQuickAnchor = null;
 let messageBusy = false;
@@ -225,6 +242,146 @@ function markPendingPromptStatusesFailed() {
     if (element?.dataset.state === 'saving') setPromptStatus(kind, 'error');
   }
 }
+function learningSettingsSnapshot(snapshot) {
+  if (learningMode === 'file') {
+    for (const key of PD_LEARNING_KEYS) delete snapshot[key];
+  }
+  return snapshot;
+}
+function removeLegacyLearningArrays(root) {
+  if (learningMode === 'file') {
+    for (const key of PD_LEARNING_KEYS) delete root[key];
+  }
+}
+function ensureLearningWritable() {
+  if (learningMode !== 'blocked' && !learningImportBusy) return true;
+  toast(pdT('학습 데이터 저장소를 사용할 수 없습니다. 기존 데이터는 보존되어 있습니다.'), 'error');
+  return false;
+}
+function learningStorageMarker() {
+  return { format:PD_LEARNING_STORAGE_FORMAT, path:PD_LEARNING_FILE_PATH, legacyBackup:learningBackupPath };
+}
+function learningDataEqual(a, b) {
+  return JSON.stringify(pickLearningData(a)) === JSON.stringify(pickLearningData(b));
+}
+function applyLearningData(data) {
+  const copy = pickLearningData(data);
+  for (const key of PD_LEARNING_KEYS) settings[key] = copy[key];
+}
+async function initializeLearningStorage() {
+  learningStore = createPhraseDeskLearningStore({ headers:getRequestHeaders });
+  const root = extension_settings[EXT_NAME] || {};
+  const marker = root.learningStorage?.format === PD_LEARNING_STORAGE_FORMAT;
+  const oldData = pickLearningData(root);
+  const oldHasData = hasLearningData(oldData);
+  try {
+    const remote = await learningStore.read();
+    if (marker && !remote) {
+      throw new Error('Server learning file missing despite settings marker');
+    }
+    if (remote && oldHasData && !learningDataEqual(oldData, remote.data)) {
+      // This also protects a stale pre-migration browser that wrote learning
+      // arrays after another device had already migrated the server file.
+      throw new Error('Legacy and server wordbook differ; automatic migration was blocked to avoid overwriting either copy');
+    }
+    if (!remote && oldHasData) {
+      // A verified backup is written BEFORE the first server snapshot and
+      // before removing any learning array from settings.json.
+      learningBackupPath = await learningStore.backupLegacy(oldData);
+    } else {
+      learningBackupPath = String(root.learningStorage?.legacyBackup || '');
+    }
+    const saved = remote || (oldHasData
+      ? await learningStore.write(oldData, 0)
+      : null);
+    learningRevision = saved?.revision || 0;
+    if (saved) applyLearningData(saved.data);
+    learningMode = 'file';
+    if ((!marker && saved) || (marker && PD_LEARNING_KEYS.some(k => Object.hasOwn(root,k)))) {
+      settings.learningStorage = learningStorageMarker();
+      // The legacy arrays are removed only after read-back verification.
+      // Await ST's settings persistence so a failed commit retains the old
+      // root and can resume safely next time.
+      await saveSettingsStrictForImport();
+    }
+    console.info('[Phrase Desk] server learning storage ready', {
+      notes:settings.notebook.length,
+      revision:learningRevision,
+      migrated:!marker && oldHasData,
+    });
+    return true;
+  } catch (error) {
+    learningMode = 'blocked';
+    console.error('[Phrase Desk] learning file migration/load blocked, legacy data was not removed', error);
+    if (!learningStorageWarningShown) {
+      learningStorageWarningShown = true;
+      toast(pdT('단어장 저장소를 열지 못했습니다. 기록을 보호하기 위해 학습 편집을 중지했어. 개발자 콘솔을 확인해줘.'), 'error');
+    }
+    return false;
+  }
+}
+async function flushLearningWriteQueue() {
+  if (learningWriteActive) return;
+  learningWriteActive = true;
+  try {
+    while (learningQueuedWrite) {
+      const job = learningQueuedWrite;
+      learningQueuedWrite = null;
+      try {
+        const written = await learningStore.write(job.snapshot, learningRevision);
+        learningRevision = written.revision;
+        learningCommittedSequence = job.seq;
+        if (!settings.learningStorage) {
+          settings.learningStorage = learningStorageMarker();
+          if (saveSettings(true) === false) {
+            console.warn('[Phrase Desk] saved learning file but the settings pointer may be pending');
+          }
+        }
+        job.waiters.forEach(waiter => waiter.resolve(written));
+      } catch (error) {
+        job.waiters.forEach(waiter => waiter.reject(error));
+      }
+    }
+  } finally {
+    learningWriteActive = false;
+  }
+}
+function queueLearningSnapshot(data = null, { internal = false } = {}) {
+  if (learningMode === 'legacy') {
+    if (saveSettings(true) === false) return Promise.reject(new Error('Legacy learning settings save failed'));
+    return Promise.resolve();
+  }
+  if (learningMode !== 'file' || !learningStore || (learningImportBusy && !internal)) {
+    return Promise.reject(new Error('Learning storage is not ready for writing'));
+  }
+  const snapshot = pickLearningData(data ?? settings);
+  const seq = ++learningWriteSequence;
+  const task = new Promise((resolve, reject) => {
+    if (learningQueuedWrite) {
+      // A save is already in flight: only the LATEST not-yet-written complete
+      // snapshot needs uploading; preserve every caller's completion signal.
+      learningQueuedWrite.snapshot = snapshot;
+      learningQueuedWrite.seq = seq;
+      learningQueuedWrite.waiters.push({ resolve, reject });
+    } else {
+      learningQueuedWrite = { snapshot, seq, waiters:[{ resolve, reject }] };
+    }
+    if (!learningWriteActive) void flushLearningWriteQueue();
+  });
+  learningSaveQueue = task;
+  return task;
+}
+function saveLearningData() {
+  if (learningMode === 'legacy') return saveSettings(true);
+  if (!ensureLearningWritable()) return false;
+  // Do not revert to settings.json on error, or large data would silently
+  // reappear there. Keep changed notes in memory for export or retry.
+  void queueLearningSnapshot().catch(error => {
+    console.error('[Phrase Desk] learning data was NOT saved', error);
+    toast(pdT('단어장 저장 실패! 이 화면을 닫기 전에 노트를 JSON으로 내보내서 보존해줘.'), 'error');
+  });
+  return true;
+}
 function saveSettings(now = false) {
   clearTimeout(saveTimer);
   const run = () => {
@@ -232,7 +389,7 @@ function saveSettings(now = false) {
       const currentRoot = extension_settings[EXT_NAME] && typeof extension_settings[EXT_NAME] === 'object'
         ? extension_settings[EXT_NAME]
         : {};
-      const snapshot = safeExtensionSettingsSnapshot(settings);
+      const snapshot = learningSettingsSnapshot(safeExtensionSettingsSnapshot(settings));
       const persistedPrompts = currentRoot.characterPrompts && typeof currentRoot.characterPrompts === 'object' && !Array.isArray(currentRoot.characterPrompts)
         ? Object.assign({}, currentRoot.characterPrompts)
         : {};
@@ -250,6 +407,7 @@ function saveSettings(now = false) {
 
       settings.characterPrompts = Object.assign({}, snapshot.characterPrompts || {});
       Object.assign(currentRoot, snapshot);
+      removeLegacyLearningArrays(currentRoot);
       extension_settings[EXT_NAME] = currentRoot;
       dirtyCharacterPromptNames.clear();
       characterPromptStoreMigrationPending = false;
@@ -272,7 +430,7 @@ async function saveSettingsStrictForImport() {
   clearTimeout(saveTimer);
   const previousRoot = extension_settings[EXT_NAME];
   const currentRoot = previousRoot && typeof previousRoot === 'object' ? previousRoot : {};
-  const snapshot = safeExtensionSettingsSnapshot(settings);
+  const snapshot = learningSettingsSnapshot(safeExtensionSettingsSnapshot(settings));
   const persistedPrompts = currentRoot.characterPrompts && typeof currentRoot.characterPrompts === 'object' && !Array.isArray(currentRoot.characterPrompts)
     ? Object.assign({}, currentRoot.characterPrompts)
     : {};
@@ -288,7 +446,9 @@ async function saveSettingsStrictForImport() {
     snapshot.characterPrompts = persistedPrompts;
   }
 
-  extension_settings[EXT_NAME] = Object.assign({}, currentRoot, snapshot);
+  const nextRoot = Object.assign({}, currentRoot, snapshot);
+  removeLegacyLearningArrays(nextRoot);
+  extension_settings[EXT_NAME] = nextRoot;
   try {
     if (typeof ctx?.saveSettings === 'function') await ctx.saveSettings();
     else if (typeof ctx?.saveSettingsDebounced === 'function') await ctx.saveSettingsDebounced();
@@ -7277,6 +7437,7 @@ function sameMeaningSense(a = '', b = '') {
   return meaningSenseTokens(aa).some(t => bt.has(t));
 }
 function addNote(n) {
+  if (!ensureLearningWritable()) return null;
   n = Object.assign(newNoteLanguageFields(), n || {});
   if (n.expression && !n.text) n.text = n.expression;
   if (n.meaningKo && !n.meaning) n.meaning = n.meaningKo;
@@ -7298,13 +7459,13 @@ function addNote(n) {
     if (n.source) existing.sources = Array.from(new Set([...(existing.sources||[]), n.source, existing.source].filter(Boolean)));
     if (n.aiEnriched) existing.aiEnriched = true;
     existing.updatedAt = Date.now();
-    saveSettings(true); return existing;
+    saveLearningData(); return existing;
   }
   const note = Object.assign({ id:uid('note'), expression:'', meaning:'', meaningKo:'', context:'', contextKo:'', contexts:[], tags:[], memo:'', explanation:'', alternatives:'', grammar:'', vocabulary:'', status:'new', favorite:false, source: n.source || '', sources:[], createdAt:Date.now(), aiEnriched:false }, n);
   note.expression = note.text;
   note.meaningKo = note.meaning;
   normalizeNoteContexts(note);
-  settings.notebook.unshift(note); saveSettings(true); updateSavedCount(); return note;
+  settings.notebook.unshift(note); saveLearningData(); updateSavedCount(); return note;
 }
 function updateSavedCount(){ $('#phrase-desk-settings .pd-settings-foot span').html(pdUi`<b>${settings.notebook.length}</b>개 표현 저장됨`); }
 function clearPhraseDeskCacheFromExtra(extra) {
@@ -7358,14 +7519,25 @@ async function clearCurrentChatTranslationCache(){
 
 
 
-function resetLearningData() {
+async function resetLearningData() {
+  if (!ensureLearningWritable()) return;
   if (!confirm(pdT('수집한 어휘, 쪽지 시험 기록, 오답노트, AI 답변 연습 기록, 학습 달력 기록이 모두 초기화됩니다. 번역 설정과 번역 캐시는 유지됩니다. 진행할까요?'))) return;
-  settings.notebook = [];
-  settings.quizHistory = [];
-  settings.practiceHistory = [];
-  settings.hiddenWrongNotes = [];
-  settings.recentPracticeNoteIds = [];
-  saveSettings(true);
+  const empty = Object.fromEntries(PD_LEARNING_KEYS.map(key => [key, []]));
+  if (learningMode === 'file') {
+    learningImportBusy = true;
+    try {
+      await learningSaveQueue.catch(() => undefined);
+      // A failed upload never clears the in-memory or stored learning records.
+      await queueLearningSnapshot(empty, { internal:true });
+    } catch (error) {
+      learningImportBusy = false;
+      console.error('[Phrase Desk] learning data reset was not saved', error);
+      toast(pdT('학습 데이터 초기화에 실패했어. 기존 기록은 그대로 보존돼.'), 'error');
+      return;
+    }
+  }
+  applyLearningData(empty);
+  if (learningMode === 'legacy') saveSettings(true);
   renderNotebook();
   updateSavedCount();
   closeModals();
@@ -7405,6 +7577,7 @@ function studyCounts() {
   return out;
 }
 function openStudyCalendar(monthDate = new Date()) {
+  if (!ensureLearningWritable()) return;
   const d = new Date(monthDate);
   const y = d.getFullYear();
   const m = d.getMonth();
@@ -7555,6 +7728,7 @@ function bindPhraseDeskViewportPlacement() {
 }
 
 function openSaveModal(p={}) {
+  if (!ensureLearningWritable()) return;
   const withExplanation = !!(p.fromExplanation || p.explanation || p.grammar || p.alternatives);
   showModal(pdUi`<button class="pd-x" data-close-modal>×</button><h3>표현 저장</h3><div class="pd-language-fields"><label>표현 언어<select id="pd-save-language">${noteLanguageOptions(studyLanguage().key, studyLanguage().name)}</select></label><label>뜻·해설 언어<select id="pd-save-meaning-language">${noteLanguageOptions(targetLanguage().key, targetLanguage().name)}</select></label></div><label>표현</label><textarea id="pd-save-text" rows="2">${esc(p.text||'')}</textarea><label>뜻</label><input id="pd-save-meaning" value="${esc(p.meaning||'')}" placeholder="나중에 AI 교정으로 채울 수 있습니다."><label>문맥</label><textarea id="pd-save-context" rows="3">${esc(p.context||'')}</textarea><label>태그 쉼표로 구분</label><input id="pd-save-tags" placeholder="직접 태그를 입력해주세요."><label>메모</label><textarea id="pd-save-memo" rows="3"></textarea><div class="pd-submit-actions"><button id="pd-save-note" class="pd-primary">저장</button></div>`);
   if (withExplanation) {
@@ -7598,7 +7772,7 @@ function openEditNoteModal(id) {
     n.memo = $('#pd-edit-memo').val();
     n.aiEnriched = missingFields(n).length === 0;
     n.updatedAt = Date.now();
-    saveSettings(true);
+    saveLearningData();
     closeModals();
     renderNotebook();
     toast(pdT('수정했습니다.'), 'success');
@@ -7606,6 +7780,7 @@ function openEditNoteModal(id) {
 }
 
 function openNotebook() {
+  if (!ensureLearningWritable()) return;
   $('.pd-popover').remove();
   const html=pdUi`<div class="pd-popover" role="dialog"><div class="pd-head"><div class="pd-titlebox"><div class="pd-title-line"><b>Phrase Desk</b><button id="pd-study-calendar" class="pd-title-calendar" title="학습 달력" aria-label="학습 달력">📅</button></div><span>Collect, review, remember.</span></div><div class="pd-head-actions"><button id="pd-gear" title="설정">⚙</button><button data-close-pop title="닫기">×</button></div></div><div class="pd-body"><aside class="pd-filterbar"><button data-filter="all" class="on" title="전체">All</button><button data-filter="new" title="새 표현">○</button><button data-filter="learning" title="외우는 중">◐</button><button data-filter="hard" title="어려움">◆</button><button data-filter="known" title="외움">●</button><button data-filter="starred" title="즐겨찾기">★</button></aside><main><div class="pd-actions"><button id="pd-add-direct">어휘 직접 추가</button><button id="pd-ai-fill">AI 어휘 교정</button><button id="pd-repeat-find">반복 표현 찾기</button><button id="pd-quiz">쪽지 시험</button><button id="pd-writing-practice">AI 답변 연습</button><button id="pd-quiz-history">이전 학습지</button></div><div class="pd-notebook-search"><input id="pd-search" placeholder="표현·뜻·태그 검색"><select id="pd-note-language-filter" aria-label="노트 언어 필터"><option value="all">모든 언어</option>${Array.from(new Set(settings.notebook.map(n => noteLanguages(n).language))).map(code => `<option value="${esc(code)}">${esc(code.startsWith('custom:') ? code.slice(7) : languageName(code, getUiLocale()))}</option>`).join('')}</select></div><div id="pd-list"></div></main></div></div>`;
   $('body').append(html);
@@ -7672,11 +7847,11 @@ function renderNotebook(){
   const q=($('#pd-search').val()||'').toLowerCase(); const f=$('.pd-body aside button.on').data('filter')||'all';
   const list=settings.notebook.filter(n=>{const hay=`${n.text} ${n.meaning} ${n.memo} ${(n.tags||[]).join(' ')} ${n.source} ${(n.sources||[]).join(' ')}`.toLowerCase(); return ($('#pd-note-language-filter').val() === 'all' || !$('#pd-note-language-filter').val() || noteLanguages(n).language === $('#pd-note-language-filter').val()) && (!q||hay.includes(q)) && (f==='all'||(f==='starred'?n.favorite:n.status===f));});
   $('#pd-list').html(list.length?list.map(card).join(''):pdT('<div class="pd-empty">아직 저장된 표현이 없습니다.</div>'));
-  $('.pd-del').on('click',function(){ if(!confirm(pdT('이 표현을 삭제할까요?'))) return; const id=$(this).closest('.pd-note').data('id'); settings.notebook=settings.notebook.filter(n=>n.id!==id); saveSettings(true); renderNotebook(); updateSavedCount(); toast(pdT('삭제했습니다.'),'success'); });
+  $('.pd-del').on('click',function(){ if(!confirm(pdT('이 표현을 삭제할까요?'))) return; const id=$(this).closest('.pd-note').data('id'); settings.notebook=settings.notebook.filter(n=>n.id!==id); saveLearningData(); renderNotebook(); updateSavedCount(); toast(pdT('삭제했습니다.'),'success'); });
   $('.pd-edit').on('click',function(){ const id=$(this).closest('.pd-note').data('id'); openEditNoteModal(id); });
   $('.pd-copy').on('click',function(){ const id=$(this).closest('.pd-note').data('id'); const n=settings.notebook.find(x=>x.id===id); if(!n)return; copyText(noteCopyText(n)).then(ok=>toast(ok?pdT('복사했습니다.'):pdT('복사에 실패했습니다.'), ok?'success':'error')); });
-  $('.pd-star').on('click',function(){ const n=settings.notebook.find(x=>x.id===$(this).closest('.pd-note').data('id')); if(n){n.favorite=!n.favorite; saveSettings(true); renderNotebook();}});
-  $('.pd-status').on('change',function(){ const n=settings.notebook.find(x=>x.id===$(this).closest('.pd-note').data('id')); if(n){n.status=$(this).val(); saveSettings();}});
+  $('.pd-star').on('click',function(){ const n=settings.notebook.find(x=>x.id===$(this).closest('.pd-note').data('id')); if(n){n.favorite=!n.favorite; saveLearningData(); renderNotebook();}});
+  $('.pd-status').on('change',function(){ const n=settings.notebook.find(x=>x.id===$(this).closest('.pd-note').data('id')); if(n){n.status=$(this).val(); saveLearningData();}});
 }
 function card(n){
   const sources = Array.from(new Set([n.source,...(n.sources||[])].filter(Boolean)));
@@ -7717,6 +7892,7 @@ function compactNoteForAI(n) {
   return item;
 }
 async function enrichNotes(){
+  if (!ensureLearningWritable()) return;
   if (!languagesReady(true)) return;
   if (!beginAiTask('enrich', pdT('AI 어휘 교정을 시작합니다.'))) return;
   try {
@@ -7783,7 +7959,7 @@ async function enrichNotes(){
       n.aiEnriched=missingFields(n).length===0;
       if(done.length) filled.push({text:n.text, fields:done});
     });
-    saveSettings(true);
+    saveLearningData();
     closeModals();
     renderNotebook();
     updateSavedCount();
@@ -8053,6 +8229,23 @@ async function applyImportedLearningData(payload) {
       return clone;
     });
   }
+  if (!ensureLearningWritable()) throw new Error('Learning storage unavailable');
+  if (learningMode === 'file') {
+    learningImportBusy = true;
+    try {
+      await learningSaveQueue.catch(() => undefined);
+      const replacement = Object.assign(pickLearningData(settings), staged);
+      // The imported data must be written and read back BEFORE it replaces
+      // anything in memory. Failure leaves both prior disk and UI intact.
+      await queueLearningSnapshot(replacement, { internal:true });
+      applyLearningData(replacement);
+      renderNotebook();
+      updateSavedCount();
+      return;
+    } finally {
+      learningImportBusy = false;
+    }
+  }
   const previousRoot = extension_settings[EXT_NAME];
   let importPersisted = false;
   await applySettingsPatchAtomicallyAsync(
@@ -8165,7 +8358,7 @@ function pickPracticeNote(pool) {
   const chosen = prioritizedNotes(fresh.length ? fresh : pool, 1)[0];
   if (chosen?.id) {
     settings.recentPracticeNoteIds = [chosen.id, ...(settings.recentPracticeNoteIds || []).filter(id => id !== chosen.id)].slice(0, 8);
-    saveSettings();
+    saveLearningData();
   }
   return chosen;
 }
@@ -8195,6 +8388,7 @@ function practicePool(){
   return settings.notebook.filter(n => activeStudyNote(n) && n.status !== 'known' && norm(n.text) && norm(n.meaning));
 }
 async function openWritingPractice(){
+  if (!ensureLearningWritable()) return;
   if (!languagesReady(true)) return;
   if (!beginAiTask('practice', pdT('AI 답변 연습을 준비하고 있습니다.'))) return;
   try {
@@ -8280,7 +8474,7 @@ async function openWritingPractice(){
           updatePracticeStats(finalNote, perfect);
           settings.practiceHistory.unshift({ ...noteLanguages(finalNote), id: uid('practice'), time: new Date().toLocaleString(), dateKey: dateKey(), char, noteId: finalNote?.id || '', target: finalNote?.text || q.target || '', questionEn: q.questionEn, questionKo: q.questionKo || '', answer, usedTarget, perfect, corrected: res.corrected || answer, explanationKo: res.explanationKo || '', characterReplyEn: res.characterReplyEn || '', characterReplyKo: res.characterReplyKo || '' });
           settings.practiceHistory = retainLanguageHistory(settings.practiceHistory, 60);
-          saveSettings(true);
+          saveLearningData();
           const retryButton = !perfect ? pdUi`<button id="pd-practice-retry" class="pd-lite-btn">같은 질문 다시 답하기</button>` : '';
           showModal(pdUi`<button class="pd-x" data-close-modal>×</button><h3>AI 답변 연습 결과</h3><div class="pd-feedback ${perfect?'ok':'bad'}"><small>답변 교정</small><b>${esc(verdict)}</b><pre>${esc(res.corrected || answer)}</pre><p>${esc(res.explanationKo || '')}</p></div>${res.characterReplyEn ? pdUi`<div class="pd-practice-question"><small>${esc(char)}의 답변</small><p>${esc(res.characterReplyEn)}</p><span>${esc(res.characterReplyKo || '')}</span></div>` : ''}<div class="pd-manage-buttons">${retryButton}<button id="pd-practice-again" class="pd-primary">다른 질문 풀기</button></div>`);
           $('#pd-practice-retry').on('click', () => showPracticeForm(''));
@@ -8567,6 +8761,7 @@ function quizCorrectAnswer(q) {
 // The regular quiz is intentionally local and deterministic. AI generation/checking
 // belongs to the separately labelled AI answer-practice feature.
 function openQuiz(options = {}){
+  if (!ensureLearningWritable()) return;
   const allNotes = settings.notebook.filter(n => activeStudyNote(n) && norm(n.text) && norm(n.meaning));
   const requestedIds = Array.isArray(options.focusIds) ? Array.from(new Set(options.focusIds.map(String))) : [];
   const requestedNotes = requestedIds.map(id => allNotes.find(n => String(n.id) === id)).filter(Boolean);
@@ -8634,7 +8829,7 @@ function renderQuiz(qs, meta = {}){
     if(ok) correct++;
     result.push({id:q.id, stage, type:q.type, answerMode:q.answerMode, ok, prompt:q.prompt, answer:shownAnswer, picked, explanation:feedback});
     updateQuizStats(settings.notebook.find(x=>x.id===q.id), ok);
-    saveSettings();
+    saveLearningData();
     $('.pd-choice, .pd-token, #pd-quiz-submit, #pd-quiz-clear, #pd-quiz-answer').prop('disabled',true);
     if (q.answerMode === 'choice') $('.pd-choice').each(function(){ const i=Number($(this).data('i')); if(i===Number(q.answerIndex)) $(this).addClass('ok'); if(i===Number(choiceIndex) && !ok) $(this).addClass('bad'); });
     const correctLine = (!ok && shownAnswer) ? pdUi`<br><small>정답 예시: ${esc(shownAnswer)}</small>` : '';
@@ -8648,15 +8843,16 @@ function renderQuiz(qs, meta = {}){
     const related = Array.from(new Map(result.map(r=>settings.notebook.find(n=>n.id===r.id)).filter(Boolean).map(n => [n.id, n])).values());
     const known = related.filter(n=>n.status!=='known' && (n.quizStats?.streak||0)>=3);
     const hard = related.filter(n=>n.status!=='hard' && (n.quizStats?.wrong||0)>=2 && Number(n.quizStats?.wrong||0) > Number(n.quizStats?.correct||0));
-    saveSettings(true);
+    saveLearningData();
     const suggestions = `${known.length?pdUi`<h4>'● 외움'으로 바꿀 만한 표현</h4>${known.map(n=>pdUi`<button class="pd-suggest" data-id="${esc(n.id)}" data-status="known">'● 외움'으로 변경 · ${esc(n.text)}</button>`).join('')}`:''}${hard.length?pdUi`<h4>'◆ 어려움'으로 바꿀 만한 표현</h4>${hard.map(n=>pdUi`<button class="pd-suggest" data-id="${esc(n.id)}" data-status="hard">'◆ 어려움'으로 변경 · ${esc(n.text)}</button>`).join('')}`:''}`;
     showModal(pdUi`<button class="pd-x" data-close-modal>×</button><h3>${esc(title)} 결과</h3><p>${esc(stageLabel)} 단계 · ${correct}/${qs.length} 정답입니다.</p>${suggestions || pdT('<p>이번 학습지에서는 상태를 바꿀 만한 어휘가 없습니다.</p>')}`);
-    $('.pd-suggest').on('click',function(){ const n=settings.notebook.find(x=>x.id===$(this).data('id')); if(n){n.status=$(this).data('status'); saveSettings(true); renderNotebook(); $(this).prop('disabled',true).text(pdT('적용했습니다.'));} });
+    $('.pd-suggest').on('click',function(){ const n=settings.notebook.find(x=>x.id===$(this).data('id')); if(n){n.status=$(this).data('status'); saveLearningData(); renderNotebook(); $(this).prop('disabled',true).text(pdT('적용했습니다.'));} });
   };
   draw();
 }
 function wrongNoteKey(historyId, index) { return `${historyId || 'quiz'}_${index}`; }
 function openQuizHistory(){
+  if (!ensureLearningWritable()) return;
   const quizHistory = settings.quizHistory.filter(h => activeStudyNote(h));
   const practiceHistory = (settings.practiceHistory || []).filter(h => activeStudyNote(h));
   const hidden = new Set(settings.hiddenWrongNotes || []);
@@ -8679,7 +8875,7 @@ function openQuizHistory(){
     const key = $(this).closest('[data-wrong-key]').data('wrong-key');
     if (!key) return;
     settings.hiddenWrongNotes = Array.from(new Set([...(settings.hiddenWrongNotes || []), String(key)]));
-    saveSettings(true);
+    saveLearningData();
     openQuizHistory();
     toast(pdT('오답노트에서 삭제했습니다.'), 'success');
   });
@@ -8690,7 +8886,7 @@ function openQuizHistory(){
     if (!id) return;
     settings.quizHistory = (settings.quizHistory || []).filter(h => String(h.id) !== id);
     settings.hiddenWrongNotes = (settings.hiddenWrongNotes || []).filter(k => !String(k).startsWith(id + '_'));
-    saveSettings(true);
+    saveLearningData();
     openQuizHistory();
     toast(pdT('시험 기록을 삭제했습니다.'), 'success');
   });
@@ -8700,7 +8896,7 @@ function openQuizHistory(){
     const id = String($(this).closest('[data-practice-id]').data('practice-id') || '');
     if (!id) return;
     settings.practiceHistory = (settings.practiceHistory || []).filter(p => String(p.id) !== id);
-    saveSettings(true);
+    saveLearningData();
     openQuizHistory();
     toast(pdT('연습 기록을 삭제했습니다.'), 'success');
   });
@@ -9181,6 +9377,7 @@ async function boot(){
   pdGlobalState.bootedAt = Date.now();
   pdGlobalState.version = PD_VERSION;
   await initPdI18n(stI18n);
+  await initializeLearningStorage();
   if (pdLanguageMigrationPending || pdTranslationPresetMigrationPending || pdInputTranslationPresetMigrationPending) {
     saveSettings(true);
     pdLanguageMigrationPending = false;

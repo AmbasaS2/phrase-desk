@@ -296,7 +296,7 @@ You can retake only the expressions in the wrong-answer notebook. Individual wro
 ## 💾 Data Storage
 
 - Message translation caches are saved with each chat message and, when applicable, with each swipe. They are not deleted automatically after a set period; they change only when the chat or message is deleted, its source is edited, or a new translation overwrites them.
-- Input and output translation prompt libraries, their independently saved selections, character-specific translation prompts, Phrase Notebook, and study records are saved in SillyTavern user settings. They remain available across devices and characters when you use the same server and user.
+- Input/output translation prompt libraries, saved selections, character-specific prompts, and ordinary options remain in SillyTavern user settings. The Phrase Notebook, quiz history, AI answer-practice history, wrong-answer visibility, and recent practice IDs are kept in the separate per-user server file `data/<user>/files/phrase-desk-learning-v1.json` (URL: `/user/files/phrase-desk-learning-v1.json`). The same SillyTavern user on desktop and mobile loads that server file; reload after making changes on another device. Concurrent edits are conflict-checked, not silently merged.
 - Phrase Desk does not create a separate backup or translation cache in `localStorage` or `IndexedDB`.
 - Debug logs exist only in the current page's memory and disappear when the page is refreshed.
 
@@ -614,7 +614,7 @@ Phrase Desk를 열고 오른쪽 위의 `⚙`을 누릅니다.
 ## 💾 저장 구조
 
 - 메시지 번역 캐시는 각 채팅 메시지와, 스와이프가 있는 경우 각 스와이프에 함께 저장됩니다. 기간이 지나도 자동 삭제되지 않으며, 해당 채팅이나 메시지를 삭제하거나 원문을 수정하거나 재번역으로 덮어쓸 때만 바뀝니다.
-- 전체 번역 프롬프트, 캐릭터별 번역 프롬프트, 표현 노트와 학습 기록은 SillyTavern 사용자 설정에 저장되어 같은 서버·사용자라면 기기와 캐릭터를 바꿔도 이어집니다.
+- 번역 프롬프트·캐릭터별 프롬프트·일반 옵션은 SillyTavern 사용자 설정에 유지됩니다. **표현 노트·시험·AI 답변 연습·오답·최근 학습 기록은 서버 사용자별 `files/phrase-desk-learning-v1.json` 파일로 분리**됩니다. 같은 SillyTavern 사용자로 PC·모바일에서 이용할 수 있으며 다른 기기에서 바뀐 데이터는 새로고침 후 읽습니다. 동시에 수정한 내용은 자동 병합하지 않고 충돌 시 덮어쓰기를 막습니다.
 - Phrase Desk는 `localStorage`나 `IndexedDB`에 별도 백업·번역 캐시를 만들지 않습니다.
 - 디버그 로그는 현재 페이지 메모리에만 있으며 새로고침하면 사라집니다.
 

@@ -2,12 +2,13 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import * as language from './pd-language.js';
 import * as safe from './pd-safe-utils.js';
+import * as learning from './pd-learning-storage.js';
 import * as chunks from './pd-translation-chunks.js';
 import * as presets from './pd-prompt-presets.js';
 import * as inputPresets from './pd-input-prompt-presets.js';
 
 export const identityUi = (parts, ...values) => parts.reduce((out, part, i) => out + part + (i < values.length ? values[i] : ''), '');
-export function loadPhraseDesk({ locale = 'ko-KR', seed = {} } = {}) {
+export function loadPhraseDesk({ locale = 'ko-KR', seed = {}, learningStoreFactory = null } = {}) {
   const source = fs.readFileSync(new URL('./index.js', import.meta.url), 'utf8');
   const context = { chat:[], characters:[], name1:'User', name2:'Character', characterId:0,
     extensionSettings:{connectionManager:{profiles:[{id:'test',name:'Test'}]}}, saveSettings(){}, saveSettingsDebounced(){}, saveChatDebounced(){} };
@@ -20,13 +21,14 @@ export function loadPhraseDesk({ locale = 'ko-KR', seed = {} } = {}) {
     createElement(){return { innerHTML:'', get textContent(){return this.innerHTML.replace(/<[^>]*>/g,'').replace(/&amp;/g,'&');} };},
   };
   const sandbox = {
-    ...language, ...safe, ...chunks, ...presets, ...inputPresets, Math, Date, Set, Map, Intl, Uint8Array, URL, AbortController,
+    ...language, ...safe, ...learning, ...chunks, ...presets, ...inputPresets, Math, Date, Set, Map, Intl, Uint8Array, URL, AbortController,
     console, document, navigator:{language:locale}, window:{SillyTavern:{getContext:()=>context}},
     extension_settings:{'phrase-desk':structuredClone(seed)}, getContext:()=>context,
     getUiLocale:()=>locale, pdT:value=>value, pdUi:identityUi, initPdI18n:async()=>{}, stI18n:{},
     getRequestHeaders:()=>({}), jQuery(){}, $:()=>empty, setTimeout:()=>0, clearTimeout(){},
     requestAnimationFrame(){}, confirm:()=>true,
   };
+  if (learningStoreFactory) sandbox.createPhraseDeskLearningStore = learningStoreFactory;
   vm.createContext(sandbox);
   const code = source.replace(/^import[\s\S]*?;\s*\n/gm, '');
   const names = [...source.matchAll(/^(?:async )?function (\w+)\(/gm)].map(match=>match[1]);

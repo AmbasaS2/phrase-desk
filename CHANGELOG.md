@@ -1,5 +1,14 @@
 # Phrase Desk changelog
 
+## 1.6.2 — 2026-11-20 · Server-file Phrase Notebook and study-history storage
+
+- Storage-only migration: five potentially growing learning arrays (notebook, quizHistory, practiceHistory, hiddenWrongNotes, recentPracticeNoteIds) now persist in /user/files/phrase-desk-learning-v1.json via SillyTavern's built-in per-user /api/files endpoints. Normal settings, custom prompts, and per-message translation caches keep their original format/location. No CSS or other feature change.
+- On first successful migration, save a separately verified phrase-desk-learning-legacy-*.json file BEFORE creating the new store; upload and read the new file back and verify all fields before removing the old arrays from settings.json. The old backup remains for recovery, including after normal learning reset.
+- Startup loads the verified file before registering notebook actions; missing/corrupt/conflicting data blocks study edits instead of silently starting an empty notebook or overwriting the old settings copy. Saves check the current revision and warn instead of overwriting a version changed by another device. This is conflict detection, NOT automatic merging or transactional server locking.
+- Notebook saves, quizzes, AI practice, hidden wrong answers, import, export, reset and calendar now use the separate store. In-flight edits coalesce pending snapshots without rewriting whole SillyTavern settings. Imports/reset commit and verify the file before replacing in-memory data; failed file writes never fall back to storing arrays in settings.json.
+- Node.js regression checks include original features, large notebook migration, verification, interrupted/restarted migration, device conflict, import/reset, and server-write failure. Real installed SillyTavern and browser performance remain unverified.
+- Rollback baseline: 859cb5ea6bb515e81e134217d4ff51c534b187fd. BEFORE reverting code, export learning records to JSON: the previous version does not read the new server file. Do not delete settings.json, the separate server file, or the verified legacy backup.
+
 ## 2026-11-18 UI follow-up — separate input/output prompt libraries (v1.6.1 unchanged)
 
 - Added **Input Translation Prompt** directly above the existing **Output Translation Prompt**, with matching compact SillyTavern theme-style buttons (Save, Save as New, separate JSON Export/Import, Delete, same name/confirmation dialogs). Dropdown defaults are explicitly named **입력 번역 기본 프롬프트** / **출력 번역 기본 프롬프트** in Korean and translated for en/ja/fr/es.

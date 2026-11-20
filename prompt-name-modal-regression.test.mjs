@@ -60,7 +60,7 @@ test('prompt dialog has iRiver-scale title, 26px input, 24px buttons and reduced
   assert.match(buttons,/font-size: 12px !important/);
 });
 
-test('all compact rules are scoped and translation version remains v1.6.1',()=>{
+test('all compact rules are scoped and translation version matches manifest',()=>{
   const start=css.indexOf('/* Compact name/confirmation dialogs in the translation prompt manager only.');
   const boundary=css.indexOf('/* Input prompt library mirrors the established output prompt controls',start);
   const compactCss=css.slice(start,boundary>=0?boundary:undefined);
@@ -69,6 +69,6 @@ test('all compact rules are scoped and translation version remains v1.6.1',()=>{
   assert.ok(selectors.length>=5);
   for(const line of selectors)assert.match(line,/\.pd-preset-compact-modal/);
   const manifest=JSON.parse(fs.readFileSync(new URL('./manifest.json',import.meta.url),'utf8'));
-  assert.equal(manifest.version,'1.6.1');
-  assert.match(js,/const PD_VERSION = "1\.6\.1"/);
+  assert.equal(manifest.version,'1.6.2');
+  assert.match(js,/const PD_VERSION = "1\.6\.2"/);
 });
