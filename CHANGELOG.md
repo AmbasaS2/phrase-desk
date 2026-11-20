@@ -1,5 +1,12 @@
 # Phrase Desk changelog
 
+## 1.6.3 — 2026-11-20 · Native-size extension settings title
+
+- Removed the Phrase Desk-specific drawer-title markup class and three layers of forced size, line-height, inheritance, and display rules. The settings header now uses the same native bold title element as other SillyTavern extension drawers.
+- Preserved the existing chevron icon styling, expanded settings controls, translation features, language assets, learning storage, and all other styles.
+- Added targeted header regression tests and updated the version assertion. All 108 Node.js regression tests passed; final text size in the installed SillyTavern theme awaits visual confirmation.
+- Rollback baseline: b0dbb4f545942f01d2610f10188f39455cc38229; this version changes no saved data.
+
 ## 1.6.2 — 2026-11-20 · Server-file Phrase Notebook and study-history storage
 
 - Storage-only migration: five potentially growing learning arrays (notebook, quizHistory, practiceHistory, hiddenWrongNotes, recentPracticeNoteIds) now persist in /user/files/phrase-desk-learning-v1.json via SillyTavern's built-in per-user /api/files endpoints. Normal settings, custom prompts, and per-message translation caches keep their original format/location. No CSS or other feature change.

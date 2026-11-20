@@ -1045,11 +1045,6 @@ body > .pd-modal-backdrop:not(.pd-modal-in-popover) > .pd-modal {
 
 
 /* 0.12.7 / 1.3.7 patch: safer icon spacing, calendar spacing, stronger learned-day color */
-#phrase-desk-settings .inline-drawer-title {
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 6px !important;
-}
 .pd-cal-week { margin-bottom: 9px !important; }
 .pd-cal-grid { margin-top: 0 !important; }
 .pd-cal-week span { padding-bottom: 2px !important; }
@@ -1443,8 +1438,6 @@ body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal {
 }
 
 
-/* final15: keep the collapsed drawer title at SillyTavern's default size. */
-#phrase-desk-settings .inline-drawer-title { font-size: var(--mainFontSize, 14px) !important; line-height: 1.25 !important; }
 .pd-context small { display:block !important; opacity:.62 !important; font-size: 11px !important; margin-bottom: 4px !important; }
 .pd-context-list .pd-context + .pd-context { margin-top: 7px !important; }
 
@@ -1485,17 +1478,6 @@ body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal {
   line-height: 1.35 !important;
 }
 
-/* final10: restore SillyTavern drawer header/icon. Compact rules must not touch the collapsed extension title or chevron. */
-#phrase-desk-settings > .inline-drawer-toggle,
-#phrase-desk-settings > .inline-drawer-toggle .inline-drawer-title {
-  font-family: inherit !important;
-  font-size: inherit !important;
-  line-height: inherit !important;
-  letter-spacing: inherit !important;
-}
-#phrase-desk-settings > .inline-drawer-toggle .inline-drawer-title {
-  display: inline !important;
-}
 #phrase-desk-settings > .inline-drawer-toggle .inline-drawer-icon,
 #phrase-desk-settings > .inline-drawer-toggle .inline-drawer-icon::before,
 #phrase-desk-settings > .inline-drawer-toggle .fa-solid,
