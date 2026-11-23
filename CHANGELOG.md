@@ -1,5 +1,13 @@
 # Phrase Desk changelog
 
+## 1.6.5 — 2026-11-24 · Group translation prompts in one disclosure
+
+- Replace the three independent disclosure rows with one collapsed-by-default Translation Prompts header (down/up chevron). All three original editors, preset controls, help and save indicators are inside the same group.
+- Move each large-editor button from the heading into a compact right-aligned toolbar immediately above its own textarea; no editor controls remain visible when the group is collapsed.
+- Keep the existing large-editor behavior, read-only defaults, manual preset saving, character autosave and stale-target guards. No prompt content or storage changes.
+- Validation: all 116 Node.js regression tests passed; isolated Chromium UI checks at 320×568, 375×812, 507×700, 812×375 and 1280×900 verified group disclosure, right-aligned editor button placement, draft preservation and existing expanded-editor behavior. Installed SillyTavern/iOS theme validation remains pending.
+- Rollback baseline: `4bf24675a73c044331b62d2eeb3ded33964f51dd`; no user-data migration required.
+
 ## 1.6.4 — 2026-11-24 · Collapsible translation prompts and expanded editor
 
 - Input, output and character-specific prompt sections collapse independently using their title or chevron. Each header also provides a large editor button, including while collapsed. Existing fields, preset toolbars, help and save indicators are retained.

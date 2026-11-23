@@ -54,7 +54,7 @@ function normalizeChatMaxTokens(value) {
   return Number.isFinite(amount) && amount > 0 ? Math.min(32768, Math.max(256, Math.round(amount))) : MAX_TOKENS;
 }
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.6.4";
+const PD_VERSION = "1.6.5";
 const CHAT_TRANSLATION_QUALITY_LIMITS = Object.freeze({
   partialCoverageMin:0.75,
   degradedCoverageMin:0.25,
@@ -4859,78 +4859,65 @@ function setTextArea(el, value) {
   el.dispatchEvent(new Event('change', { bubbles:true }));
 }
 
-// Preserve the original prompt fields, including their existing save handlers.
-function setupPromptSection(editorId, selectorId = '') {
-  const editor = document.getElementById(editorId);
-  const row = editor?.closest('.pd-setting-row');
-  if (!row || row.classList.contains('pd-prompt-section')) return;
-  row.classList.add('pd-prompt-section');
-  let heading = row.querySelector('.pd-preset-heading');
-  if (!heading) {
-    heading = document.createElement('div');
-    heading.className = 'pd-preset-heading';
-    const title = document.createElement('div');
-    title.className = 'pd-preset-title';
-    title.append(row.querySelector('label'));
-    const actions = document.createElement('div');
-    actions.className = 'pd-preset-top-actions';
-    heading.append(title, actions);
-    row.prepend(heading);
-  }
-  const title = heading.querySelector('.pd-preset-title');
-  const label = title.querySelector('label');
-  const actions = heading.querySelector('.pd-preset-top-actions');
+// Keep the existing editors, preset toolbars and save handlers inside one disclosure.
+function setupTranslationPromptGroup() {
+  const fields = [
+    ['pd-input-global-prompt', 'pd-input-preset-select'],
+    ['pd-global-prompt', 'pd-preset-select'],
+    ['pd-char-prompt', ''],
+  ].map(([id, selectorId]) => {
+    const editor = document.getElementById(id);
+    return { editor, selectorId, row: editor?.closest('.pd-setting-row') };
+  });
+  if (fields.some(field => !field.row || field.row.closest('.pd-prompt-group'))) return;
+  const group = document.createElement('div');
+  group.className = 'pd-prompt-group';
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'pd-prompt-group-toggle';
+  toggle.setAttribute('aria-controls', 'pd-prompt-group-body');
+  const title = document.createElement('span');
+  title.textContent = pdT('번역 프롬프트');
+  const arrow = document.createElement('i');
+  arrow.setAttribute('aria-hidden', 'true');
+  toggle.append(title, arrow);
   const body = document.createElement('div');
-  body.id = editorId + '-section';
-  body.className = 'pd-prompt-section-body';
-  for (const child of Array.from(row.children)) {
-    if (child !== heading) body.append(child);
+  body.id = 'pd-prompt-group-body';
+  body.className = 'pd-prompt-group-body';
+  group.append(toggle, body);
+  fields[0].row.before(group);
+  for (const { editor, selectorId, row } of fields) {
+    body.append(row);
+    const label = row.querySelector('label');
+    const tools = document.createElement('div');
+    tools.className = 'pd-prompt-editor-tools';
+    const expand = document.createElement('button');
+    expand.type = 'button';
+    expand.className = 'menu_button margin0 menu_button_icon pd-preset-icon-btn pd-prompt-expand';
+    expand.title = pdT('프롬프트 크게 보기');
+    expand.setAttribute('aria-label', expand.title);
+    const icon = document.createElement('i');
+    icon.className = 'fa-solid fa-expand';
+    icon.setAttribute('aria-hidden', 'true');
+    expand.append(icon);
+    tools.append(expand);
+    editor.before(tools);
+    expand.addEventListener('click', () => {
+      if (!selectorId) refreshCharacterPromptField();
+      openExpandedPrompt(editor, selectorId, label.textContent.trim(), expand);
+    });
   }
-  row.append(body);
-  function iconButton(className, icon, labelText) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'menu_button margin0 menu_button_icon pd-preset-icon-btn ' + className;
-    button.title = pdT(labelText);
-    button.setAttribute('aria-label', button.title);
-    const glyph = document.createElement('i');
-    glyph.className = 'fa-solid ' + icon;
-    glyph.setAttribute('aria-hidden', 'true');
-    button.append(glyph);
-    return button;
-  }
-  const toggle = iconButton('pd-prompt-toggle', 'fa-chevron-down', '프롬프트 접기');
-  toggle.setAttribute('aria-controls', body.id);
-  toggle.setAttribute('aria-expanded', 'true');
-  title.prepend(toggle);
   function setCollapsed(collapsed) {
     body.hidden = collapsed;
-    row.dataset.pdCollapsed = String(collapsed);
     toggle.setAttribute('aria-expanded', String(!collapsed));
-    toggle.title = pdT(collapsed ? '프롬프트 펼치기' : '프롬프트 접기');
-    toggle.setAttribute('aria-label', toggle.title);
-    toggle.firstElementChild.className = 'fa-solid ' + (collapsed ? 'fa-chevron-right' : 'fa-chevron-down');
-    if (collapsed) {
-      const help = title.querySelector('.pd-prompt-help');
-      if (help) help.open = false;
-    }
+    arrow.className = 'fa-solid ' + (collapsed ? 'fa-chevron-down' : 'fa-chevron-up');
+    if (collapsed) body.querySelectorAll('.pd-prompt-help[open]').forEach(help => { help.open = false; });
   }
   toggle.addEventListener('click', () => setCollapsed(!body.hidden));
-  label.addEventListener('click', event => {
-    event.preventDefault();
-    setCollapsed(!body.hidden);
-  });
-  const expand = iconButton('pd-prompt-expand', 'fa-expand', '프롬프트 크게 보기');
-  actions.prepend(expand);
-  expand.addEventListener('click', () => {
-    if (!selectorId) refreshCharacterPromptField();
-    openExpandedPrompt(editor, selectorId, label.textContent.trim(), expand, () => {
-      if (selectorId && body.hidden) setCollapsed(false);
-    });
-  });
+  setCollapsed(true);
 }
 
-function openExpandedPrompt(editor, selectorId, title, opener, onEdited) {
+function openExpandedPrompt(editor, selectorId, title, opener) {
   const isCharacter = !selectorId;
   const targetKey = () => isCharacter ? currentCharPromptKey() : document.getElementById(selectorId)?.value;
   const key = targetKey();
@@ -4968,7 +4955,6 @@ function openExpandedPrompt(editor, selectorId, title, opener, onEdited) {
     lastValue = expanded.value;
     editor.value = lastValue;
     $(editor).trigger('input');
-    onEdited();
   });
   modal.addEventListener('keydown', event => {
     if (event.key === 'Escape') {
@@ -5565,9 +5551,7 @@ function setupSettingsPanel() {
   updateTranslationEngineControl();
   activeCharacterPromptKey = currentCharPromptKey();
   $('#pd-char-prompt').on('focus', function(){ refreshCharacterPromptField(); }).on('input', function(){ if (setCurrentPrompt($(this).val())) { setPromptStatus('char','saving'); saveSettings(); } }).on('change blur', function(){ const key = currentCharPromptKey(); if (key && dirtyCharacterPromptNames.has(key)) saveSettings(true); });
-  setupPromptSection('pd-input-global-prompt', 'pd-input-preset-select');
-  setupPromptSection('pd-global-prompt', 'pd-preset-select');
-  setupPromptSection('pd-char-prompt');
+  setupTranslationPromptGroup();
   $('#pd-clear-chat-cache').on('click', clearCurrentChatTranslationCache);
   $('#pd-open-debug').on('click', () => { $('#pd-debug-panel').toggle(); $('#pd-debug-output').val(debugText()); });
   $('#pd-copy-debug').on('click', (e) => { e.preventDefault(); e.stopPropagation(); copyDebugText(); });

@@ -2403,31 +2403,51 @@ body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal.pd-preset-compact-modal 
 }
 
 
-/* Independent translation prompt sections and expanded editor only. */
-#phrase-desk-settings .pd-prompt-section > .pd-preset-heading {
+/* One translation-prompt disclosure; each editor owns its expand button. */
+#phrase-desk-settings .pd-prompt-group {
+  width: 100% !important;
+  min-width: 0 !important;
+  margin-bottom: 7px !important;
+}
+#phrase-desk-settings .pd-prompt-group-toggle {
   display: flex !important;
   align-items: center !important;
   justify-content: space-between !important;
-  flex-wrap: wrap !important;
-  gap: 4px !important;
+  gap: 8px !important;
   width: 100% !important;
-}
-#phrase-desk-settings .pd-prompt-section .pd-preset-title,
-#phrase-desk-settings .pd-prompt-section .pd-preset-top-actions {
-  display: flex !important;
-  align-items: center !important;
-  gap: 4px !important;
-  min-width: 0 !important;
-}
-#phrase-desk-settings .pd-prompt-section .pd-preset-title {
-  flex: 1 1 auto !important;
-}
-#phrase-desk-settings .pd-prompt-section .pd-preset-title label {
+  padding: 4px 0 !important;
   margin: 0 !important;
-  overflow-wrap: anywhere;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: inherit !important;
+  font: inherit !important;
+  font-weight: 600 !important;
+  text-align: left !important;
+  cursor: pointer !important;
 }
-#phrase-desk-settings .pd-prompt-section .pd-prompt-toggle,
-#phrase-desk-settings .pd-prompt-section .pd-prompt-expand {
+#phrase-desk-settings .pd-prompt-group-toggle i {
+  flex: 0 0 auto !important;
+}
+#phrase-desk-settings .pd-prompt-group-body {
+  width: 100% !important;
+  min-width: 0 !important;
+  padding-top: 5px !important;
+}
+#phrase-desk-settings .pd-prompt-group-body[hidden] {
+  display: none !important;
+}
+#phrase-desk-settings .pd-prompt-editor-tools {
+  display: flex !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  width: 100% !important;
+  margin: 0 0 2px !important;
+}
+#phrase-desk-settings .pd-prompt-editor-tools .pd-prompt-expand {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
   flex: 0 0 auto !important;
   width: min-content !important;
   min-width: 0 !important;
@@ -2435,15 +2455,6 @@ body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal.pd-preset-compact-modal 
   margin: 0 !important;
   font-size: 12px !important;
   line-height: 1 !important;
-}
-#phrase-desk-settings .pd-prompt-section-body {
-  width: 100% !important;
-  min-width: 0 !important;
-}
-#phrase-desk-settings .pd-prompt-section-body[hidden],
-#phrase-desk-settings .pd-prompt-section[data-pd-collapsed="true"] .pd-prompt-help,
-#phrase-desk-settings .pd-prompt-section[data-pd-collapsed="true"] .pd-preset-top-actions > :not(.pd-prompt-expand) {
-  display: none !important;
 }
 body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal.pd-prompt-editor-modal {
   display: flex !important;

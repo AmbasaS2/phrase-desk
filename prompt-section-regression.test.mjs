@@ -21,24 +21,28 @@ function fixture({readOnly=false, character=false}={}) {
   const opener = {isConnected:true, focus(){}};
   let cleanup, closed=0;
   const fn = new Function('editor','selectorId','opener','document','window','$','currentCharPromptKey',
-    'pdT','esc','showModal','closeModals','toast','placeModalInViewport','onEdited','activeCharacterPromptKey',
+    'pdT','esc','showModal','closeModals','toast','placeModalInViewport','activeCharacterPromptKey',
     'setCleanup', 'let modalViewportCleanup; '+body+
-    ";openExpandedPrompt(editor, selectorId, 'Title', opener, onEdited);setCleanup(modalViewportCleanup);");
+    ";openExpandedPrompt(editor, selectorId, 'Title', opener);setCleanup(modalViewportCleanup);");
   fn(editor,character?'':'preset',opener,document,window,()=>({trigger:event=>events.push(event)}),
-    ()=>key,x=>x,x=>x,()=>backdrop,()=>{closed++;cleanup?.()},()=>{},()=>{},()=>events.push('edited'),
+    ()=>key,x=>x,x=>x,()=>backdrop,()=>{closed++;cleanup?.()},()=>{},()=>{},
     'first',value=>cleanup=value);
   return {editor,expanded,events,edit(value){expanded.value=value;listeners.input();},
     switchKey(){key='second';},close(){cleanup();},get closed(){return closed;}};
 }
 
-test('all three existing prompt fields are wired once; hidden sections override host display rules',()=>{
-  for (const call of ["setupPromptSection('pd-input-global-prompt', 'pd-input-preset-select')",
-    "setupPromptSection('pd-global-prompt', 'pd-preset-select')","setupPromptSection('pd-char-prompt')"]) {
-    assert.equal(source.split(call).length,2);
-  }
-  assert.match(source,/body\.hidden = collapsed/);
-  assert.match(source,/toggle\.setAttribute\('aria-expanded', String\(!collapsed\)\)/);
-  assert.match(css,/\.pd-prompt-section-body\[hidden\][\s\S]*?display: none !important/);
+test('one disclosure contains all three existing prompt fields and editor-local expand controls',()=>{
+  assert.equal(source.split('setupTranslationPromptGroup();').length,2);
+  const group = source.slice(source.indexOf('function setupTranslationPromptGroup()'), start);
+  for (const id of ['pd-input-global-prompt','pd-global-prompt','pd-char-prompt']) assert.ok(group.includes(id));
+  assert.match(group,/body\.append\(row\)/);
+  assert.match(group,/editor\.before\(tools\)/);
+  assert.match(group,/body\.hidden = collapsed/);
+  assert.match(group,/toggle\.setAttribute\('aria-expanded', String\(!collapsed\)\)/);
+  assert.match(group,/collapsed \? 'fa-chevron-down' : 'fa-chevron-up'/);
+  assert.match(group,/setCollapsed\(true\)/);
+  assert.match(css,/\.pd-prompt-group-body\[hidden\][\s\S]*?display: none !important/);
+  assert.doesNotMatch(source,/function setupPromptSection\(/);
 });
 
 test('expanded editor uses the original input event and preserves manual-save behavior',()=>{
@@ -47,7 +51,7 @@ test('expanded editor uses the original input event and preserves manual-save be
   f.edit('new draft\n한글');
   assert.equal(f.editor.value,'new draft\n한글');
   f.close();
-  assert.deepEqual(f.events,['input','edited']);
+  assert.deepEqual(f.events,['input']);
 });
 
 test('built-in prompt remains read-only even on synthetic input',()=>{
@@ -64,7 +68,7 @@ test('character editor flushes existing autosave path on close',()=>{
   f.edit('character notes');
   f.close();
   assert.equal(f.editor.value,'character notes');
-  assert.deepEqual(f.events,['input','edited','change']);
+  assert.deepEqual(f.events,['input','change']);
 });
 
 test('stale preset or character changes cannot overwrite a new target',()=>{
