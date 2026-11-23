@@ -1,5 +1,13 @@
 # Phrase Desk changelog
 
+## 1.6.4 — 2026-11-24 · Collapsible translation prompts and expanded editor
+
+- Input, output and character-specific prompt sections collapse independently using their title or chevron. Each header also provides a large editor button, including while collapsed. Existing fields, preset toolbars, help and save indicators are retained.
+- Expanded editing uses the original field's input handlers. Built-in prompts remain read-only; input/output drafts retain explicit Save/Save As behavior, and character prompts retain autosave. A stale preset or character cannot be overwritten from an old expanded editor. No prompt content or saved-data schema changes.
+- The large editor uses the visible viewport, responds to keyboard/viewport resizing, and keeps a close button and a scrollable text area. All five existing UI locale catalogs include the new labels.
+- Validation: Node.js regression suite (including focused prompt-editor tests) and isolated Chromium UI fixture at 320×568, 375×812, 507×700, 812×375 and 1280×900. Actual installed SillyTavern/iOS Safari keyboard and theme are not yet verified.
+- Rollback baseline: `412976c379a535d1cddb6f1c01de63f23027a6ea`. Reverting this UI change requires no user-data migration.
+
 ## 1.6.3 — 2026-11-20 · Native-size extension settings title
 
 - Removed the Phrase Desk-specific drawer-title markup class and three layers of forced size, line-height, inheritance, and display rules. The settings header now uses the same native bold title element as other SillyTavern extension drawers.

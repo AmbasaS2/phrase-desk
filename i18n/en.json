@@ -318,5 +318,13 @@
   "phraseDesk.5456e3a": "Input is translated into the study language.",
   "phraseDesk.ed097f7e": "Output is translated into the translation language.",
   "phraseDesk.c35e9d38": "Phrase Desk sets the language and protects required formatting. Existing language variables still work and are optional.",
-  "phraseDesk.fd43067a": "Rename prompt"
+  "phraseDesk.fd43067a": "Rename prompt",
+  "phraseDesk.c8f0af3a": "Collapse prompt",
+  "phraseDesk.53c338c5": "Expand prompt section",
+  "phraseDesk.3d9c7bd": "Open large prompt editor",
+  "phraseDesk.4c08742a": "Edits are saved automatically.",
+  "phraseDesk.8550c253": "Edits appear in the original field. Use its existing Save button to save.",
+  "phraseDesk.f3c8ddbc": "No current character.",
+  "phraseDesk.738d9163": "The original prompt changed; the large editor was closed.",
+  "phraseDesk.866c7eae": "Close"
 }

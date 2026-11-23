@@ -54,7 +54,7 @@ function normalizeChatMaxTokens(value) {
   return Number.isFinite(amount) && amount > 0 ? Math.min(32768, Math.max(256, Math.round(amount))) : MAX_TOKENS;
 }
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.6.3";
+const PD_VERSION = "1.6.4";
 const CHAT_TRANSLATION_QUALITY_LIMITS = Object.freeze({
   partialCoverageMin:0.75,
   degradedCoverageMin:0.25,
@@ -1188,6 +1188,7 @@ function refreshCharacterPromptField(force = false) {
   const field = $('#pd-char-prompt');
   if (!field.length) return;
   const key = currentCharPromptKey();
+  if (key !== activeCharacterPromptKey && document.querySelector('.pd-prompt-editor-modal[data-pd-prompt-source="pd-char-prompt"]')) closeModals();
   if (!force && key === activeCharacterPromptKey) return;
   if (document.activeElement === field[0] && !force) return;
   activeCharacterPromptKey = key;
@@ -4858,6 +4859,147 @@ function setTextArea(el, value) {
   el.dispatchEvent(new Event('change', { bubbles:true }));
 }
 
+// Preserve the original prompt fields, including their existing save handlers.
+function setupPromptSection(editorId, selectorId = '') {
+  const editor = document.getElementById(editorId);
+  const row = editor?.closest('.pd-setting-row');
+  if (!row || row.classList.contains('pd-prompt-section')) return;
+  row.classList.add('pd-prompt-section');
+  let heading = row.querySelector('.pd-preset-heading');
+  if (!heading) {
+    heading = document.createElement('div');
+    heading.className = 'pd-preset-heading';
+    const title = document.createElement('div');
+    title.className = 'pd-preset-title';
+    title.append(row.querySelector('label'));
+    const actions = document.createElement('div');
+    actions.className = 'pd-preset-top-actions';
+    heading.append(title, actions);
+    row.prepend(heading);
+  }
+  const title = heading.querySelector('.pd-preset-title');
+  const label = title.querySelector('label');
+  const actions = heading.querySelector('.pd-preset-top-actions');
+  const body = document.createElement('div');
+  body.id = editorId + '-section';
+  body.className = 'pd-prompt-section-body';
+  for (const child of Array.from(row.children)) {
+    if (child !== heading) body.append(child);
+  }
+  row.append(body);
+  function iconButton(className, icon, labelText) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'menu_button margin0 menu_button_icon pd-preset-icon-btn ' + className;
+    button.title = pdT(labelText);
+    button.setAttribute('aria-label', button.title);
+    const glyph = document.createElement('i');
+    glyph.className = 'fa-solid ' + icon;
+    glyph.setAttribute('aria-hidden', 'true');
+    button.append(glyph);
+    return button;
+  }
+  const toggle = iconButton('pd-prompt-toggle', 'fa-chevron-down', '프롬프트 접기');
+  toggle.setAttribute('aria-controls', body.id);
+  toggle.setAttribute('aria-expanded', 'true');
+  title.prepend(toggle);
+  function setCollapsed(collapsed) {
+    body.hidden = collapsed;
+    row.dataset.pdCollapsed = String(collapsed);
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+    toggle.title = pdT(collapsed ? '프롬프트 펼치기' : '프롬프트 접기');
+    toggle.setAttribute('aria-label', toggle.title);
+    toggle.firstElementChild.className = 'fa-solid ' + (collapsed ? 'fa-chevron-right' : 'fa-chevron-down');
+    if (collapsed) {
+      const help = title.querySelector('.pd-prompt-help');
+      if (help) help.open = false;
+    }
+  }
+  toggle.addEventListener('click', () => setCollapsed(!body.hidden));
+  label.addEventListener('click', event => {
+    event.preventDefault();
+    setCollapsed(!body.hidden);
+  });
+  const expand = iconButton('pd-prompt-expand', 'fa-expand', '프롬프트 크게 보기');
+  actions.prepend(expand);
+  expand.addEventListener('click', () => {
+    if (!selectorId) refreshCharacterPromptField();
+    openExpandedPrompt(editor, selectorId, label.textContent.trim(), expand, () => {
+      if (selectorId && body.hidden) setCollapsed(false);
+    });
+  });
+}
+
+function openExpandedPrompt(editor, selectorId, title, opener, onEdited) {
+  const isCharacter = !selectorId;
+  const targetKey = () => isCharacter ? currentCharPromptKey() : document.getElementById(selectorId)?.value;
+  const key = targetKey();
+  let lastValue = editor.value;
+  const readOnly = editor.readOnly || (isCharacter && !key);
+  const stillCurrent = () => editor.isConnected && targetKey() === key && editor.value === lastValue
+    && (!isCharacter || activeCharacterPromptKey === key);
+  const hint = readOnly
+    ? pdT(isCharacter ? '현재 캐릭터가 없어요.' : '기본 프롬프트는 읽기 전용이에요. 새 프롬프트로 저장하면 표현 지침을 자유롭게 바꿀 수 있고, 목록에서 기본값으로 돌아갈 수 있어요.')
+    : pdT(isCharacter ? '편집 내용은 자동 저장됩니다.' : '편집 내용은 원래 입력창에 반영됩니다. 저장은 기존 저장 버튼을 사용하세요.');
+  const backdrop = showModal(
+    '<div class="pd-prompt-editor-heading"><h3 id="pd-expanded-prompt-title">' + esc(title) + '</h3>' +
+    '<button class="menu_button" type="button" data-close-modal>' + esc(pdT('닫기')) + '</button></div>' +
+    '<textarea id="pd-expanded-prompt" class="text_pole" aria-labelledby="pd-expanded-prompt-title"></textarea>' +
+    '<div class="pd-prompt-editor-hint">' + esc(hint) + '</div>',
+    { promptEditorLayout: true });
+  const modal = backdrop.find('.pd-prompt-editor-modal')[0];
+  modal.dataset.pdPromptSource = editor.id;
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.setAttribute('aria-labelledby', 'pd-expanded-prompt-title');
+  const expanded = modal.querySelector('textarea');
+  const close = modal.querySelector('[data-close-modal]');
+  expanded.value = lastValue;
+  expanded.readOnly = readOnly;
+  expanded.spellcheck = editor.spellcheck;
+  expanded.placeholder = editor.placeholder;
+  expanded.addEventListener('input', () => {
+    if (readOnly) { expanded.value = lastValue; return; }
+    if (!stillCurrent() || editor.readOnly) {
+      closeModals();
+      toast(pdT('원래 프롬프트가 변경되어 확대 편집창을 닫았습니다.'), 'warn');
+      return;
+    }
+    lastValue = expanded.value;
+    editor.value = lastValue;
+    $(editor).trigger('input');
+    onEdited();
+  });
+  modal.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      closeModals();
+    } else if (event.key === 'Tab') {
+      if (event.shiftKey && document.activeElement === close) {
+        event.preventDefault();
+        expanded.focus();
+      } else if (!event.shiftKey && document.activeElement === expanded) {
+        event.preventDefault();
+        close.focus();
+      }
+    }
+  });
+  const reposition = () => placeModalInViewport(backdrop[0]);
+  window.addEventListener('resize', reposition);
+  window.visualViewport?.addEventListener('resize', reposition);
+  window.visualViewport?.addEventListener('scroll', reposition);
+  modalViewportCleanup = () => {
+    window.removeEventListener('resize', reposition);
+    window.visualViewport?.removeEventListener('resize', reposition);
+    window.visualViewport?.removeEventListener('scroll', reposition);
+    if (isCharacter && !readOnly && stillCurrent()) $(editor).trigger('change');
+    if (opener.isConnected) opener.focus({ preventScroll: true });
+  };
+  reposition();
+  close.focus({ preventScroll: true });
+}
+
 function promptLibraryHelp(input) {
   const direction = input ? '입력은 학습 언어로 번역해요.' : '출력은 번역 언어로 번역해요.';
   const label = input ? '입력 번역 프롬프트 안내' : '출력 번역 프롬프트 안내';
@@ -5423,6 +5565,9 @@ function setupSettingsPanel() {
   updateTranslationEngineControl();
   activeCharacterPromptKey = currentCharPromptKey();
   $('#pd-char-prompt').on('focus', function(){ refreshCharacterPromptField(); }).on('input', function(){ if (setCurrentPrompt($(this).val())) { setPromptStatus('char','saving'); saveSettings(); } }).on('change blur', function(){ const key = currentCharPromptKey(); if (key && dirtyCharacterPromptNames.has(key)) saveSettings(true); });
+  setupPromptSection('pd-input-global-prompt', 'pd-input-preset-select');
+  setupPromptSection('pd-global-prompt', 'pd-preset-select');
+  setupPromptSection('pd-char-prompt');
   $('#pd-clear-chat-cache').on('click', clearCurrentChatTranslationCache);
   $('#pd-open-debug').on('click', () => { $('#pd-debug-panel').toggle(); $('#pd-debug-output').val(debugText()); });
   $('#pd-copy-debug').on('click', (e) => { e.preventDefault(); e.stopPropagation(); copyDebugText(); });
@@ -7631,10 +7776,11 @@ function placeModalInViewport(backdrop) {
   // Only the prompt name/confirmation dialogs use the compact theme-like width.
   // Other Phrase Desk modals retain their existing 720px layout.
   const compactPrompt = modal.classList.contains('pd-preset-compact-modal');
-  const width = compactPrompt
+  const expandedPrompt = modal.classList.contains('pd-prompt-editor-modal');
+  const width = expandedPrompt ? Math.max(0, Math.min(960, v.width - margin * 2)) : compactPrompt
     ? Math.max(260, Math.min(400, v.width - margin * 2))
     : Math.max(280, Math.min(720, v.width - margin * 2));
-  const maxHeight = Math.max(220, Math.min(760, v.height - margin * 2));
+  const maxHeight = expandedPrompt ? Math.max(0, v.height - margin * 2) : Math.max(220, Math.min(760, v.height - margin * 2));
   const set = (el, prop, val) => el.style.setProperty(prop, val, 'important');
   set(backdrop, 'position', 'fixed');
   set(backdrop, 'left', '0');
@@ -7661,13 +7807,24 @@ function placeModalInViewport(backdrop) {
   set(modal, 'overflow-y', modal.classList.contains('pd-explain-modal') ? 'hidden' : 'auto');
   set(modal, 'margin', 'auto');
   set(modal, 'z-index', '2147483001');
+  if (expandedPrompt) {
+    set(backdrop, 'left', v.left + 'px');
+    set(backdrop, 'top', v.top + 'px');
+    set(backdrop, 'right', 'auto');
+    set(backdrop, 'bottom', 'auto');
+    set(backdrop, 'width', v.width + 'px');
+    set(backdrop, 'height', v.height + 'px');
+    set(modal, 'height', maxHeight + 'px');
+    set(modal, 'overflow-y', 'hidden');
+  }
 }
 function showModal(inner, options = {}) {
   closeModals();
   keepPhraseDeskOpen(1200);
   const explainClass = options?.explainLayout === true ? ' pd-explain-modal' : '';
   const compactClass = options?.compactPrompt === true ? ' pd-preset-compact-modal' : '';
-  const backdrop = $(`<div class="pd-modal-backdrop pd-viewport-modal"><div class="pd-modal${explainClass}${compactClass}">${inner}</div></div>`);
+  const promptEditorClass = options?.promptEditorLayout === true ? ' pd-prompt-editor-modal' : '';
+  const backdrop = $(`<div class="pd-modal-backdrop pd-viewport-modal"><div class="pd-modal${explainClass}${compactClass}${promptEditorClass}">${inner}</div></div>`);
   $('body').append(backdrop);
   const doPlace = () => placeModalInViewport(backdrop[0]);
   requestAnimationFrame(doPlace);

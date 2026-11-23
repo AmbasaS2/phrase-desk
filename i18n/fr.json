@@ -318,5 +318,13 @@
   "phraseDesk.5456e3a": "La saisie est traduite dans la langue étudiée.",
   "phraseDesk.ed097f7e": "La sortie est traduite dans la langue de traduction.",
   "phraseDesk.c35e9d38": "Phrase Desk fixe la langue et protège le format requis. Les variables de langue existantes restent compatibles et facultatives.",
-  "phraseDesk.fd43067a": "Renommer le prompt"
+  "phraseDesk.fd43067a": "Renommer le prompt",
+  "phraseDesk.c8f0af3a": "Replier le prompt",
+  "phraseDesk.53c338c5": "Déplier le prompt",
+  "phraseDesk.3d9c7bd": "Ouvrir le grand éditeur de prompt",
+  "phraseDesk.4c08742a": "Les modifications sont enregistrées automatiquement.",
+  "phraseDesk.8550c253": "Les modifications sont reportées dans le champ initial. Utilisez son bouton Enregistrer.",
+  "phraseDesk.f3c8ddbc": "Aucun personnage actuel.",
+  "phraseDesk.738d9163": "Le prompt initial a changé ; le grand éditeur a été fermé.",
+  "phraseDesk.866c7eae": "Fermer"
 }

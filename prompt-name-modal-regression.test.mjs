@@ -69,6 +69,6 @@ test('all compact rules are scoped and translation version matches manifest',()=
   assert.ok(selectors.length>=5);
   for(const line of selectors)assert.match(line,/\.pd-preset-compact-modal/);
   const manifest=JSON.parse(fs.readFileSync(new URL('./manifest.json',import.meta.url),'utf8'));
-  assert.equal(manifest.version,'1.6.3');
-  assert.match(js,/const PD_VERSION = "1\.6\.3"/);
+  assert.equal(manifest.version,'1.6.4');
+  assert.match(js,/const PD_VERSION = "1\.6\.4"/);
 });

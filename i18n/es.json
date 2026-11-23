@@ -318,5 +318,13 @@
   "phraseDesk.5456e3a": "La entrada se traduce al idioma de estudio.",
   "phraseDesk.ed097f7e": "La salida se traduce al idioma de traducción.",
   "phraseDesk.c35e9d38": "Phrase Desk fija el idioma y protege el formato obligatorio. Las variables de idioma existentes siguen funcionando y son opcionales.",
-  "phraseDesk.fd43067a": "Cambiar nombre de la instrucción"
+  "phraseDesk.fd43067a": "Cambiar nombre de la instrucción",
+  "phraseDesk.c8f0af3a": "Contraer el prompt",
+  "phraseDesk.53c338c5": "Expandir la sección del prompt",
+  "phraseDesk.3d9c7bd": "Abrir el editor amplio del prompt",
+  "phraseDesk.4c08742a": "Los cambios se guardan automáticamente.",
+  "phraseDesk.8550c253": "Los cambios se reflejan en el campo original. Usa su botón Guardar para guardarlos.",
+  "phraseDesk.f3c8ddbc": "No hay ningún personaje actual.",
+  "phraseDesk.738d9163": "El prompt original cambió; se cerró el editor amplio.",
+  "phraseDesk.866c7eae": "Cerrar"
 }

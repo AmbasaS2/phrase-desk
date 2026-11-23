@@ -2401,3 +2401,92 @@ body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal.pd-preset-compact-modal 
   font-size: 12px !important;
   line-height: 18px !important;
 }
+
+
+/* Independent translation prompt sections and expanded editor only. */
+#phrase-desk-settings .pd-prompt-section > .pd-preset-heading {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-wrap: wrap !important;
+  gap: 4px !important;
+  width: 100% !important;
+}
+#phrase-desk-settings .pd-prompt-section .pd-preset-title,
+#phrase-desk-settings .pd-prompt-section .pd-preset-top-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  min-width: 0 !important;
+}
+#phrase-desk-settings .pd-prompt-section .pd-preset-title {
+  flex: 1 1 auto !important;
+}
+#phrase-desk-settings .pd-prompt-section .pd-preset-title label {
+  margin: 0 !important;
+  overflow-wrap: anywhere;
+}
+#phrase-desk-settings .pd-prompt-section .pd-prompt-toggle,
+#phrase-desk-settings .pd-prompt-section .pd-prompt-expand {
+  flex: 0 0 auto !important;
+  width: min-content !important;
+  min-width: 0 !important;
+  padding: 3px 5px !important;
+  margin: 0 !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+}
+#phrase-desk-settings .pd-prompt-section-body {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+#phrase-desk-settings .pd-prompt-section-body[hidden],
+#phrase-desk-settings .pd-prompt-section[data-pd-collapsed="true"] .pd-prompt-help,
+#phrase-desk-settings .pd-prompt-section[data-pd-collapsed="true"] .pd-preset-top-actions > :not(.pd-prompt-expand) {
+  display: none !important;
+}
+body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal.pd-prompt-editor-modal {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  box-sizing: border-box !important;
+  padding: 12px !important;
+  border-radius: 10px !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+.pd-prompt-editor-modal .pd-prompt-editor-heading {
+  display: flex !important;
+  flex: 0 0 auto !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+.pd-prompt-editor-modal .pd-prompt-editor-heading h3 {
+  min-width: 0 !important;
+  margin: 0 !important;
+  font-size: 15px !important;
+  overflow-wrap: anywhere;
+}
+.pd-prompt-editor-modal .pd-prompt-editor-heading .menu_button {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  margin: 0 !important;
+}
+.pd-prompt-editor-modal #pd-expanded-prompt {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  height: auto !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+  resize: none !important;
+  font-size: max(16px, var(--pd-user-font-size, 13px)) !important;
+  line-height: 1.5 !important;
+  overflow: auto !important;
+}
+.pd-prompt-editor-modal .pd-prompt-editor-hint {
+  flex: 0 0 auto !important;
+  font-size: 12px !important;
+  line-height: 1.3 !important;
+}
