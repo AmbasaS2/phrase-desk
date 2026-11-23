@@ -641,7 +641,8 @@ function looksLikeInfoBlock(block = '') {
     /\b(?:date|time|weather|location|place|status|state|info|mood|health|hp|mp|inventory|quest|objective)\b/i,
     /(?:날짜|시간|날씨|장소|위치|상태|기분|체력|소지품|목표|퀘스트|정보)/,
     /^\s*[\[【](?:status|state|info|weather|location|date|time|상태|정보|날씨|장소|위치)[\]】]/im,
-    /^\s*(?:[-*+]\s*)?(?:date|time|weather|location|status|날짜|시간|날씨|장소|위치|상태)\s*[:|]/im,
+    // Restrict each heading to one line; \s with /m scans long newline runs repeatedly.
+    /^[ \t]*(?:[-*+][ \t]*)?(?:date|time|weather|location|status|날짜|시간|날씨|장소|위치|상태)[ \t]*[:|]/im,
     /^\s*```\s*(?:status|state|info|yaml|md|markdown|text)\s*$/im,
   ];
   for (const re of markers) if (re.test(t)) score++;
