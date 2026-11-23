@@ -332,11 +332,14 @@ export function cleanOrphanFormatTokens(value = '') {
     const infoish = /[🗓📅📍⏰🕰🕒🌬☁🌧🌫☀🌙❄🔥]|\b(?:date|time|location|place|weather|season)\b|(?:날짜|시간|장소|위치|날씨|계절)/i.test(line);
     return infoish ? ' | ' : '';
   });
+  // Normalize whitespace around pipes in linear time, without lookbehind
+  // (needed for compatibility with older Safari/WebKit versions).
   out = out
-    .replace(/[ \t]*\|[ \t]*/g, ' | ')
-    .replace(/(?:\s*\|\s*){2,}/g, ' | ')
+    .replace(/[ \t]+|\|[ \t]*/g, (part, offset, whole) =>
+      part[0] === '|' ? ' | ' : (whole[offset + part.length] === '|' ? '' : part))
+    .replace(/(^|[^\s])\s*\|(?:\s*\|)+\s*/g, '$1 | ')
     .replace(/^[ \t]*\|[ \t]*/gm, '')
-    .replace(/[ \t]*\|[ \t]*$/gm, '')
+    .replace(/(^|[^ \t])[ \t]*\|[ \t]*$/gm, '$1')
     .replace(/\n{4,}/g, '\n\n\n');
   return out.trim();
 }
