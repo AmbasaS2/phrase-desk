@@ -26,6 +26,8 @@ test('separator cleanup avoids quadratic whitespace scans', () => {
 test('info block recognition preserves ordinary headings without scanning across lines', () => {
   const api = loadPhraseDesk();
   assert.equal(api.looksLikeInfoBlock('Date: Monday\nWeather: cloudy'), true);
+  assert.equal(api.looksLikeInfoBlock('[Status]\nWeather: cloudy'), true);
+  assert.equal(api.looksLikeInfoBlock('```status\nDate: Monday\n```'), true);
   assert.equal(api.looksLikeInfoBlock('- Location | Great Hall'), true);
   assert.equal(api.looksLikeInfoBlock('Just ordinary prose.'), false);
 
