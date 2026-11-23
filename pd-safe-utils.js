@@ -332,11 +332,12 @@ export function cleanOrphanFormatTokens(value = '') {
     const infoish = /[🗓📅📍⏰🕰🕒🌬☁🌧🌫☀🌙❄🔥]|\b(?:date|time|location|place|weather|season)\b|(?:날짜|시간|장소|위치|날씨|계절)/i.test(line);
     return infoish ? ' | ' : '';
   });
+  // Avoid rescanning a long whitespace run at every position (quadratic time).
   out = out
-    .replace(/[ \t]*\|[ \t]*/g, ' | ')
-    .replace(/(?:\s*\|\s*){2,}/g, ' | ')
+    .replace(/(?<![ \t])[ \t]*\|[ \t]*/g, ' | ')
+    .replace(/(?<!\s)\s*\|(?:\s*\|)+\s*/g, ' | ')
     .replace(/^[ \t]*\|[ \t]*/gm, '')
-    .replace(/[ \t]*\|[ \t]*$/gm, '')
+    .replace(/(?<![ \t])[ \t]*\|[ \t]*$/gm, '')
     .replace(/\n{4,}/g, '\n\n\n');
   return out.trim();
 }
