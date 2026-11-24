@@ -1,5 +1,13 @@
 # Phrase Desk changelog
 
+## 1.6.7 — 2026-11-24 · Consolidate advanced settings and prompt controls
+
+- Replace the extra-options heading and separate prompt disclosure with one Advanced settings group, collapsed by default. Opening it displays all four options and all three prompt editors directly, with no nested disclosure. Basic settings and cache controls stay outside.
+- Place expand before export in both preset toolbars, preserving the three aligned action columns below. Place character prompt expand at the right of its heading and restore the textarea's normal width and padding.
+- Keep the native expanded-editor popup, preset saving, character autosave, translations and stored data unchanged.
+- Validation: all 118 Node.js tests passed; Chromium fixtures using the host Popup implementation passed at 320×568, 375×812, 507×700, 812×375 and 1280×900, including group toggling, option and draft preservation, button alignment, and native popup behavior. Installed-theme visual confirmation remains pending.
+- Rollback baseline: `579d2ca97cc1cbb3f67263d673142f068f0441c5`; no user-data migration required.
+
 ## 1.6.6 — 2026-11-24 · Compact prompt controls and native expanded editor
 
 - Put the disclosure chevron immediately after the Translation Prompts title; align both preset-action rows to the same three equal-width and equal-height columns.

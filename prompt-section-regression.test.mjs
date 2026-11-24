@@ -37,18 +37,20 @@ function fixture({readOnly=false, character=false}={}) {
     get removed(){return removed;}};
 }
 
-test('one disclosure contains all three existing prompt fields and editor-local expand controls',()=>{
-  assert.equal(source.split('setupTranslationPromptGroup();').length,2);
-  const group = source.slice(source.indexOf('function setupTranslationPromptGroup()'), start);
+test('one advanced disclosure contains the existing options and all three prompt fields',()=>{
+  assert.equal(source.split('setupAdvancedSettingsGroup();').length,2);
+  const group = source.slice(source.indexOf('function setupAdvancedSettingsGroup()'), start);
   for (const id of ['pd-input-global-prompt','pd-global-prompt','pd-char-prompt']) assert.ok(group.includes(id));
   assert.match(group,/body\.append\(row\)/);
-  assert.match(group,/editor\.before\(wrap\)/);
-  assert.match(group,/wrap\.append\(editor, expand\)/);
+  assert.match(group,/body\.append\(options\)/);
+  assert.match(group,/title\.textContent = pdT\('고급 설정'\)/);
+  assert.match(group,/querySelector\('\.pd-preset-top-actions'\)\.prepend\(expand\)/);
+  assert.match(group,/heading\.append\(label, expand\)/);
   assert.match(group,/body\.hidden = collapsed/);
   assert.match(group,/toggle\.setAttribute\('aria-expanded', String\(!collapsed\)\)/);
   assert.match(group,/collapsed \? 'fa-chevron-down' : 'fa-chevron-up'/);
   assert.match(group,/setCollapsed\(true\)/);
-  assert.match(css,/\.pd-prompt-group-body\[hidden\][\s\S]*?display: none !important/);
+  assert.match(css,/\.pd-advanced-group-body\[hidden\][\s\S]*?display: none !important/);
   assert.doesNotMatch(source,/function setupPromptSection\(/);
 });
 
@@ -64,11 +66,13 @@ test('native popup inherits theme and does not force a full-height dialog',()=>{
   assert.equal(f.removed,1);
 });
 
-test('preset actions share a fixed three-column width and expand occupies no extra row',()=>{
-  assert.match(css,/grid-template-columns: repeat\(3, var\(--pd-preset-button-size\)\)/);
+test('expand precedes export while the original three paired action columns stay aligned',()=>{
+  assert.match(css,/grid-template-columns: repeat\(4, var\(--pd-preset-button-size\)\)/);
   assert.match(css,/grid-template-columns: minmax\(0, 1fr\) repeat\(3, var\(--pd-preset-button-size\)\)/);
-  assert.match(css,/\.pd-prompt-editor-wrap > \.pd-prompt-expand \{[\s\S]*?position: absolute !important/);
-  assert.match(css,/padding-inline-end: 42px !important/);
+  assert.match(css,/\.pd-char-prompt-heading > \.pd-prompt-expand \{/);
+  assert.doesNotMatch(css,/\.pd-prompt-editor-wrap/);
+  assert.doesNotMatch(css,/padding-inline-end: 42px !important/);
+  assert.doesNotMatch(source,/setupTranslationPromptGroup\(/);
 });
 
 test('expanded editor uses the original input event and preserves manual-save behavior',()=>{

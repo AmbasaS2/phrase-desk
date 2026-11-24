@@ -59,8 +59,6 @@
   margin: -3px 0 12px !important;
   padding-bottom: 0 !important;
 }
-#phrase-desk-settings .pd-options-heading { margin-bottom: 4px !important; }
-#phrase-desk-settings .pd-options-heading label { margin-bottom: 0 !important; }
 @media (max-width: 600px) {
   #phrase-desk-settings .pd-translation-controls-row {
     grid-template-columns: minmax(0, 1fr) !important;
@@ -2403,13 +2401,13 @@ body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal.pd-preset-compact-modal 
 }
 
 
-/* One translation-prompt disclosure; each editor owns its expand button. */
-#phrase-desk-settings .pd-prompt-group {
+/* One advanced-settings disclosure containing options and all three prompt editors. */
+#phrase-desk-settings .pd-advanced-group {
   width: 100% !important;
   min-width: 0 !important;
   margin-bottom: 7px !important;
 }
-#phrase-desk-settings .pd-prompt-group-toggle {
+#phrase-desk-settings .pd-advanced-group-toggle {
   display: flex !important;
   align-items: center !important;
   justify-content: flex-start !important;
@@ -2426,33 +2424,33 @@ body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal.pd-preset-compact-modal 
   text-align: left !important;
   cursor: pointer !important;
 }
-#phrase-desk-settings .pd-prompt-group-toggle i {
+#phrase-desk-settings .pd-advanced-group-toggle i {
   flex: 0 0 auto !important;
 }
-#phrase-desk-settings .pd-prompt-group-body {
+#phrase-desk-settings .pd-advanced-group-body {
   width: 100% !important;
   min-width: 0 !important;
   padding-top: 5px !important;
 }
-#phrase-desk-settings .pd-prompt-group-body[hidden] {
+#phrase-desk-settings .pd-advanced-group-body[hidden] {
   display: none !important;
 }
 /* Equal columns on the two preset-action rows; keep the native theme's colors. */
-#phrase-desk-settings .pd-prompt-group .pd-translation-preset-row {
+#phrase-desk-settings .pd-advanced-group .pd-translation-preset-row {
   --pd-preset-button-size: 22px;
 }
-#phrase-desk-settings .pd-prompt-group .pd-translation-preset-row .pd-preset-top-actions {
+#phrase-desk-settings .pd-advanced-group .pd-translation-preset-row .pd-preset-top-actions {
   display: grid !important;
-  grid-template-columns: repeat(3, var(--pd-preset-button-size));
+  grid-template-columns: repeat(4, var(--pd-preset-button-size));
   gap: 4px !important;
 }
-#phrase-desk-settings .pd-prompt-group .pd-translation-preset-row .pd-preset-selection {
+#phrase-desk-settings .pd-advanced-group .pd-translation-preset-row .pd-preset-selection {
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) repeat(3, var(--pd-preset-button-size));
   gap: 4px !important;
 }
-#phrase-desk-settings .pd-prompt-group .pd-preset-top-actions > .pd-preset-icon-btn,
-#phrase-desk-settings .pd-prompt-group .pd-preset-selection > .pd-preset-icon-btn {
+#phrase-desk-settings .pd-advanced-group .pd-preset-top-actions > .pd-preset-icon-btn,
+#phrase-desk-settings .pd-advanced-group .pd-preset-selection > .pd-preset-icon-btn {
   box-sizing: border-box !important;
   width: var(--pd-preset-button-size) !important;
   min-width: var(--pd-preset-button-size) !important;
@@ -2463,31 +2461,33 @@ body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal.pd-preset-compact-modal 
   padding: 0 !important;
   margin: 0 !important;
 }
-/* Overlay the expand button inside the field without covering text or its scrollbar. */
-#phrase-desk-settings .pd-prompt-editor-wrap {
-  position: relative;
-  width: 100% !important;
+/* The character editor has no preset toolbar; use its existing title row. */
+#phrase-desk-settings .pd-advanced-group .pd-preset-title label,
+#phrase-desk-settings .pd-char-prompt-heading > label {
   min-width: 0 !important;
+  overflow-wrap: anywhere;
 }
-#phrase-desk-settings .pd-prompt-editor-wrap > :is(#pd-input-global-prompt, #pd-global-prompt, #pd-char-prompt) {
-  display: block !important;
+#phrase-desk-settings .pd-char-prompt-heading {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 4px !important;
+  margin-bottom: 3px !important;
+}
+#phrase-desk-settings .pd-char-prompt-heading > label {
   margin: 0 !important;
-  padding-inline-end: 42px !important;
 }
-#phrase-desk-settings .pd-prompt-editor-wrap > .pd-prompt-expand {
-  position: absolute !important;
-  top: 4px !important;
-  inset-inline-end: 18px !important;
-  z-index: 1;
+#phrase-desk-settings .pd-char-prompt-heading > .pd-prompt-expand {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  box-sizing: border-box !important;
-  width: 20px !important;
-  min-width: 20px !important;
-  max-width: 20px !important;
-  height: 20px !important;
-  min-height: 20px !important;
+  flex: 0 0 22px !important;
+  width: 22px !important;
+  min-width: 22px !important;
+  max-width: 22px !important;
+  height: 22px !important;
+  min-height: 22px !important;
+  max-height: 22px !important;
   padding: 0 !important;
   margin: 0 !important;
   font-size: 12px !important;

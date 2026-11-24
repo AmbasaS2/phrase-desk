@@ -55,7 +55,7 @@ function normalizeChatMaxTokens(value) {
   return Number.isFinite(amount) && amount > 0 ? Math.min(32768, Math.max(256, Math.round(amount))) : MAX_TOKENS;
 }
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.6.6";
+const PD_VERSION = "1.6.7";
 const CHAT_TRANSLATION_QUALITY_LIMITS = Object.freeze({
   partialCoverageMin:0.75,
   degradedCoverageMin:0.25,
@@ -4861,8 +4861,8 @@ function setTextArea(el, value) {
   el.dispatchEvent(new Event('change', { bubbles:true }));
 }
 
-// Keep the existing editors, preset toolbars and save handlers inside one disclosure.
-function setupTranslationPromptGroup() {
+// Keep the existing options, editors and save handlers inside one advanced-settings disclosure.
+function setupAdvancedSettingsGroup() {
   const fields = [
     ['pd-input-global-prompt', 'pd-input-preset-select'],
     ['pd-global-prompt', 'pd-preset-select'],
@@ -4871,28 +4871,28 @@ function setupTranslationPromptGroup() {
     const editor = document.getElementById(id);
     return { editor, selectorId, row: editor?.closest('.pd-setting-row') };
   });
-  if (fields.some(field => !field.row || field.row.closest('.pd-prompt-group'))) return;
+  const options = document.getElementById('pd-bilingual-blur')?.closest('.pd-option-row');
+  if (!options || options.closest('.pd-advanced-group') || fields.some(field => !field.row)) return;
   const group = document.createElement('div');
-  group.className = 'pd-prompt-group';
+  group.className = 'pd-advanced-group';
   const toggle = document.createElement('button');
   toggle.type = 'button';
-  toggle.className = 'pd-prompt-group-toggle';
-  toggle.setAttribute('aria-controls', 'pd-prompt-group-body');
+  toggle.className = 'pd-advanced-group-toggle';
+  toggle.setAttribute('aria-controls', 'pd-advanced-group-body');
   const title = document.createElement('span');
-  title.textContent = pdT('번역 프롬프트');
+  title.textContent = pdT('고급 설정');
   const arrow = document.createElement('i');
   arrow.setAttribute('aria-hidden', 'true');
   toggle.append(title, arrow);
   const body = document.createElement('div');
-  body.id = 'pd-prompt-group-body';
-  body.className = 'pd-prompt-group-body';
+  body.id = 'pd-advanced-group-body';
+  body.className = 'pd-advanced-group-body';
   group.append(toggle, body);
-  fields[0].row.before(group);
+  options.before(group);
+  body.append(options);
   for (const { editor, selectorId, row } of fields) {
     body.append(row);
     const label = row.querySelector('label');
-    const wrap = document.createElement('div');
-    wrap.className = 'pd-prompt-editor-wrap';
     const expand = document.createElement('button');
     expand.type = 'button';
     expand.className = 'menu_button margin0 menu_button_icon pd-preset-icon-btn pd-prompt-expand';
@@ -4902,8 +4902,15 @@ function setupTranslationPromptGroup() {
     icon.className = 'fa-solid fa-expand';
     icon.setAttribute('aria-hidden', 'true');
     expand.append(icon);
-    editor.before(wrap);
-    wrap.append(editor, expand);
+    if (selectorId) {
+      // Keep the existing six preset actions aligned; expand sits before export.
+      row.querySelector('.pd-preset-top-actions').prepend(expand);
+    } else {
+      const heading = document.createElement('div');
+      heading.className = 'pd-char-prompt-heading';
+      label.before(heading);
+      heading.append(label, expand);
+    }
     expand.addEventListener('click', () => {
       if (!selectorId) refreshCharacterPromptField();
       openExpandedPrompt(editor, selectorId, label.textContent.trim(), expand);
@@ -5528,9 +5535,6 @@ function setupSettingsPanel() {
     $('<div>', { class:'pd-setting-help', text:pdT('모델의 출력 한도를 넘어서면 번역 요청이 실패할 수 있습니다.') })
   ));
   $('#pd-target-custom').next('.pd-setting-help').addClass('pd-language-help');
-  $('<div>', { class:'pd-setting-row pd-options-heading' })
-    .append($('<label>', { text:pdT('추가 옵션') }))
-    .insertBefore($('#pd-bilingual-blur').closest('.pd-option-row'));
   // Character-specific prompts retain their existing automatic save indicator.
   const initialStatus = pdT('자동 저장됨 ✓');
   $('<div>',{ class:'pd-prompt-actions pd-char-prompt-actions' })
@@ -5567,7 +5571,7 @@ function setupSettingsPanel() {
   updateTranslationEngineControl();
   activeCharacterPromptKey = currentCharPromptKey();
   $('#pd-char-prompt').on('focus', function(){ refreshCharacterPromptField(); }).on('input', function(){ if (setCurrentPrompt($(this).val())) { setPromptStatus('char','saving'); saveSettings(); } }).on('change blur', function(){ const key = currentCharPromptKey(); if (key && dirtyCharacterPromptNames.has(key)) saveSettings(true); });
-  setupTranslationPromptGroup();
+  setupAdvancedSettingsGroup();
   $('#pd-clear-chat-cache').on('click', clearCurrentChatTranslationCache);
   $('#pd-open-debug').on('click', () => { $('#pd-debug-panel').toggle(); $('#pd-debug-output').val(debugText()); });
   $('#pd-copy-debug').on('click', (e) => { e.preventDefault(); e.stopPropagation(); copyDebugText(); });
