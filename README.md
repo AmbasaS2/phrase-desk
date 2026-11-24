@@ -47,6 +47,8 @@ Translation caches are separate by source/swipe and target language. Changing la
 
 Set the translation method and related options under **Extensions → Phrase Desk**.
 
+**Translation settings** groups the connection, engine, translation mode, token limit, and language controls. It starts expanded and remembers your last open/closed choice. **Advanced settings** starts collapsed and contains the four extra options and all three prompt editors. The cache controls remain outside these groups.
+
 **Translation Connection**
 
 | Setting | Description |
@@ -95,11 +97,11 @@ Set the translation method and related options under **Extensions → Phrase Des
 | **Show the Input-box Aa Button** | The fourth checkbox shows or hides only the composer quick-menu button. Selection `Aa` and the wand-menu entry remain available. |
 | **Current Character Prompt** | Adds rules needed only for the current character, such as names, gender, forms of address, voice, and proper nouns. |
 
-Phrase Desk ships **one read-only built-in input prompt and one read-only built-in output prompt**, each with its own named custom library and last-saved selection. The **input editor is above the output editor**. Choose **Save as New** to copy the displayed prompt into a named custom entry; edit it, then press the **disk Save** button. Switching the dropdown or typing alone does not change the active prompt. JSON Import/Export and deletion are available separately for each type; input JSON uses `phrase-desk-input-translation-prompt`, output JSON keeps the earlier `phrase-desk-translation-prompt` format. Old output prompts migrate unchanged as **기존 전체 프롬프트**, never into the input library. The input path no longer prepends the output literary prompt: its independent instructions resolve `{{target_language}}` to the study language; the output path resolves the same placeholder to the output language. The current-character name/register references and previous-output reference continue to support input translation. PDU/PD_FMT contracts remain internal to output translation. Google Translation does not use prompt text.
+Phrase Desk ships **one read-only built-in input prompt and one read-only built-in output prompt**, each with its own named custom library and last-saved selection. The **input editor is above the output editor**. Choose **Save as New** to copy the displayed prompt into a named custom entry; edit it, then press the **disk Save** button. Switching the dropdown or typing alone does not change the active prompt. Renaming custom prompts, JSON Import/Export, and deletion are available separately for each type; input JSON uses `phrase-desk-input-translation-prompt`, output JSON keeps the earlier `phrase-desk-translation-prompt` format. Old output prompts migrate unchanged as **기존 전체 프롬프트**, never into the input library. The input path no longer prepends the output literary prompt: its independent instructions resolve `{{target_language}}` to the study language; the output path resolves the same placeholder to the output language. The current-character name/register references and previous-output reference continue to support input translation. PDU/PD_FMT contracts remain internal to output translation. Google Translation does not use prompt text.
 
 Enabling automatic translation may create a translation request whenever a new message arrives. Connection Profile translation is affected by the selected model and preset.
 
-Each **input/output translation prompt selector and editor** has its own disk Save button; Save as New, Import, and confirmed Delete save their named action immediately. Unsaved changes require an in-page confirmation before switching. Both saved selections survive refresh/restart independently. The **Current Character Prompt** still auto-saves. Changing output prompts does not erase existing translations or automatically retranslate; hold `🌐` to request a new translation.
+Each **input/output translation prompt selector and editor** has its own disk Save button; Save as New, Rename, Import, and confirmed Delete save their named action immediately. Unsaved changes require an in-page confirmation before switching. Both saved selections survive refresh/restart independently. The **Current Character Prompt** still auto-saves. Use the expand icon on any of the three editors to open a larger editor in SillyTavern's native popup; the same read-only, explicit-save, or auto-save rules apply. Changing output prompts does not erase existing translations or automatically retranslate; hold `🌐` to request a new translation.
 
 The Current Character Prompt is saved by character name rather than by chat. Character cards with exactly the same name share that prompt, and renaming a character may leave the prompt field for the new name empty until you set it again.
 
@@ -115,6 +117,8 @@ The Current Character Prompt is saved by character name rather than by chat. Cha
 Translation results are saved with the chat. When you view the same message again, or return after swiping to another response, Phrase Desk restores the saved translation when one is available.
 
 Translations are stored separately for the currently selected swipe. Moving between swipes restores only the translation saved for that swipe, and editing its source text clears that swipe's stale translation cache. A fresh translation always starts from the preserved source, never from the translation currently displayed.
+
+Very long chat messages may be split into larger chunks at protected translation-unit boundaries for Connection Profile translation, or by encoded request size for Quick Google Translation, and assembled for display. This can require more than one request; normal-length messages are not translated sentence by sentence.
 
 For messages containing HTML or custom tags, Phrase Desk protects tags and attributes according to the source. If a model changes or omits some protection markers, Phrase Desk does not discard the entire response for that reason alone. It restores safely matched structure and translated units where possible; when exact alignment remains incomplete, it displays a sanitized selected-language fallback from the received response. Press and hold `🌐` only when you want a fresh translation.
 
@@ -138,7 +142,7 @@ To translate again without using saved translations, enter:
 /pd-translate-all force=true
 ```
 
-`force=true` is an option added to `/pd-translate-all`, not a separate command. Messages currently displayed on the screen are translated in order using the selected translation engine and chat translation mode.
+`force=true` is an option added to `/pd-translate-all`, not a separate command. Messages loaded on the current screen are translated in order using the selected translation engine and chat translation mode. Hidden-from-prompt messages are also included so their translations are ready when unhidden; ordinary older messages not loaded on screen are not included.
 
 **Input-box Translation**
 
@@ -365,6 +369,8 @@ It is a good idea to export important Phrase Notebook and study records as a bac
 
 **Extensions → Phrase Desk**에서 번역 방식과 관련 설정을 조절합니다.
 
+**번역 설정**에는 연결 프로필, 번역 엔진, 번역 방식, 토큰 한도와 언어 설정이 모여 있습니다. 기본적으로 펼쳐져 있으며 마지막 접기·펼치기 상태를 기억합니다. **고급 설정**은 기본적으로 접혀 있고, 네 가지 추가 옵션과 세 프롬프트 편집기를 포함합니다. 캐시 관리 항목은 두 그룹 바깥에 있습니다.
+
 **번역 연결**
 
 | 설정 | 설명 |
@@ -401,23 +407,23 @@ It is a good idea to export important Phrase Notebook and study records as a bac
 | 설정 | 설명 |
 |---|---|
 | **병기 번역 뜻 블러 처리** | 번역된 뜻을 흐리게 가리고, 마우스를 올리거나 탭했을 때 확인합니다. |
-| **병기 번역을 주석으로 보기** | 한국어 번역을 번호 주석으로 정리합니다. 본문 번호를 누르면 번역이 팝업으로 열리고, 아래 주석 영역은 접고 펼칠 수 있습니다. 블러를 켜면 주석에도 적용됩니다. |
+| **병기 번역을 주석으로 보기** | 선택한 언어의 번역을 번호 주석으로 정리합니다. 본문 번호를 누르면 번역이 팝업으로 열리고, 아래 주석 영역은 접고 펼칠 수 있습니다. 블러를 켜면 주석에도 적용됩니다. |
 
 **입력과 번역 규칙**
 
 | 설정 | 설명 |
 |---|---|
 | **보내기 전 입력 교정** | 학습 언어로 작성한 메시지를 보내기 전에 추천문과 교정 이유를 보여줍니다. |
-| **입력 번역 프롬프트** | 내가 입력한 글을 번역할 때 사용합니다. 입력 전용 기본·커스텀 프롬프트를 선택하고, 출력과 똑같이 저장·새 프롬프트로 저장·JSON 내보내기/가져오기·삭제를 지원합니다. |
+| **입력 번역 프롬프트** | 내가 입력한 글을 번역할 때 사용합니다. 입력 전용 기본·커스텀 프롬프트를 선택하고, 출력과 똑같이 저장·새 프롬프트로 저장·이름 변경·JSON 내보내기/가져오기·삭제를 지원합니다. |
 | **출력 번역 프롬프트** | 채팅 메시지 번역에 사용합니다. 기존 기본 프롬프트·커스텀 목록·마지막 선택을 그대로 유지하며, 입력 번역과 분리됩니다. |
 | **입력창 Aa 버튼 표시** | 네 번째 체크 항목입니다. 입력창의 빠른 메뉴 버튼만 숨기거나 표시합니다. 드래그 선택 Aa와 요술봉 메뉴는 유지됩니다. |
 | **현재 캐릭터 전용 프롬프트** | 이름, 성별, 호칭, 말투, 고유명사처럼 현재 캐릭터에게만 필요한 규칙을 적습니다. |
 
-**입력 번역 기본 프롬프트와 출력 번역 기본 프롬프트를 각각 하나씩 내장**하며, 두 기본값은 읽기 전용입니다. 입력 영역은 출력 영역 위에 있고 두 영역 모두 독립된 커스텀 목록을 갖습니다. 현재 내용을 복사해 새로 만들려면 **새 프롬프트로 저장** 아이콘을 누르고 이름을 붙인 뒤, 내용을 편집해 디스켓 **저장**으로 확정하세요. 드롭다운에서 고르거나 입력만 해서는 실제 번역에 반영되지 않습니다. 가져오기/내보내기는 각 영역에서 한 프롬프트씩 처리하며 입력 JSON과 출력 JSON의 형식은 구분됩니다. 기존 출력 전체 프롬프트·커스텀 저장본은 **출력 쪽에 그대로 유지**되고 입력 기본값으로 복사되지 않습니다. 입력 번역은 선택한 입력 프롬프트만 사용하되 기존 캐릭터 이름·말투 참고 정보 및 이전 출력 참고 기능은 유지합니다. `{{target_language}}`는 입력 번역에서는 학습 언어, 출력 번역에서는 번역 언어로 바뀝니다. 출력의 PDU/PD_FMT 보호 규칙은 별도로 유지되고, 구글 간편 번역은 프롬프트를 사용하지 않습니다.
+**입력 번역 기본 프롬프트와 출력 번역 기본 프롬프트를 각각 하나씩 내장**하며, 두 기본값은 읽기 전용입니다. 입력 영역은 출력 영역 위에 있고 두 영역 모두 독립된 커스텀 목록을 갖습니다. 현재 내용을 복사해 새로 만들려면 **새 프롬프트로 저장** 아이콘을 누르고 이름을 붙인 뒤, 내용을 편집해 디스켓 **저장**으로 확정하세요. 드롭다운에서 고르거나 입력만 해서는 실제 번역에 반영되지 않습니다. 커스텀 프롬프트는 이름을 변경할 수도 있습니다. 가져오기/내보내기는 각 영역에서 한 프롬프트씩 처리하며 입력 JSON과 출력 JSON의 형식은 구분됩니다. 기존 출력 전체 프롬프트·커스텀 저장본은 **출력 쪽에 그대로 유지**되고 입력 기본값으로 복사되지 않습니다. 입력 번역은 선택한 입력 프롬프트만 사용하되 기존 캐릭터 이름·말투 참고 정보 및 이전 출력 참고 기능은 유지합니다. `{{target_language}}`는 입력 번역에서는 학습 언어, 출력 번역에서는 번역 언어로 바뀝니다. 출력의 PDU/PD_FMT 보호 규칙은 별도로 유지되고, 구글 간편 번역은 프롬프트를 사용하지 않습니다.
 
 자동 번역을 켜면 새 메시지가 도착할 때마다 번역 요청이 생길 수 있습니다. 연결 프로필 번역 결과는 선택한 모델과 프리셋의 영향을 받습니다.
 
-**입력과 출력의 프롬프트 선택·내용은 각자의 디스켓 저장 버튼으로 확정**합니다. 각각 마지막으로 저장한 선택을 새로고침·브라우저 재실행·서버 재시작 후에도 복원합니다. 새 프롬프트로 저장·가져오기·삭제 확인은 각 영역에서 독립적으로 동작하며, 미저장 수정 내용은 해당 번역에 적용되지 않습니다. **현재 캐릭터 전용 프롬프트는 기존대로 자동 저장**됩니다. 기존 출력 번역 캐시는 그대로 남고, 새 출력 프롬프트로 다시 번역하려면 🌐을 길게 누르면 됩니다.
+**입력과 출력의 프롬프트 선택·내용은 각자의 디스켓 저장 버튼으로 확정**합니다. 각각 마지막으로 저장한 선택을 새로고침·브라우저 재실행·서버 재시작 후에도 복원합니다. 새 프롬프트로 저장·이름 변경·가져오기·삭제 확인은 각 영역에서 독립적으로 동작하며, 미저장 수정 내용은 해당 번역에 적용되지 않습니다. **현재 캐릭터 전용 프롬프트는 기존대로 자동 저장**됩니다. 세 편집기의 크게 보기 아이콘을 누르면 SillyTavern 기본 팝업에서 넓게 편집할 수 있으며, 읽기 전용·수동 저장·자동 저장 규칙은 그대로 적용됩니다. 기존 출력 번역 캐시는 그대로 남고, 새 출력 프롬프트로 다시 번역하려면 🌐을 길게 누르면 됩니다.
 
 현재 캐릭터 전용 프롬프트는 채팅방이 아니라 캐릭터 이름을 기준으로 저장됩니다. 이름이 완전히 같은 캐릭터 카드는 같은 프롬프트를 공유하며, 캐릭터 이름을 바꾸면 새 이름의 프롬프트 칸은 다시 설정하기 전까지 비어 보일 수 있습니다.
 
@@ -433,6 +439,8 @@ It is a good idea to export important Phrase Notebook and study records as a bac
 번역 결과는 채팅방에 저장됩니다. 같은 메시지를 다시 보거나, 스와이프로 다른 응답을 본 뒤 돌아와도 저장된 번역이 있으면 다시 표시됩니다.
 
 번역은 현재 선택한 스와이프마다 따로 저장됩니다. 스와이프를 오갈 때는 해당 스와이프에 저장된 번역만 복원되며, 원문을 수정하면 수정한 스와이프의 오래된 번역 캐시가 지워집니다. 새 번역과 재번역은 화면에 보이는 번역문이 아니라 보존된 원문에서 시작합니다.
+
+아주 긴 채팅 메시지는 연결 프로필의 경우 보호된 번역 단위 경계에서, 구글 간편 번역의 경우 인코딩된 요청 크기를 기준으로 큰 구간으로 나누어 번역한 뒤 합쳐 표시할 수 있습니다. 이 경우 요청이 여러 번 발생할 수 있지만 일반 길이의 메시지를 문장마다 따로 번역하지는 않습니다.
 
 HTML이나 사용자 정의 태그가 있는 메시지는 태그와 속성을 원문 기준으로 보호합니다. 모델이 보호 표시를 일부 바꾸거나 빠뜨려도 그것만으로 전체 결과를 버리지 않습니다. 안전하게 맞출 수 있는 구조와 번역 단위를 가능한 만큼 복원하고, 정확한 정렬이 끝까지 되지 않으면 받은 응답을 정리한 선택 언어 번역본을 하나의 폴백으로 표시합니다. 번역 결과가 마음에 들지 않을 때만 메시지 옆 `🌐`을 길게 눌러 직접 재번역하면 됩니다.
 
@@ -456,7 +464,7 @@ HTML이나 사용자 정의 태그가 있는 메시지는 태그와 속성을 �
 /pd-translate-all force=true
 ```
 
-`force=true`는 별도 명령어가 아니라 `/pd-translate-all`에 붙이는 옵션입니다. 현재 화면에 표시된 메시지를 순서대로 번역하며, 선택한 번역 엔진과 채팅 번역 방식을 따릅니다.
+`force=true`는 별도 명령어가 아니라 `/pd-translate-all`에 붙이는 옵션입니다. 현재 화면에 불러와진 메시지를 순서대로 번역하며, 선택한 번역 엔진과 채팅 번역 방식을 따릅니다. 프롬프트에서 숨긴 메시지도 숨김 해제 후 번역을 볼 수 있도록 포함하지만, 화면에 불러오지 않은 일반 과거 메시지는 포함하지 않습니다.
 
 **입력창 번역**
 
