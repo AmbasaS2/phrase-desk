@@ -55,7 +55,7 @@ function normalizeChatMaxTokens(value) {
   return Number.isFinite(amount) && amount > 0 ? Math.min(32768, Math.max(256, Math.round(amount))) : MAX_TOKENS;
 }
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.6.7";
+const PD_VERSION = "1.6.8";
 const CHAT_TRANSLATION_QUALITY_LIMITS = Object.freeze({
   partialCoverageMin:0.75,
   degradedCoverageMin:0.25,
@@ -4883,7 +4883,10 @@ function setupAdvancedSettingsGroup() {
   title.textContent = pdT('고급 설정');
   const arrow = document.createElement('i');
   arrow.setAttribute('aria-hidden', 'true');
-  toggle.append(title, arrow);
+  const settingsIcon = document.createElement('i');
+  settingsIcon.className = 'fa-solid fa-sliders';
+  settingsIcon.setAttribute('aria-hidden', 'true');
+  toggle.append(settingsIcon, title, arrow);
   const body = document.createElement('div');
   body.id = 'pd-advanced-group-body';
   body.className = 'pd-advanced-group-body';

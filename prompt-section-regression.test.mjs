@@ -54,6 +54,15 @@ test('one advanced disclosure contains the existing options and all three prompt
   assert.doesNotMatch(source,/function setupPromptSection\(/);
 });
 
+test('advanced disclosure is a single theme-aware callout with a full-width header',()=>{
+  assert.match(source,/settingsIcon\.className = 'fa-solid fa-sliders'/);
+  const style = css.slice(css.indexOf('#phrase-desk-settings .pd-advanced-group {'),css.indexOf('/* Equal columns on the two preset-action rows'));
+  assert.match(style,/border: 1px solid var\(--SmartThemeBorderColor/);
+  assert.match(style,/color-mix\(in srgb, var\(--SmartThemeBodyColor/);
+  assert.match(style,/\.pd-advanced-group-toggle \{[\s\S]*?width: 100% !important/);
+  assert.match(style,/\.pd-advanced-group-body \{[\s\S]*?border-top: 1px solid var\(--SmartThemeBorderColor/);
+});
+
 test('native popup inherits theme and does not force a full-height dialog',()=>{
   const f=fixture();
   assert.equal(f.options.okButton,false);

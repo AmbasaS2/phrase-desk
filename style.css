@@ -2403,20 +2403,27 @@ body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal.pd-preset-compact-modal 
 
 /* One advanced-settings disclosure containing options and all three prompt editors. */
 #phrase-desk-settings .pd-advanced-group {
+  box-sizing: border-box !important;
   width: 100% !important;
   min-width: 0 !important;
-  margin-bottom: 7px !important;
+  margin: 8px 0 7px !important;
+  padding: 0 !important;
+  border: 1px solid var(--SmartThemeBorderColor, rgba(127, 127, 127, 0.3)) !important;
+  border-radius: 9px !important;
+  background: rgba(127, 127, 127, 0.05) !important;
+  background: color-mix(in srgb, var(--SmartThemeBodyColor, currentColor) 5%, transparent) !important;
 }
 #phrase-desk-settings .pd-advanced-group-toggle {
   display: flex !important;
   align-items: center !important;
-  justify-content: flex-start !important;
-  gap: 5px !important;
-  width: fit-content !important;
-  padding: 4px 0 !important;
+  gap: 7px !important;
+  width: 100% !important;
+  min-height: 34px !important;
+  padding: 6px 9px !important;
   margin: 0 !important;
   background: transparent !important;
   border: 0 !important;
+  border-radius: 8px !important;
   box-shadow: none !important;
   color: inherit !important;
   font: inherit !important;
@@ -2424,13 +2431,22 @@ body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal.pd-preset-compact-modal 
   text-align: left !important;
   cursor: pointer !important;
 }
+#phrase-desk-settings .pd-advanced-group-toggle > span {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+}
 #phrase-desk-settings .pd-advanced-group-toggle i {
   flex: 0 0 auto !important;
 }
+#phrase-desk-settings .pd-advanced-group-toggle > i:last-child {
+  opacity: .7;
+}
 #phrase-desk-settings .pd-advanced-group-body {
+  box-sizing: border-box !important;
   width: 100% !important;
   min-width: 0 !important;
-  padding-top: 5px !important;
+  padding: 8px 9px !important;
+  border-top: 1px solid var(--SmartThemeBorderColor, rgba(127, 127, 127, 0.2));
 }
 #phrase-desk-settings .pd-advanced-group-body[hidden] {
   display: none !important;

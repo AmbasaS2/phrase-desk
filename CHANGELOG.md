@@ -1,5 +1,12 @@
 # Phrase Desk changelog
 
+## 1.6.8 — 2026-11-24 · Theme-aware advanced settings callout
+
+- Wrap the existing advanced settings disclosure and its entire body in a compact, theme-aware card, inspired by the Lorebook Manager settings card. Add the sliders icon, full-width clickable heading, right-aligned chevron, subtle background, and open-state divider.
+- Keep default collapse, all settings, preset controls, native editor popup, and stored data unchanged.
+- Validation: 119 Node.js tests passed; Chromium fixtures passed at 320×568, 375×812, 507×700, 812×375 and 1280×900, including the callout geometry, controls, drafts and native popup. Installed-theme visual confirmation remains pending.
+- Rollback baseline: `67af389233cb4449312beb82da176e122e7579c8`; no user-data migration required.
+
 ## 1.6.7 — 2026-11-24 · Consolidate advanced settings and prompt controls
 
 - Replace the extra-options heading and separate prompt disclosure with one Advanced settings group, collapsed by default. Opening it displays all four options and all three prompt editors directly, with no nested disclosure. Basic settings and cache controls stay outside.
