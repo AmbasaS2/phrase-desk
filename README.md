@@ -49,6 +49,10 @@ Set the translation method and related options under **Extensions → Phrase Des
 
 **Translation settings** groups the connection, engine, translation mode, token limit, and language controls. It starts expanded and remembers your last open/closed choice. **Advanced settings** starts collapsed and contains the four extra options and all three prompt editors. The cache controls remain outside these groups.
 
+<p align="center">
+  <a href="assets/readme/mobile/phrase-desk-translation-settings-mobile.png"><img src="assets/readme/mobile/phrase-desk-translation-settings-mobile.png" alt="Translation settings panel (v1.6.9 UI illustration)" width="860" /></a>
+</p>
+
 **Translation Connection**
 
 | Setting | Description |
@@ -89,6 +93,10 @@ Set the translation method and related options under **Extensions → Phrase Des
 
 **Input and Translation Rules**
 
+<p align="center">
+  <a href="assets/readme/mobile/phrase-desk-advanced-settings-mobile.png"><img src="assets/readme/mobile/phrase-desk-advanced-settings-mobile.png" alt="Advanced settings and three prompt editors (v1.6.9 UI illustration)" width="860" /></a>
+</p>
+
 | Setting | Description |
 |---|---|
 | **Correct Input Before Sending** | Shows a suggested sentence and a short explanation before a message in the selected study language is sent. |
@@ -102,6 +110,10 @@ Phrase Desk ships **one read-only built-in input prompt and one read-only built-
 Enabling automatic translation may create a translation request whenever a new message arrives. Connection Profile translation is affected by the selected model and preset.
 
 Each **input/output translation prompt selector and editor** has its own disk Save button; Save as New, Rename, Import, and confirmed Delete save their named action immediately. Unsaved changes require an in-page confirmation before switching. Both saved selections survive refresh/restart independently. The **Current Character Prompt** still auto-saves. Use the expand icon on any of the three editors to open a larger editor in SillyTavern's native popup; the same read-only, explicit-save, or auto-save rules apply. Changing output prompts does not erase existing translations or automatically retranslate; hold `🌐` to request a new translation.
+
+<p align="center">
+  <a href="assets/readme/mobile/phrase-desk-expanded-prompt-mobile.png"><img src="assets/readme/mobile/phrase-desk-expanded-prompt-mobile.png" alt="Expanded prompt editor and save behavior (v1.6.9 UI illustration)" width="860" /></a>
+</p>
 
 The Current Character Prompt is saved by character name rather than by chat. Character cards with exactly the same name share that prompt, and renaming a character may leave the prompt field for the new name empty until you set it again.
 
@@ -371,6 +383,10 @@ It is a good idea to export important Phrase Notebook and study records as a bac
 
 **번역 설정**에는 연결 프로필, 번역 엔진, 번역 방식, 토큰 한도와 언어 설정이 모여 있습니다. 기본적으로 펼쳐져 있으며 마지막 접기·펼치기 상태를 기억합니다. **고급 설정**은 기본적으로 접혀 있고, 네 가지 추가 옵션과 세 프롬프트 편집기를 포함합니다. 캐시 관리 항목은 두 그룹 바깥에 있습니다.
 
+<p align="center">
+  <a href="assets/readme/mobile/phrase-desk-translation-settings-mobile.png"><img src="assets/readme/mobile/phrase-desk-translation-settings-mobile.png" alt="번역 설정 패널 (v1.6.9 UI 구성 예시)" width="860" /></a>
+</p>
+
 **번역 연결**
 
 | 설정 | 설명 |
@@ -411,6 +427,10 @@ It is a good idea to export important Phrase Notebook and study records as a bac
 
 **입력과 번역 규칙**
 
+<p align="center">
+  <a href="assets/readme/mobile/phrase-desk-advanced-settings-mobile.png"><img src="assets/readme/mobile/phrase-desk-advanced-settings-mobile.png" alt="고급 설정과 세 프롬프트 편집기 (v1.6.9 UI 구성 예시)" width="860" /></a>
+</p>
+
 | 설정 | 설명 |
 |---|---|
 | **보내기 전 입력 교정** | 학습 언어로 작성한 메시지를 보내기 전에 추천문과 교정 이유를 보여줍니다. |
@@ -424,6 +444,10 @@ It is a good idea to export important Phrase Notebook and study records as a bac
 자동 번역을 켜면 새 메시지가 도착할 때마다 번역 요청이 생길 수 있습니다. 연결 프로필 번역 결과는 선택한 모델과 프리셋의 영향을 받습니다.
 
 **입력과 출력의 프롬프트 선택·내용은 각자의 디스켓 저장 버튼으로 확정**합니다. 각각 마지막으로 저장한 선택을 새로고침·브라우저 재실행·서버 재시작 후에도 복원합니다. 새 프롬프트로 저장·이름 변경·가져오기·삭제 확인은 각 영역에서 독립적으로 동작하며, 미저장 수정 내용은 해당 번역에 적용되지 않습니다. **현재 캐릭터 전용 프롬프트는 기존대로 자동 저장**됩니다. 세 편집기의 크게 보기 아이콘을 누르면 SillyTavern 기본 팝업에서 넓게 편집할 수 있으며, 읽기 전용·수동 저장·자동 저장 규칙은 그대로 적용됩니다. 기존 출력 번역 캐시는 그대로 남고, 새 출력 프롬프트로 다시 번역하려면 🌐을 길게 누르면 됩니다.
+
+<p align="center">
+  <a href="assets/readme/mobile/phrase-desk-expanded-prompt-mobile.png"><img src="assets/readme/mobile/phrase-desk-expanded-prompt-mobile.png" alt="프롬프트 크게 보기와 저장 방법 (v1.6.9 UI 구성 예시)" width="860" /></a>
+</p>
 
 현재 캐릭터 전용 프롬프트는 채팅방이 아니라 캐릭터 이름을 기준으로 저장됩니다. 이름이 완전히 같은 캐릭터 카드는 같은 프롬프트를 공유하며, 캐릭터 이름을 바꾸면 새 이름의 프롬프트 칸은 다시 설정하기 전까지 비어 보일 수 있습니다.
 
