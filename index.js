@@ -1,4 +1,5 @@
 import * as stI18n from '../../../../scripts/i18n.js';
+import { Popup, POPUP_TYPE, POPUP_RESULT } from '../../../../scripts/popup.js';
 import {
   LANGUAGES, DEFAULT_TRANSLATION_PROMPT, DEFAULT_INPUT_TRANSLATION_PROMPT, normalizeLanguageCode, languageName,
   resolveLanguage, textLanguageStats, sourceNeedsTargetScript, languageScriptPattern,
@@ -54,7 +55,7 @@ function normalizeChatMaxTokens(value) {
   return Number.isFinite(amount) && amount > 0 ? Math.min(32768, Math.max(256, Math.round(amount))) : MAX_TOKENS;
 }
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.6.5";
+const PD_VERSION = "1.6.6";
 const CHAT_TRANSLATION_QUALITY_LIMITS = Object.freeze({
   partialCoverageMin:0.75,
   degradedCoverageMin:0.25,
@@ -184,6 +185,7 @@ let inputCorrectionBusy = false;
 let inputCorrectionBypassUntil = 0;
 const aiTasks = Object.create(null);
 let modalViewportCleanup = null;
+let activeExpandedPrompt = null;
 let autoTranslateLock = false;
 let chatTranslateBusy = false;
 let chatTranslateCancelRequested = false;
@@ -767,7 +769,7 @@ function currentUser() {
 }
 let pdKeepOpenUntil = 0;
 function keepPhraseDeskOpen(ms = 1800) { pdKeepOpenUntil = Math.max(pdKeepOpenUntil, Date.now() + ms); }
-function phraseDeskShouldStayOpen() { return Date.now() < pdKeepOpenUntil || Object.values(aiTasks || {}).some(Boolean) || !!document.querySelector('.pd-modal-backdrop,.pd-dialog'); }
+function phraseDeskShouldStayOpen() { return Date.now() < pdKeepOpenUntil || Object.values(aiTasks || {}).some(Boolean) || !!document.querySelector('.pd-modal-backdrop,.pd-dialog,.pd-prompt-editor-popup[open]'); }
 function beginAiTask(key, message) {
   if (aiTasks[key]) { toast(pdT('이미 요청을 처리하고 있습니다. 잠시만 기다려주세요.'), 'warn'); return false; }
   aiTasks[key] = true;
@@ -1188,7 +1190,7 @@ function refreshCharacterPromptField(force = false) {
   const field = $('#pd-char-prompt');
   if (!field.length) return;
   const key = currentCharPromptKey();
-  if (key !== activeCharacterPromptKey && document.querySelector('.pd-prompt-editor-modal[data-pd-prompt-source="pd-char-prompt"]')) closeModals();
+  if (key !== activeCharacterPromptKey && activeExpandedPrompt?.source === 'pd-char-prompt') closeExpandedPrompt();
   if (!force && key === activeCharacterPromptKey) return;
   if (document.activeElement === field[0] && !force) return;
   activeCharacterPromptKey = key;
@@ -4889,8 +4891,8 @@ function setupTranslationPromptGroup() {
   for (const { editor, selectorId, row } of fields) {
     body.append(row);
     const label = row.querySelector('label');
-    const tools = document.createElement('div');
-    tools.className = 'pd-prompt-editor-tools';
+    const wrap = document.createElement('div');
+    wrap.className = 'pd-prompt-editor-wrap';
     const expand = document.createElement('button');
     expand.type = 'button';
     expand.className = 'menu_button margin0 menu_button_icon pd-preset-icon-btn pd-prompt-expand';
@@ -4900,8 +4902,8 @@ function setupTranslationPromptGroup() {
     icon.className = 'fa-solid fa-expand';
     icon.setAttribute('aria-hidden', 'true');
     expand.append(icon);
-    tools.append(expand);
-    editor.before(tools);
+    editor.before(wrap);
+    wrap.append(editor, expand);
     expand.addEventListener('click', () => {
       if (!selectorId) refreshCharacterPromptField();
       openExpandedPrompt(editor, selectorId, label.textContent.trim(), expand);
@@ -4917,7 +4919,16 @@ function setupTranslationPromptGroup() {
   setCollapsed(true);
 }
 
+function closeExpandedPrompt() {
+  const active = activeExpandedPrompt;
+  if (!active || active.closing) return;
+  active.closing = true;
+  void active.popup.completeCancelled();
+}
+
 function openExpandedPrompt(editor, selectorId, title, opener) {
+  if (activeExpandedPrompt) return;
+  closeModals();
   const isCharacter = !selectorId;
   const targetKey = () => isCharacter ? currentCharPromptKey() : document.getElementById(selectorId)?.value;
   const key = targetKey();
@@ -4928,27 +4939,45 @@ function openExpandedPrompt(editor, selectorId, title, opener) {
   const hint = readOnly
     ? pdT(isCharacter ? '현재 캐릭터가 없어요.' : '기본 프롬프트는 읽기 전용이에요. 새 프롬프트로 저장하면 표현 지침을 자유롭게 바꿀 수 있고, 목록에서 기본값으로 돌아갈 수 있어요.')
     : pdT(isCharacter ? '편집 내용은 자동 저장됩니다.' : '편집 내용은 원래 입력창에 반영됩니다. 저장은 기존 저장 버튼을 사용하세요.');
-  const backdrop = showModal(
-    '<div class="pd-prompt-editor-heading"><h3 id="pd-expanded-prompt-title">' + esc(title) + '</h3>' +
-    '<button class="menu_button" type="button" data-close-modal>' + esc(pdT('닫기')) + '</button></div>' +
+  // Use the same native Popup/themed text_pole as SillyTavern's own expanded editors.
+  const popup = new Popup(
+    '<h3 id="pd-expanded-prompt-title">' + esc(title) + '</h3>' +
     '<textarea id="pd-expanded-prompt" class="text_pole" aria-labelledby="pd-expanded-prompt-title"></textarea>' +
     '<div class="pd-prompt-editor-hint">' + esc(hint) + '</div>',
-    { promptEditorLayout: true });
-  const modal = backdrop.find('.pd-prompt-editor-modal')[0];
-  modal.dataset.pdPromptSource = editor.id;
-  modal.setAttribute('role', 'dialog');
-  modal.setAttribute('aria-modal', 'true');
+    POPUP_TYPE.TEXT, '', {
+      okButton: false, cancelButton: pdT('닫기'), defaultResult: POPUP_RESULT.NEGATIVE,
+      allowVerticalScrolling: true,
+      onClosing: () => {
+        if (activeExpandedPrompt?.popup === popup) activeExpandedPrompt.closing = true;
+        return true;
+      },
+      onClose: () => {
+        window.removeEventListener('resize', fitViewport);
+        window.visualViewport?.removeEventListener('resize', fitViewport);
+        if (activeExpandedPrompt?.popup === popup) {
+          activeExpandedPrompt = null;
+          if (isCharacter && !readOnly && stillCurrent()) $(editor).trigger('change');
+          if (opener.isConnected) opener.focus({ preventScroll: true });
+        }
+      },
+    });
+  const modal = popup.dlg;
+  modal.classList.add('pd-prompt-editor-popup');
   modal.setAttribute('aria-labelledby', 'pd-expanded-prompt-title');
-  const expanded = modal.querySelector('textarea');
-  const close = modal.querySelector('[data-close-modal]');
+  const expanded = modal.querySelector('#pd-expanded-prompt');
   expanded.value = lastValue;
   expanded.readOnly = readOnly;
   expanded.spellcheck = editor.spellcheck;
   expanded.placeholder = editor.placeholder;
+  const fitViewport = () => {
+    const height = window.visualViewport?.height || window.innerHeight;
+    if (height > 0) modal.style.setProperty('--pd-prompt-visible-height', height + 'px');
+  };
   expanded.addEventListener('input', () => {
     if (readOnly) { expanded.value = lastValue; return; }
+    if (activeExpandedPrompt?.popup !== popup || activeExpandedPrompt.closing) return;
     if (!stillCurrent() || editor.readOnly) {
-      closeModals();
+      closeExpandedPrompt();
       toast(pdT('원래 프롬프트가 변경되어 확대 편집창을 닫았습니다.'), 'warn');
       return;
     }
@@ -4956,34 +4985,21 @@ function openExpandedPrompt(editor, selectorId, title, opener) {
     editor.value = lastValue;
     $(editor).trigger('input');
   });
+  // Let the native dialog handle Escape rather than closing unrelated Phrase Desk UI.
   modal.addEventListener('keydown', event => {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      event.stopPropagation();
-      closeModals();
-    } else if (event.key === 'Tab') {
-      if (event.shiftKey && document.activeElement === close) {
-        event.preventDefault();
-        expanded.focus();
-      } else if (!event.shiftKey && document.activeElement === expanded) {
-        event.preventDefault();
-        close.focus();
-      }
-    }
+    if (event.key === 'Escape') event.stopPropagation();
   });
-  const reposition = () => placeModalInViewport(backdrop[0]);
-  window.addEventListener('resize', reposition);
-  window.visualViewport?.addEventListener('resize', reposition);
-  window.visualViewport?.addEventListener('scroll', reposition);
-  modalViewportCleanup = () => {
-    window.removeEventListener('resize', reposition);
-    window.visualViewport?.removeEventListener('resize', reposition);
-    window.visualViewport?.removeEventListener('scroll', reposition);
-    if (isCharacter && !readOnly && stillCurrent()) $(editor).trigger('change');
-    if (opener.isConnected) opener.focus({ preventScroll: true });
-  };
-  reposition();
-  close.focus({ preventScroll: true });
+  activeExpandedPrompt = { popup, source: editor.id, closing: false };
+  window.addEventListener('resize', fitViewport);
+  window.visualViewport?.addEventListener('resize', fitViewport);
+  fitViewport();
+  popup.show().catch(error => {
+    window.removeEventListener('resize', fitViewport);
+    window.visualViewport?.removeEventListener('resize', fitViewport);
+    if (activeExpandedPrompt?.popup === popup) activeExpandedPrompt = null;
+    console.warn('[Phrase Desk] Failed to open prompt editor', error);
+    toast(pdT('프롬프트를 열지 못했습니다.'), 'error');
+  });
 }
 
 function promptLibraryHelp(input) {
@@ -7732,6 +7748,7 @@ function openStudyCalendar(monthDate = new Date()) {
 }
 
 function closeModals() {
+  closeExpandedPrompt();
   if (modalViewportCleanup) { try { modalViewportCleanup(); } catch {} modalViewportCleanup = null; }
   $('.pd-modal-backdrop').remove();
   try { window.__pdRepeatCandidates = []; } catch {}
@@ -7760,11 +7777,10 @@ function placeModalInViewport(backdrop) {
   // Only the prompt name/confirmation dialogs use the compact theme-like width.
   // Other Phrase Desk modals retain their existing 720px layout.
   const compactPrompt = modal.classList.contains('pd-preset-compact-modal');
-  const expandedPrompt = modal.classList.contains('pd-prompt-editor-modal');
-  const width = expandedPrompt ? Math.max(0, Math.min(960, v.width - margin * 2)) : compactPrompt
+  const width = compactPrompt
     ? Math.max(260, Math.min(400, v.width - margin * 2))
     : Math.max(280, Math.min(720, v.width - margin * 2));
-  const maxHeight = expandedPrompt ? Math.max(0, v.height - margin * 2) : Math.max(220, Math.min(760, v.height - margin * 2));
+  const maxHeight = Math.max(220, Math.min(760, v.height - margin * 2));
   const set = (el, prop, val) => el.style.setProperty(prop, val, 'important');
   set(backdrop, 'position', 'fixed');
   set(backdrop, 'left', '0');
@@ -7791,24 +7807,14 @@ function placeModalInViewport(backdrop) {
   set(modal, 'overflow-y', modal.classList.contains('pd-explain-modal') ? 'hidden' : 'auto');
   set(modal, 'margin', 'auto');
   set(modal, 'z-index', '2147483001');
-  if (expandedPrompt) {
-    set(backdrop, 'left', v.left + 'px');
-    set(backdrop, 'top', v.top + 'px');
-    set(backdrop, 'right', 'auto');
-    set(backdrop, 'bottom', 'auto');
-    set(backdrop, 'width', v.width + 'px');
-    set(backdrop, 'height', v.height + 'px');
-    set(modal, 'height', maxHeight + 'px');
-    set(modal, 'overflow-y', 'hidden');
-  }
+
 }
 function showModal(inner, options = {}) {
   closeModals();
   keepPhraseDeskOpen(1200);
   const explainClass = options?.explainLayout === true ? ' pd-explain-modal' : '';
   const compactClass = options?.compactPrompt === true ? ' pd-preset-compact-modal' : '';
-  const promptEditorClass = options?.promptEditorLayout === true ? ' pd-prompt-editor-modal' : '';
-  const backdrop = $(`<div class="pd-modal-backdrop pd-viewport-modal"><div class="pd-modal${explainClass}${compactClass}${promptEditorClass}">${inner}</div></div>`);
+  const backdrop = $(`<div class="pd-modal-backdrop pd-viewport-modal"><div class="pd-modal${explainClass}${compactClass}">${inner}</div></div>`);
   $('body').append(backdrop);
   const doPlace = () => placeModalInViewport(backdrop[0]);
   requestAnimationFrame(doPlace);

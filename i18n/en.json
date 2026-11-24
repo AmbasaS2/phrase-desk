@@ -326,5 +326,6 @@
   "phraseDesk.8550c253": "Edits appear in the original field. Use its existing Save button to save.",
   "phraseDesk.f3c8ddbc": "No current character.",
   "phraseDesk.738d9163": "The original prompt changed; the large editor was closed.",
-  "phraseDesk.866c7eae": "Close"
+  "phraseDesk.866c7eae": "Close",
+  "phraseDesk.6282c847": "Could not open the prompt."
 }

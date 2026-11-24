@@ -4,7 +4,7 @@ import fs from 'node:fs';
 
 const source = fs.readFileSync(new URL('./index.js', import.meta.url), 'utf8');
 const css = fs.readFileSync(new URL('./style.css', import.meta.url), 'utf8');
-const start = source.indexOf('function openExpandedPrompt(');
+const start = source.indexOf('function closeExpandedPrompt(');
 const body = source.slice(start, source.indexOf('function promptLibraryHelp(', start));
 
 function fixture({readOnly=false, character=false}={}) {
@@ -13,22 +13,28 @@ function fixture({readOnly=false, character=false}={}) {
   const editor = { id: character ? 'pd-char-prompt' : 'pd-global-prompt', value:'original',
     readOnly, isConnected:true, spellcheck:false, placeholder:'' };
   const expanded = {value:'', addEventListener(name, handler){listeners[name]=handler;}};
-  const close = {focus(){}};
-  const modal = {dataset:{}, setAttribute(){}, querySelector(sel){return sel==='textarea'?expanded:close;}, addEventListener(){}};
-  const backdrop = {0:{}, find(){return [modal];}};
+  const modal = {classList:{add(){}}, setAttribute(){}, querySelector(){return expanded;},
+    addEventListener(){}, style:{setProperty(){}}};
+  let popup, closed=0, removed=0;
+  class Popup {
+    constructor(content,type,input,options) {
+      this.dlg=modal; this.options=options; popup=this;
+    }
+    show(){return Promise.resolve();}
+    completeCancelled(){closed++;this.options.onClosing();this.options.onClose();return Promise.resolve();}
+  }
   const document = {getElementById:()=>({value:key})};
-  const window = {addEventListener(){}, removeEventListener(){}};
+  const window = {innerHeight:800, addEventListener(){}, removeEventListener(){removed++;}};
   const opener = {isConnected:true, focus(){}};
-  let cleanup, closed=0;
   const fn = new Function('editor','selectorId','opener','document','window','$','currentCharPromptKey',
-    'pdT','esc','showModal','closeModals','toast','placeModalInViewport','activeCharacterPromptKey',
-    'setCleanup', 'let modalViewportCleanup; '+body+
-    ";openExpandedPrompt(editor, selectorId, 'Title', opener);setCleanup(modalViewportCleanup);");
+    'pdT','esc','Popup','POPUP_TYPE','POPUP_RESULT','closeModals','toast','activeCharacterPromptKey',
+    'let activeExpandedPrompt=null; '+body+
+    ";openExpandedPrompt(editor, selectorId, 'Title', opener);");
   fn(editor,character?'':'preset',opener,document,window,()=>({trigger:event=>events.push(event)}),
-    ()=>key,x=>x,x=>x,()=>backdrop,()=>{closed++;cleanup?.()},()=>{},()=>{},
-    'first',value=>cleanup=value);
-  return {editor,expanded,events,edit(value){expanded.value=value;listeners.input();},
-    switchKey(){key='second';},close(){cleanup();},get closed(){return closed;}};
+    ()=>key,x=>x,x=>x,Popup,{TEXT:1},{NEGATIVE:0},()=>{},()=>{},'first');
+  return {editor,expanded,events,options:popup.options,edit(value){expanded.value=value;listeners.input();},
+    switchKey(){key='second';},close(){popup.options.onClosing();popup.options.onClose();},get closed(){return closed;},
+    get removed(){return removed;}};
 }
 
 test('one disclosure contains all three existing prompt fields and editor-local expand controls',()=>{
@@ -36,13 +42,33 @@ test('one disclosure contains all three existing prompt fields and editor-local 
   const group = source.slice(source.indexOf('function setupTranslationPromptGroup()'), start);
   for (const id of ['pd-input-global-prompt','pd-global-prompt','pd-char-prompt']) assert.ok(group.includes(id));
   assert.match(group,/body\.append\(row\)/);
-  assert.match(group,/editor\.before\(tools\)/);
+  assert.match(group,/editor\.before\(wrap\)/);
+  assert.match(group,/wrap\.append\(editor, expand\)/);
   assert.match(group,/body\.hidden = collapsed/);
   assert.match(group,/toggle\.setAttribute\('aria-expanded', String\(!collapsed\)\)/);
   assert.match(group,/collapsed \? 'fa-chevron-down' : 'fa-chevron-up'/);
   assert.match(group,/setCollapsed\(true\)/);
   assert.match(css,/\.pd-prompt-group-body\[hidden\][\s\S]*?display: none !important/);
   assert.doesNotMatch(source,/function setupPromptSection\(/);
+});
+
+test('native popup inherits theme and does not force a full-height dialog',()=>{
+  const f=fixture();
+  assert.equal(f.options.okButton,false);
+  assert.equal(f.options.cancelButton,'닫기');
+  assert.equal(f.options.large,undefined);
+  assert.equal(f.options.allowVerticalScrolling,true);
+  assert.match(source,/new Popup\(/);
+  assert.match(css,/dialog\.popup\.pd-prompt-editor-popup \{[\s\S]*?height: fit-content !important/);
+  f.close();
+  assert.equal(f.removed,1);
+});
+
+test('preset actions share a fixed three-column width and expand occupies no extra row',()=>{
+  assert.match(css,/grid-template-columns: repeat\(3, var\(--pd-preset-button-size\)\)/);
+  assert.match(css,/grid-template-columns: minmax\(0, 1fr\) repeat\(3, var\(--pd-preset-button-size\)\)/);
+  assert.match(css,/\.pd-prompt-editor-wrap > \.pd-prompt-expand \{[\s\S]*?position: absolute !important/);
+  assert.match(css,/padding-inline-end: 42px !important/);
 });
 
 test('expanded editor uses the original input event and preserves manual-save behavior',()=>{

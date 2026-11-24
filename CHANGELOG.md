@@ -1,5 +1,13 @@
 # Phrase Desk changelog
 
+## 1.6.6 — 2026-11-24 · Compact prompt controls and native expanded editor
+
+- Put the disclosure chevron immediately after the Translation Prompts title; align both preset-action rows to the same three equal-width and equal-height columns.
+- Position each expand button inside its own textarea's top-right corner, reserving room for text and scrollbar without adding an extra row.
+- Use SillyTavern's native Popup and theme-owned text field/close button, with a content-fitting height and bounded scrollable editor instead of a nearly full-screen custom modal. Preserve read-only defaults, manual preset saving, character autosave and stale-target protection.
+- Validation: 118 Node.js tests passed; Chromium fixtures using the host Popup implementation and template at 320×568, 375×812, 507×700, 812×375 and 1280×900 verified alignment, inline placement, compact height, draft preservation and save behavior. Installed SillyTavern/iOS theme validation remains pending.
+- Rollback baseline: `23ad95449170ee4be8c024e142c47c0b2182dfa1`; no user-data migration required.
+
 ## 1.6.5 — 2026-11-24 · Group translation prompts in one disclosure
 
 - Replace the three independent disclosure rows with one collapsed-by-default Translation Prompts header (down/up chevron). All three original editors, preset controls, help and save indicators are inside the same group.
