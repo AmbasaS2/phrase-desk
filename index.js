@@ -6303,10 +6303,10 @@ let pdButtonHydrationChatRef = null;
 
 function pdScheduleButtonHydrationFrame() {
   if (hydrateRaf) return;
-  const raf = typeof requestAnimationFrame === 'function'
-    ? requestAnimationFrame
-    : callback => setTimeout(callback, 16);
-  hydrateRaf = raf(() => {
+  const schedule = typeof requestIdleCallback === 'function'
+    ? callback => requestIdleCallback(callback, { timeout: 150 })
+    : (typeof requestAnimationFrame === 'function' ? requestAnimationFrame : callback => setTimeout(callback, 16));
+  hydrateRaf = schedule(() => {
     hydrateRaf = 0;
     if (liveContext()?.chat !== pdButtonHydrationChatRef) {
       pdButtonHydrationNodes.clear();
@@ -6409,6 +6409,8 @@ function setupMessageButtonObserver() {
     const scopes = new Set();
     for (const mutation of mutations) {
       const target = mutation.target?.nodeType === 1 ? mutation.target : mutation.target?.parentElement;
+      // Streamed body text cannot change the metadata anchors for the button.
+      if (target?.closest?.('.mes_text')) continue;
       const owner = target?.closest?.('.mes');
       const inMetadata = !!(owner && target?.closest?.('.mesAvatarWrapper, .mesIDDisplay, .tokenCounterDisplay, .mes_timer'));
       const allAdded = Array.from(mutation.addedNodes || []);
