@@ -63,6 +63,52 @@ test('advanced disclosure is a single theme-aware callout with a full-width head
   assert.match(style,/\.pd-advanced-group-body \{[\s\S]*?border-top: 1px solid var\(--SmartThemeBorderColor/);
 });
 
+test('basic translation disclosure starts expanded and saves only user toggles',()=>{
+  const start = source.indexOf('function setupBasicTranslationSettingsGroup()');
+  const end = source.indexOf('function setupAdvancedSettingsGroup()', start);
+  const fnSource = source.slice(start,end);
+  function createFixture(seed) {
+    const state = {...seed}, saves = [];
+    const parent = {};
+    const last = {parentElement:parent};
+    const middle = {parentElement:parent,nextElementSibling:last};
+    const first = {parentElement:parent,nextElementSibling:middle,closest:()=>null,before(){}};
+    const nodes = [];
+    const document = {
+      getElementById:()=>({closest:()=>first}),
+      querySelector:()=>last,
+      createElement(tag) {
+        const node={tag,children:[],attrs:{},append(...items){this.children.push(...items);},
+          setAttribute(key,value){this.attrs[key]=value;},addEventListener(name,fn){this[name]=fn;}};
+        nodes.push(node); return node;
+      }
+    };
+    const run=new Function('document','settings','pdT','saveSettings','toast',fnSource+';setupBasicTranslationSettingsGroup();');
+    run(document,state,x=>x,now=>{assert.equal(now,true);saves.push({...state});return true;},()=>{});
+    const toggle=nodes.find(n=>n.tag==='button'), body=nodes.find(n=>n.id==='pd-basic-translation-body');
+    return {state,saves,toggle,body};
+  }
+  const initial=createFixture({});
+  assert.equal(initial.body.hidden,false);
+  assert.deepEqual(initial.saves,[]);
+  assert.equal(initial.body.children.length,3);
+  initial.toggle.click();
+  assert.equal(initial.body.hidden,true);
+  assert.equal(initial.toggle.attrs['aria-expanded'],'false');
+  assert.deepEqual(initial.saves,[{translationSettingsCollapsed:true}]);
+  const restored=createFixture(initial.saves.at(-1));
+  assert.equal(restored.body.hidden,true);
+  assert.deepEqual(restored.saves,[]);
+  restored.toggle.click();
+  assert.equal(restored.body.hidden,false);
+  assert.deepEqual(restored.saves,[{translationSettingsCollapsed:false}]);
+  assert.equal(createFixture(restored.saves.at(-1)).body.hidden,false);
+  assert.equal(createFixture({translationSettingsCollapsed:'true'}).body.hidden,false);
+  assert.match(source,/translationSettingsCollapsed: false/);
+  assert.match(source,/settings\.translationSettingsCollapsed = settings\.translationSettingsCollapsed === true/);
+  assert.match(css,/\.pd-basic-translation-body\[hidden\],\s*#phrase-desk-settings \.pd-advanced-group-body\[hidden\]/);
+});
+
 test('native popup inherits theme and does not force a full-height dialog',()=>{
   const f=fixture();
   assert.equal(f.options.okButton,false);

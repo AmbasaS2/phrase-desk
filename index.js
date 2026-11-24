@@ -55,7 +55,7 @@ function normalizeChatMaxTokens(value) {
   return Number.isFinite(amount) && amount > 0 ? Math.min(32768, Math.max(256, Math.round(amount))) : MAX_TOKENS;
 }
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.6.8";
+const PD_VERSION = "1.6.9";
 const CHAT_TRANSLATION_QUALITY_LIMITS = Object.freeze({
   partialCoverageMin:0.75,
   degradedCoverageMin:0.25,
@@ -100,6 +100,7 @@ const defaults = {
   bilingualNotes: false,
   inputCorrection: false,
   translationEngine: 'profile',
+  translationSettingsCollapsed: false,
   notebook: [],
   quizHistory: [],
   practiceHistory: [],
@@ -137,6 +138,7 @@ settings.bilingualBlur = !!settings.bilingualBlur;
 settings.bilingualNotes = !!settings.bilingualNotes;
 settings.inputCorrection = !!settings.inputCorrection;
 settings.translationEngine = ['profile','google'].includes(settings.translationEngine) ? settings.translationEngine : 'profile';
+settings.translationSettingsCollapsed = settings.translationSettingsCollapsed === true;
 settings.repeatDifficulty = ['very_easy','easy','normal','hard','expert'].includes(settings.repeatDifficulty) ? settings.repeatDifficulty : 'normal';
 settings.quizCount = [5,10,15,20,30].includes(Number(settings.quizCount)) ? Number(settings.quizCount) : 10;
 delete settings.translationProvider;
@@ -4861,6 +4863,51 @@ function setTextArea(el, value) {
   el.dispatchEvent(new Event('change', { bubbles:true }));
 }
 
+// Group the existing basic translation controls without recreating any fields.
+function setupBasicTranslationSettingsGroup() {
+  const first = document.getElementById('pd-profile')?.closest('.pd-setting-row');
+  const last = document.querySelector('#phrase-desk-settings .pd-language-help');
+  if (!first || !last || first.parentElement !== last.parentElement || first.closest('.pd-basic-translation-group')) return;
+  const rows = [];
+  for (let row = first; row; row = row.nextElementSibling) {
+    rows.push(row);
+    if (row === last) break;
+  }
+  if (rows[rows.length - 1] !== last) return;
+  const group = document.createElement('div');
+  group.className = 'pd-basic-translation-group';
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'pd-basic-translation-toggle';
+  toggle.setAttribute('aria-controls', 'pd-basic-translation-body');
+  const title = document.createElement('span');
+  title.textContent = pdT('번역 설정');
+  const icon = document.createElement('i');
+  icon.className = 'fa-solid fa-language';
+  icon.setAttribute('aria-hidden', 'true');
+  const arrow = document.createElement('i');
+  arrow.setAttribute('aria-hidden', 'true');
+  toggle.append(icon, title, arrow);
+  const body = document.createElement('div');
+  body.id = 'pd-basic-translation-body';
+  body.className = 'pd-basic-translation-body';
+  group.append(toggle, body);
+  first.before(group);
+  body.append(...rows);
+  function setCollapsed(collapsed) {
+    body.hidden = collapsed;
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+    arrow.className = 'fa-solid ' + (collapsed ? 'fa-chevron-down' : 'fa-chevron-up');
+  }
+  toggle.addEventListener('click', () => {
+    const collapsed = !body.hidden;
+    setCollapsed(collapsed);
+    settings.translationSettingsCollapsed = collapsed;
+    if (saveSettings(true) === false) toast(pdT('저장 실패'), 'error');
+  });
+  setCollapsed(settings.translationSettingsCollapsed === true);
+}
+
 // Keep the existing options, editors and save handlers inside one advanced-settings disclosure.
 function setupAdvancedSettingsGroup() {
   const fields = [
@@ -5574,6 +5621,7 @@ function setupSettingsPanel() {
   updateTranslationEngineControl();
   activeCharacterPromptKey = currentCharPromptKey();
   $('#pd-char-prompt').on('focus', function(){ refreshCharacterPromptField(); }).on('input', function(){ if (setCurrentPrompt($(this).val())) { setPromptStatus('char','saving'); saveSettings(); } }).on('change blur', function(){ const key = currentCharPromptKey(); if (key && dirtyCharacterPromptNames.has(key)) saveSettings(true); });
+  setupBasicTranslationSettingsGroup();
   setupAdvancedSettingsGroup();
   $('#pd-clear-chat-cache').on('click', clearCurrentChatTranslationCache);
   $('#pd-open-debug').on('click', () => { $('#pd-debug-panel').toggle(); $('#pd-debug-output').val(debugText()); });

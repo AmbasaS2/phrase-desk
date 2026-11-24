@@ -2401,7 +2401,8 @@ body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal.pd-preset-compact-modal 
 }
 
 
-/* One advanced-settings disclosure containing options and all three prompt editors. */
+/* Matching callouts for basic translation controls and advanced settings. */
+#phrase-desk-settings .pd-basic-translation-group,
 #phrase-desk-settings .pd-advanced-group {
   box-sizing: border-box !important;
   width: 100% !important;
@@ -2413,6 +2414,7 @@ body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal.pd-preset-compact-modal 
   background: rgba(127, 127, 127, 0.05) !important;
   background: color-mix(in srgb, var(--SmartThemeBodyColor, currentColor) 5%, transparent) !important;
 }
+#phrase-desk-settings .pd-basic-translation-toggle,
 #phrase-desk-settings .pd-advanced-group-toggle {
   display: flex !important;
   align-items: center !important;
@@ -2431,16 +2433,20 @@ body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal.pd-preset-compact-modal 
   text-align: left !important;
   cursor: pointer !important;
 }
+#phrase-desk-settings .pd-basic-translation-toggle > span,
 #phrase-desk-settings .pd-advanced-group-toggle > span {
   flex: 1 1 auto !important;
   min-width: 0 !important;
 }
+#phrase-desk-settings .pd-basic-translation-toggle i,
 #phrase-desk-settings .pd-advanced-group-toggle i {
   flex: 0 0 auto !important;
 }
+#phrase-desk-settings .pd-basic-translation-toggle > i:last-child,
 #phrase-desk-settings .pd-advanced-group-toggle > i:last-child {
   opacity: .7;
 }
+#phrase-desk-settings .pd-basic-translation-body,
 #phrase-desk-settings .pd-advanced-group-body {
   box-sizing: border-box !important;
   width: 100% !important;
@@ -2448,6 +2454,7 @@ body > .pd-modal-backdrop.pd-viewport-modal > .pd-modal.pd-preset-compact-modal 
   padding: 8px 9px !important;
   border-top: 1px solid var(--SmartThemeBorderColor, rgba(127, 127, 127, 0.2));
 }
+#phrase-desk-settings .pd-basic-translation-body[hidden],
 #phrase-desk-settings .pd-advanced-group-body[hidden] {
   display: none !important;
 }

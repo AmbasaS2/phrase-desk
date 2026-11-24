@@ -1,5 +1,12 @@
 # Phrase Desk changelog
 
+## 1.6.9 — 2026-11-24 · Basic translation settings callout
+
+- Group the existing connection, translation mode, engine, token limit and language controls into a matching Translation settings callout. Keep custom language fields and helper text inside, and advanced settings/cache controls outside.
+- Start expanded for new/existing users without a saved preference. Save the user's explicit collapse/expand choice as a single boolean via the existing SillyTavern extension-settings path; restore it at startup. Advanced settings remain collapsed by default.
+- Preserve existing fields, event handlers, prompt editors, translation logic and learning storage. Validation: 120 Node.js tests and five Chromium viewport fixtures passed, including disclosure restoration and existing prompt controls; also verified the extension-settings save/reload round trip in the settings harness. Installed-theme confirmation remains pending.
+- Rollback baseline: `1c1646eedbfda67eb580cbe9aa87d30e34d9a55c`; the optional UI preference can be ignored by earlier versions.
+
 ## 1.6.8 — 2026-11-24 · Theme-aware advanced settings callout
 
 - Wrap the existing advanced settings disclosure and its entire body in a compact, theme-aware card, inspired by the Lorebook Manager settings card. Add the sliders icon, full-width clickable heading, right-aligned chevron, subtle background, and open-state divider.
