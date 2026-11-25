@@ -20,7 +20,7 @@ test('chat open only hydrates mounted controls; no full-chat translation resync'
   const hooks = between('function setupMessageRenderHooks()', 'function setupExtensionsMenuButton()');
   assert.match(hooks, /bind\('CHAT_CHANGED', ''\)/);
   assert.match(hooks, /queueMessageButtonHydration\(/);
-  assert.match(hooks, /liveContext\(\)\?\.chat !== openedChat/);
+  assert.match(hooks, /pdCancelDelayedChatWork\(\)/);
   assert.doesNotMatch(hooks, /reapplyVisiblePhraseDeskTranslations\(true\)/);
   assert.doesNotMatch(hooks, /synchronizeStoredCanonicalViews\(/);
   assert.doesNotMatch(hooks, /persistChatCache\(/);

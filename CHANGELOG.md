@@ -1,5 +1,14 @@
 # Phrase Desk changelog
 
+## 1.6.10 — 2026-11-25 · Chat rendering and delayed-work safety
+
+- Coalesce bilingual decoration into bounded frames and skip unchanged rendered bodies using message/display provenance and DOM node identity. Hydrate only actual mounted translated messages when blur/notes are enabled; preserve blur reveal and expanded notes on duplicate events. Blur toggles no longer replace message HTML.
+- Reuse the existing metadata observer and hydration queue. Remove redundant direct-update (0/120 ms), chat-open (250 ms), and MESSAGE_UPDATED (40 ms) globe recovery paths; preserve late metadata recovery and streaming-body exclusion.
+- Pin delayed decoration, auto translation, edit restoration, and in-flight translation results to the chat generation, exact message, swipe and source as appropriate. Coalesce auto jobs and stop edit retries after successful restoration or cancellation; protect text already typed before a late retry.
+- Preserve translation prompts, engines, language options, learning storage, saved-data shape and the 140/520 ms committed-translation stabilization. No added MutationObserver, ResizeObserver or periodic timer. ST 1.18.0's extension manager requires a reload; no lifecycle redesign.
+- Validation: 134 Node tests passed (121 baseline + 13 delayed-work regressions); isolated Chrome DOM fixtures at desktop 1280 px and touch-emulated 390 px passed for 25/240/500 messages, zero chat saves and one initial body walk per translated message, zero repeat/stream body walks, note/reveal preservation, original edit restoration, and one recovery after simulated foreign-button insertion. Mobile focus used the retained zero-delay edit fallback. Installed SillyTavern, real iOS Safari, and coexistence with the user's actual extensions remain unverified.
+- Rollback baseline: `bbc65a4b9790d7400dd68b51cd6d796e19fb5caf` (1.6.9); no data migration required.
+
 ## 1.6.9 — 2026-11-24 · Basic translation settings callout
 
 - Group the existing connection, translation mode, engine, token limit and language controls into a matching Translation settings callout. Keep custom language fields and helper text inside, and advanced settings/cache controls outside.

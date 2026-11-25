@@ -55,7 +55,7 @@ function normalizeChatMaxTokens(value) {
   return Number.isFinite(amount) && amount > 0 ? Math.min(32768, Math.max(256, Math.round(amount))) : MAX_TOKENS;
 }
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.6.9";
+const PD_VERSION = "1.6.10";
 const CHAT_TRANSLATION_QUALITY_LIMITS = Object.freeze({
   partialCoverageMin:0.75,
   degradedCoverageMin:0.25,
@@ -908,7 +908,7 @@ function pdCurrentRawMessageSource(msg) {
 function messageStableKey(payload) {
   const idx = Number.isFinite(payload?.idx) ? String(payload.idx) : '';
   const msgId = payload?.msg?.id || payload?.msg?.send_date || payload?.mes?.getAttribute?.('mesid') || payload?.mes?.dataset?.mesid || idx;
-  const textHash = hash([currentMessageOriginal(payload), payload?.msg?.mes, payload?.mes?.textContent || ''].filter(Boolean).join('\n\n'));
+  const textHash = hash([currentMessageOriginal(payload), payload?.msg?.mes].filter(Boolean).join('\n\n'));
   const swipe = payload?.msg?.swipe_id;
   return `${currentChatKey()}::${msgId || idx || 'msg'}::${swipe !== undefined && swipe !== null ? `swipe:${swipe}` : 'plain'}::${textHash}`;
 }
@@ -4509,14 +4509,14 @@ function decorateBilingualTranslationDom(root, kind = settings.chatMode || 'full
       while ((n = walker.nextNode())) nodes.push(n);
       nodes.forEach(node => wrapPhraseDeskBlurMatchesInTextNode(node, allowed));
       decorateBilingualNotesDom(el);
-    } catch (e) { logDebug({ type:'blur-dom-error', error:e?.message || String(e) }); }
-    return;
+      return true;
+    } catch (e) { logDebug({ type:'blur-dom-error', error:e?.message || String(e) }); return false; }
   }
   // Always normalize bilingual display wrappers for supported bilingual modes.
   // The checkbox must only toggle CSS blur, not whether wrappers exist.
   // This lets newly translated messages stay blur-ready even when the option is off.
   unwrapPhraseDeskBlurSpans(el);
-  if (!shouldDecorateBilingualTranslation(kind)) return;
+  if (!shouldDecorateBilingualTranslation(kind)) return true;
   try {
     const nodes = [];
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
@@ -4534,31 +4534,112 @@ function decorateBilingualTranslationDom(root, kind = settings.chatMode || 'full
     nodes.forEach(node => wrapPhraseDeskBlurMatchesInTextNode(node, allowed));
     if (settings.bilingualNotes) decorateBilingualNotesDom(el);
     else applyBilingualRevealState(el);
-  } catch (e) { logDebug({ type:'blur-dom-error', error:e?.message || String(e) }); }
+    return true;
+  } catch (e) { logDebug({ type:'blur-dom-error', error:e?.message || String(e) }); return false; }
 }
 function applyBilingualBlurClass() {
   try { document.documentElement.classList.toggle('pd-bilingual-blur-enabled', !!settings.bilingualBlur); } catch {}
 }
-function scheduleBilingualDomDecoration(payload, kind = settings.chatMode || 'full') {
+let pdChatWorkGeneration = 0;
+const pdBilingualDecorationState = new WeakMap();
+const pdBilingualDecorationJobs = new Map();
+let pdBilingualDecorationFrame = 0;
+const pdAutoTranslationJobs = new Map();
+
+function pdCaptureChatWork() {
+  return { generation:pdChatWorkGeneration, chat:liveContext()?.chat, key:currentChatKey() };
+}
+function pdChatWorkCurrent(scope) {
+  return !!scope && scope.generation === pdChatWorkGeneration &&
+    liveContext()?.chat === scope.chat && currentChatKey() === scope.key;
+}
+function pdMessageWorkSource(msg) {
+  const slot = msg?.swipes?.[msg?.swipe_id];
+  return [msg?.mes, typeof slot === 'object' && slot !== null ? (slot.mes ?? slot.text ?? slot.content ?? slot.message) : slot];
+}
+function pdCaptureMessageWork(payload) {
+  const scope = pdCaptureChatWork();
   const idx = messageIndexForPayload(payload);
-  const findTextEl = () => {
-    try {
-      if (Number.isFinite(idx) && idx >= 0) {
-        const refreshed = document.querySelector(`#chat .mes[mesid="${idx}"], #chat_container .mes[mesid="${idx}"], .mes[mesid="${idx}"]`);
-        const found = refreshed ? $(refreshed).find('.mes_text').first() : $();
-        if (found.length) return found;
-      }
-    } catch {}
-    return payload?.textEl || $();
-  };
-  const run = () => {
-    try { decorateBilingualTranslationDom(findTextEl(), kind); }
-    catch (e) { logDebug({ type:'blur-schedule-error', error:e?.message || String(e) }); }
-  };
-  run();
-  try { requestAnimationFrame(run); } catch {}
-  setTimeout(run, 60);
-  setTimeout(run, 240);
+  const msg = payload?.msg;
+  if (!Number.isSafeInteger(idx) || idx < 0 || !msg || scope.chat?.[idx] !== msg) return null;
+  return { scope, idx, msg, swipe:pdSwipeId(msg), source:pdMessageWorkSource(msg) };
+}
+function pdMessageWorkCurrent(job, checkSource = true) {
+  if (!job || !pdChatWorkCurrent(job.scope) || job.scope.chat?.[job.idx] !== job.msg ||
+      pdSwipeId(job.msg) !== job.swipe) return false;
+  if (!checkSource) return true;
+  const source = pdMessageWorkSource(job.msg);
+  return source[0] === job.source[0] && source[1] === job.source[1];
+}
+function pdMountedMessageForWork(job) {
+  const chatEl = document.getElementById('chat') || document.getElementById('chat_container');
+  const mes = chatEl?.querySelector(`.mes[mesid="${job.idx}"], .mes[data-mesid="${job.idx}"]`);
+  return mes?.isConnected ? mes : null;
+}
+function pdBilingualRenderState(job) {
+  const store = job.msg.extra?.phraseDesk;
+  const state = store?.variants?.[store.activeKey] || store;
+  const display = job.msg.extra?.display_text || '';
+  const kind = job.kind === 'none' ? 'none' : (state?.activeMode || job.kind);
+  const record = canonicalForLanguage(state, kind);
+  return { record, kind, signature:[job.msg, job.swipe, ...job.source, display, kind,
+    !!settings.bilingualNotes, targetLanguage().key, !!record, record?.source,
+    record?.plainKorean, state?.revision] };
+}
+function pdSameBilingualRenderState(a, b) {
+  return !!a && a.length === b.length && a.every((value,index) => value === b[index]);
+}
+function pdRunBilingualDecoration(job) {
+  if (!pdMessageWorkCurrent(job)) return;
+  const mes = pdMountedMessageForWork(job);
+  const el = mes?.querySelector('.mes_text');
+  if (!el?.isConnected) return;
+  const { record, kind, signature } = pdBilingualRenderState(job);
+  const old = pdBilingualDecorationState.get(el);
+  // ST replaces the body children synchronously, even when it keeps .mes_text.
+  // Compare node identity, not serialized HTML or a full-body hash. An owned
+  // marker also detects removal of the previous decoration inside a kept child.
+  if (old && pdSameBilingualRenderState(old.state, signature) &&
+      old.first === el.firstChild && old.last === el.lastChild &&
+      old.count === el.childNodes.length && (!old.marker || el.contains(old.marker))) return;
+  if (el.querySelector(':scope > textarea.edit_textarea, :scope > textarea.mes_edit_textarea, :scope > #curEditTextarea')) return;
+  const allowed = kind === 'none' ? new Set() : record ? bilingualTranslationCandidates(record) : null;
+  if (!decorateBilingualTranslationDom(el, kind, allowed)) return;
+  pdBilingualDecorationState.set(el, { state:signature, first:el.firstChild, last:el.lastChild,
+    count:el.childNodes.length, marker:el.querySelector('.pd-bilingual-blur,.pd-bilingual-note-marker') });
+}
+function pdScheduleBilingualFrame() {
+  if (pdBilingualDecorationFrame) return;
+  pdBilingualDecorationFrame = requestAnimationFrame(() => {
+    pdBilingualDecorationFrame = 0;
+    const start = performance.now();
+    let count = 0;
+    for (const [idx,job] of pdBilingualDecorationJobs) {
+      if (count && (count >= 96 || performance.now() - start >= 12)) break;
+      pdBilingualDecorationJobs.delete(idx);
+      count++;
+      try { pdRunBilingualDecoration(job); }
+      catch (e) { logDebug({ type:'blur-schedule-error', error:e?.message || String(e) }); }
+    }
+    if (pdBilingualDecorationJobs.size) pdScheduleBilingualFrame();
+  });
+}
+function scheduleBilingualDomDecoration(payload, kind = settings.chatMode || 'full') {
+  const job = pdCaptureMessageWork(payload);
+  if (!job) return;
+  // One shared frame, latest work for a particular message wins. No nested RAF,
+  // delayed full-body retries, or detached-payload fallback into another chat.
+  pdBilingualDecorationJobs.set(job.idx, { ...job, kind });
+  pdScheduleBilingualFrame();
+}
+function pdCancelDelayedChatWork() {
+  pdChatWorkGeneration++;
+  if (pdBilingualDecorationFrame) cancelAnimationFrame(pdBilingualDecorationFrame);
+  pdBilingualDecorationFrame = 0;
+  pdBilingualDecorationJobs.clear();
+  for (const job of pdAutoTranslationJobs.values()) clearTimeout(job.timer);
+  pdAutoTranslationJobs.clear();
+  pdCancelOriginalEditRestore();
 }
 function materializeCanonicalView(state = null, preferredKey = translationCacheKey(settings.chatMode || 'full')) {
   if (!state) return '';
@@ -4701,7 +4782,7 @@ function reapplyVisiblePhraseDeskTranslations(syncCanonicalMode = false) {
   try {
     const preferredKey = translationCacheKey(settings.chatMode || 'full');
     if (syncCanonicalMode) synchronizeStoredCanonicalViews(preferredKey);
-    $('.mes').each(function(){
+    $('#chat .mes, #chat_container .mes').each(function(){
       const payload = messagePayloadFromTarget(this);
       if (!payload?.textEl?.length) return;
       const data = variantForPayload(payload, false);
@@ -4732,17 +4813,24 @@ function reapplyVisiblePhraseDeskTranslations(syncCanonicalMode = false) {
 }
 
 function schedulePhraseDeskRenderDecoration(payload, reason = 'render') {
-  // Keep the render hook lightweight: only decorate when the user explicitly enables
-  // a bilingual display feature. Normal translated text is left to SillyTavern's own
-  // renderer so long chats do not get walked repeatedly during scroll/render cycles.
-  if (!payload?.textEl?.length) return;
-  if (!settings.bilingualBlur && !settings.bilingualNotes) return;
-  const data = variantForPayload(payload, false);
-  const mode = translationCacheKey(settings.chatMode || 'full');
-  try { requestAnimationFrame(() => scheduleBilingualDomDecoration(payload, mode)); }
-  catch (e) { logDebug({ type:'render-decoration-error', reason, error:e?.message || String(e) }); }
+  if (!payload?.msg || (!settings.bilingualBlur && !settings.bilingualNotes)) return;
+  if (!pdButtonHasSavedTranslation(payload.msg)) return;
+  const store = payload.msg.extra.phraseDesk;
+  const state = store.variants?.[store.activeKey] || store;
+  scheduleBilingualDomDecoration(payload, state.activeMode || translationCacheKey(settings.chatMode || 'full'));
 }
-
+function pdDecorateMountedTranslation(mes) {
+  if (!settings.bilingualBlur && !settings.bilingualNotes) return;
+  const chatEl = document.getElementById('chat') || document.getElementById('chat_container');
+  if (!mes?.isConnected || !chatEl?.contains(mes)) return;
+  // Valid ST message IDs are cheap to resolve; never use the body/geometry
+  // fallback when hydrating a chat's mounted messages.
+  const raw = mes?.getAttribute?.('mesid') ?? mes?.getAttribute?.('data-mesid');
+  if (!/^\d+$/.test(String(raw ?? ''))) return;
+  const idx = Number(raw);
+  const msg = liveContext()?.chat?.[idx];
+  if (msg && pdButtonHasSavedTranslation(msg)) schedulePhraseDeskRenderDecoration({ mes, msg, idx });
+}
 
 function translationCacheKey(kind) {
   let base = '';
@@ -5613,7 +5701,15 @@ function setupSettingsPanel() {
   }
   $('#pd-profile,#pd-chat-mode,#pd-auto-mode,#pd-bilingual-style,#pd-translation-engine').on('change', (event) => { settings.profile=$('#pd-profile').val(); settings.chatMode=$('#pd-chat-mode').val(); settings.autoMode=$('#pd-auto-mode').val(); settings.bilingualStyle=$('#pd-bilingual-style').val() || 'side_sentence'; settings.translationEngine=$('#pd-translation-engine').val() || 'profile'; saveSettings(); updateBilingualStyleControl(); updateTranslationEngineControl(); const displayModeChanged = event?.currentTarget?.id === 'pd-chat-mode' || event?.currentTarget?.id === 'pd-bilingual-style'; if (displayModeChanged) reapplyVisiblePhraseDeskTranslations(true); });
   $('#pd-chat-max-tokens').on('change', function(){ settings.chatMaxTokens = normalizeChatMaxTokens(this.value); $(this).val(settings.chatMaxTokens); saveSettings(true); });
-  $('#pd-bilingual-blur').on('change', function(){ settings.bilingualBlur = !!this.checked; saveSettings(true); applyBilingualBlurClass(); reapplyVisiblePhraseDeskTranslations(); });
+  $('#pd-bilingual-blur').on('change', function(){
+    settings.bilingualBlur = !!this.checked;
+    saveSettings(true);
+    applyBilingualBlurClass();
+    if (settings.bilingualBlur) {
+      const chatEl = document.getElementById('chat') || document.getElementById('chat_container');
+      chatEl?.querySelectorAll('.mes').forEach(pdDecorateMountedTranslation);
+    }
+  });
   $('#pd-bilingual-notes').on('change', function(){ settings.bilingualNotes = !!this.checked; saveSettings(true); reapplyVisiblePhraseDeskTranslations(); });
   $('#pd-input-correction').on('change', function(){ settings.inputCorrection = !!this.checked; saveSettings(true); });
   $('#pd-show-input-aa').on('change', function(){ settings.showInputAa = !!this.checked; saveSettings(true); injectInputButtons(); });
@@ -6320,8 +6416,12 @@ function pdScheduleButtonHydrationFrame() {
     // handled by the observer, NOT by re-scanning all 431 chat messages.
     for (const scope of pdButtonHydrationScopes) {
       if (scope === chatEl || (scope?.isConnected && chatEl.contains(scope))) {
-        if (scope.matches?.('.mes')) pdButtonHydrationNodes.add(scope);
-        else scope.querySelectorAll?.('.mes').forEach(mes => pdButtonHydrationNodes.add(mes));
+        const addMounted = mes => {
+          pdButtonHydrationNodes.add(mes);
+          pdGlobalState.decorateMountedMessage?.(mes);
+        };
+        if (scope.matches?.('.mes')) addMounted(scope);
+        else scope.querySelectorAll?.('.mes').forEach(addMounted);
       }
     }
     pdButtonHydrationScopes.clear();
@@ -6406,6 +6506,7 @@ function setupMessageButtonObserver() {
 
   const observer = new MutationObserver(mutations => {
     const affected = new Set();
+    const mounted = new Set();
     const scopes = new Set();
     for (const mutation of mutations) {
       const target = mutation.target?.nodeType === 1 ? mutation.target : mutation.target?.parentElement;
@@ -6428,6 +6529,7 @@ function setupMessageButtonObserver() {
         if (node.matches?.('.pd-message-translate-btn') || node.closest?.('.pd-message-translate-btn')) continue;
         if (node.matches?.('.mes')) {
           affected.add(node);
+          mounted.add(node);
         } else if (owner) {
           if (node.matches?.('.mesAvatarWrapper, .mesIDDisplay, .tokenCounterDisplay, .mes_timer') ||
               node.querySelector?.('.mesIDDisplay, .tokenCounterDisplay, .mes_timer')) affected.add(owner);
@@ -6442,6 +6544,7 @@ function setupMessageButtonObserver() {
         }
       }
     }
+    for (const mes of mounted) pdGlobalState.decorateMountedMessage?.(mes);
     for (const mes of affected) queueMessageButtonHydration(mes);
     for (const scope of scopes) queueMessageButtonHydration(scope);
   });
@@ -6486,14 +6589,9 @@ function applyMessageDisplayText(payload, value = '') {
   if (typeof updater === 'function') {
     try {
       updater.call(owner, idx, msg);
-      const rehydrateUpdated = () => {
-        try {
-          const el = document.querySelector(`.mes[mesid="${idx}"], .mes[data-mesid="${idx}"]`);
-          if (el) ensureMessageTranslateButton(el);
-        } catch {}
-      };
-      setTimeout(rehydrateUpdated, 0);
-      setTimeout(rehydrateUpdated, 120);
+      const work = pdCaptureMessageWork(payload);
+      const el = work && pdMessageWorkCurrent(work) ? pdMountedMessageForWork(work) : null;
+      if (el && !el.querySelector('.mesAvatarWrapper .pd-message-translate-btn')) queueMessageButtonHydration(el);
       return true;
     } catch (e) {
       logDebug({ type:'message-update-block-failed', idx, error:e?.message || String(e) });
@@ -6567,7 +6665,8 @@ function refreshPayloadMessageReference(payload, expectedOriginal = '') {
   return payload;
 }
 function translationRequestTargetStillCurrent(request = null) {
-  if (!request || currentChatKey() !== request.chatKey) return false;
+  if (!request || currentChatKey() !== request.chatKey ||
+      (request.chatGeneration !== undefined && request.chatGeneration !== pdChatWorkGeneration)) return false;
   const live = liveContext();
   const chat = Array.isArray(live?.chat) ? live.chat : (Array.isArray(ctx?.chat) ? ctx.chat : []);
   const msg = chat[request.idx];
@@ -6711,6 +6810,7 @@ async function translateMessagePayload(payload, forceRetranslate = false, option
   }
   const requestTarget = {
     chatKey:currentChatKey(),
+    chatGeneration:pdChatWorkGeneration,
     idx:messageIndexForPayload(payload),
     msg:payload.msg,
     swipeId:pdSwipeId(payload.msg),
@@ -9135,7 +9235,7 @@ function phraseDeskEventMessageTarget(args = [], payload = null) {
   }
   for (const arg of args) {
     if (arg === undefined || arg === null) continue;
-    const directIndex = chat.indexOf(arg);
+    const directIndex = typeof arg === 'object' ? chat.indexOf(arg) : -1;
     if (directIndex >= 0) return { chat, msg:chat[directIndex], idx:directIndex };
     const node = arg?.nodeType === 1 ? arg : (arg?.target?.nodeType === 1 ? arg.target : null);
     const raw = node?.closest?.('.mes')?.getAttribute?.('mesid')
@@ -9168,6 +9268,7 @@ function handlePhraseDeskMessageSwiped(args = [], payload = null) {
   }
 
   const chatRef = target.chat;
+  const chatScope = pdCaptureChatWork();
   const msgRef = msg;
   const expectedSwipeId = slot.id;
   const expectedSource = String(slot.source || '').replace(/\r\n/g, '\n');
@@ -9176,7 +9277,7 @@ function handlePhraseDeskMessageSwiped(args = [], payload = null) {
     try {
       const live = liveContext();
       const chat = Array.isArray(live?.chat) ? live.chat : (Array.isArray(ctx?.chat) ? ctx.chat : []);
-      if (chat !== chatRef || chat[target.idx] !== msgRef) return;
+      if (!pdChatWorkCurrent(chatScope) || chat !== chatRef || chat[target.idx] !== msgRef) return;
       const current = chat[target.idx];
       const currentSlot = pdCurrentSwipeSlot(current);
       const currentSource = String(currentSlot.source || '').replace(/\r\n/g, '\n');
@@ -9198,59 +9299,74 @@ function latestPayloadForRole(role) {
   }
   return null;
 }
-async function stableAutoTranslationPayload(role = '', args = []) {
-  let payload = payloadFromEventArgs(args);
-  if (!payload && role) payload = latestPayloadForRole(role);
-  let idx = messageIndexForPayload(payload);
-  let previousSignature = '';
+async function stableAutoTranslationPayload(job) {
+  let previousSource = '';
   for (let attempt = 0; attempt < 4; attempt++) {
-    if (Number.isFinite(idx) && idx >= 0) {
-      const livePayload = messagePayloadFromChatIndex(idx);
-      if (livePayload) payload = livePayload;
-    } else if (role) {
-      payload = latestPayloadForRole(role) || payload;
-      idx = messageIndexForPayload(payload);
+    if (pdAutoTranslationJobs.get(job.idx) !== job || !pdMessageWorkCurrent(job, false)) return null;
+    const source = messageSourceText(pdCurrentRawMessageSource(job.msg), null);
+    if (norm(source) && source === previousSource) {
+      const payload = messagePayloadFromChatIndex(job.idx);
+      if (payload?.msg === job.msg && pdMessageWorkCurrent(job, false)) return { payload, source };
+      return null;
     }
-    if (payload?.msg) {
-      const source = currentMessageOriginal(payload) || '';
-      const signature = `${payload.msg === (liveContext()?.chat || [])[idx] ? 'live' : 'other'}:${hash(source)}`;
-      if (norm(source) && signature === previousSignature) return payload;
-      previousSignature = signature;
-    }
+    previousSource = source;
     await new Promise(resolve => setTimeout(resolve, 110));
   }
-  return payload;
+  return null;
 }
-function maybeAutoTranslateRenderedMessage(roleHint, args = []) {
+function maybeAutoTranslateRenderedMessage(roleHint, args = [], target = null) {
   const mode = settings.autoMode || 'off';
   if (mode === 'off' || autoTranslateLock || chatTranslateBusy) return;
   const role = roleHint === 'user' ? 'user' : roleHint === 'char' ? 'char' : '';
   if (role && !shouldAutoTranslateRole(role)) return;
-  setTimeout(async () => {
-    if (autoTranslateLock || messageBusy || chatTranslateBusy) return;
-    const payload = await stableAutoTranslationPayload(role, args);
-    if (!payload) return;
-    const actualRole = messageRole(payload);
-    if (!shouldAutoTranslateRole(actualRole)) return;
-    if (messageBusy || chatTranslateBusy) return;
-    const key = messageStableKey(payload);
-    if (autoTranslatedMessageKeys.has(key)) return;
-    autoTranslatedMessageKeys.add(key);
-    if (autoTranslatedMessageKeys.size > 80) autoTranslatedMessageKeys.delete(autoTranslatedMessageKeys.values().next().value);
-    autoTranslateLock = true;
+  // Capture the event's exact message now, even if it has no mounted DOM yet.
+  // Only a genuinely unaddressed event may fall back to the current latest role.
+  let picked = target?.msg ? target : phraseDeskEventMessageTarget(args);
+  if (!picked?.msg && !args.length && role) picked = latestPayloadForRole(role);
+  const job = pdCaptureMessageWork(picked);
+  if (!job) return;
+  const pending = pdAutoTranslationJobs.get(job.idx);
+  if (pending) {
+    if (pdMessageWorkCurrent(pending, false) && pending.msg === job.msg && pending.swipe === job.swipe) return;
+    clearTimeout(pending.timer);
+  }
+  job.timer = setTimeout(async () => {
     try {
-      ensureMessageTranslateButton(payload.mes);
-      await translateMessagePayload(payload, false, { auto:true, silent:false });
+      if (!pdMessageWorkCurrent(job, false) || autoTranslateLock || messageBusy || chatTranslateBusy) return;
+      const stable = await stableAutoTranslationPayload(job);
+      if (!stable || pdAutoTranslationJobs.get(job.idx) !== job || !pdMessageWorkCurrent(job, false)) return;
+      const { payload, source } = stable;
+      if (messageSourceText(pdCurrentRawMessageSource(job.msg), null) !== source) return;
+      const actualRole = messageRole(payload);
+      if (!shouldAutoTranslateRole(actualRole) || autoTranslateLock || messageBusy || chatTranslateBusy) return;
+      // Do not re-save an already visible, valid translation just because an
+      // existing one-message chat emitted a first_message render event.
+      if (args[1] === 'first_message' && pdButtonHasSavedTranslation(payload.msg) &&
+          phraseDeskCacheMatchesSource(payload.msg.extra, source, hash)) return;
+      const key = messageStableKey(payload);
+      if (autoTranslatedMessageKeys.has(key)) return;
+      autoTranslatedMessageKeys.add(key);
+      if (autoTranslatedMessageKeys.size > 80) autoTranslatedMessageKeys.delete(autoTranslatedMessageKeys.values().next().value);
+      autoTranslateLock = true;
+      try {
+        if (payload.mes) queueMessageButtonHydration(payload.mes);
+        await translateMessagePayload(payload, false, { auto:true, silent:false });
+      } finally {
+        if (pdMessageWorkCurrent(job, false)) {
+          const after = variantForPayload(payload, false)?.state;
+          const usable = !!(after?.canonical || pickCachedMessageTranslation(after, after?.activeMode || translationCacheKey(settings.chatMode || 'full')).text);
+          if (!usable) autoTranslatedMessageKeys.delete(key);
+        } else autoTranslatedMessageKeys.delete(key);
+        autoTranslateLock = false;
+      }
+    } catch (e) {
+      logDebug({type:'auto-translation-schedule-error', error:e?.message || String(e)});
     } finally {
-      const after = variantForPayload(payload, false)?.state;
-      const usable = !!(after?.canonical || pickCachedMessageTranslation(after, after?.activeMode || translationCacheKey(settings.chatMode || 'full')).text);
-      if (!usable) autoTranslatedMessageKeys.delete(key);
-      autoTranslateLock = false;
+      if (pdAutoTranslationJobs.get(job.idx) === job) pdAutoTranslationJobs.delete(job.idx);
     }
   }, 360);
+  pdAutoTranslationJobs.set(job.idx, job);
 }
-
-
 
 function canonicalMessageSourceAfterUpdate(msg) {
   if (!msg) return '';
@@ -9330,49 +9446,48 @@ function setupMessageRenderHooks() {
     boundEvents.add(eventName);
     try {
       const handler = (...args) => {
-        if (key === 'CHAT_CHANGED') refreshCharacterPromptField(true);
-        // The render hooks are also the late-arrival fallback: if the chat DOM was
-        // not present during the bounded startup window, attach the same single
-        // observer as soon as SillyTavern actually renders or switches a chat.
+        if (key === 'CHAT_CHANGED') {
+          pdCancelDelayedChatWork();
+          refreshCharacterPromptField(true);
+          setupMessageButtonObserver();
+          queueMessageButtonHydration(document.getElementById('chat') || document);
+          return;
+        }
         setupMessageButtonObserver();
-        const payload = payloadFromEventArgs(args);
+        const target = phraseDeskEventMessageTarget(args);
+        if (!target.msg) {
+          if (!args.length && roleHint) maybeAutoTranslateRenderedMessage(roleHint, args);
+          return;
+        }
+        const work = pdCaptureMessageWork(target);
+        if (!pdMessageWorkCurrent(work)) return;
+        const mes = pdMountedMessageForWork(work);
+        const payload = { ...target, mes };
         if (key === 'MESSAGE_SWIPED') {
           handlePhraseDeskMessageSwiped(args, payload);
           return;
         }
-        if (key === 'MESSAGE_UPDATED') clearPhraseDeskTranslationAfterMessageUpdate(payload, args);
-        if (payload?.mes) {
-          ensureMessageTranslateButton(payload.mes);
+        if (key === 'MESSAGE_UPDATED') {
+          if (pdOriginalEditRestore?.work.msg === target.msg) pdCancelOriginalEditRestore();
+          const pendingAuto = pdAutoTranslationJobs.get(target.idx);
+          if (pendingAuto && !pdMessageWorkCurrent(pendingAuto)) {
+            clearTimeout(pendingAuto.timer);
+            pdAutoTranslationJobs.delete(target.idx);
+          }
+          clearPhraseDeskTranslationAfterMessageUpdate(payload, args);
+          if (mes) {
+            const btn = $(mes).find('.pd-message-translate-btn').first();
+            if (btn.length) {
+              if (payload.msg.extra?.phraseDesk) applyPersistedMessageTranslation(payload, btn);
+              else btn.removeClass('translated busy');
+            }
+          }
+        }
+        if (mes) {
+          if (!mes.querySelector('.mesAvatarWrapper .pd-message-translate-btn')) queueMessageButtonHydration(mes);
           schedulePhraseDeskRenderDecoration(payload, key);
         }
-        if (key === 'CHAT_CHANGED') {
-          const openedChat = liveContext()?.chat;
-          setTimeout(() => {
-            // A second chat switch can happen before this delayed hydration runs.
-            if (liveContext()?.chat !== openedChat) return;
-            // SillyTavern already renders persisted extra.display_text. On chat open,
-            // only hydrate buttons for mounted messages; never walk/mutate the full
-            // chat, rematerialize canonical records, or trigger an automatic save.
-            queueMessageButtonHydration(document.getElementById('chat') || document);
-          }, 250);
-        } else if (key === 'MESSAGE_UPDATED') {
-          setTimeout(() => {
-            const refreshed = payloadFromEventArgs(args);
-            if (refreshed?.mes) {
-              ensureMessageTranslateButton(refreshed.mes);
-              // MESSAGE_UPDATED belongs to one message. SillyTavern already owns its
-              // rendered display_text, so refresh only Phrase Desk's control/decorations
-              // for that exact target. Re-rendering every translated message here can
-              // erase DOM added by unrelated extensions and was never required.
-              const current = messagePayloadFromTarget(refreshed.mes) || refreshed;
-              const btn = $(current.mes).find('.pd-message-translate-btn').first();
-              applyPersistedMessageTranslation(current, btn);
-              schedulePhraseDeskRenderDecoration(current, key);
-            }
-            else queueMessageButtonHydration(document.getElementById('chat') || document);
-          }, 40);
-        }
-        if (roleHint === 'char' || roleHint === 'user') maybeAutoTranslateRenderedMessage(roleHint, args);
+        if (roleHint === 'char' || roleHint === 'user') maybeAutoTranslateRenderedMessage(roleHint, args, target);
       };
       es.on(eventName, handler);
       pdGlobalState.eventHandlers.push({ eventName, handler, instanceId: pdInstanceId });
@@ -9387,6 +9502,7 @@ function setupMessageRenderHooks() {
   bind('USER_MESSAGE_RENDERED', 'user');
   bind('MESSAGE_SWIPED', '');
   bind('MESSAGE_UPDATED', '');
+  pdGlobalState.decorateMountedMessage = pdDecorateMountedTranslation;
   pdGlobalState.messageRenderHooksBound = true;
 }
 
@@ -9401,45 +9517,85 @@ function originalTextForEditTarget(target) {
   if (!payload?.textEl?.length) return null;
   const data = variantForPayload(payload, false);
   const state = data?.state;
-  const original = ensureOriginalBackup(payload, state, state?.original || payload?.msg?.extra?.original_mes || payload?.msg?.mes || '');
+  const original = ensureOriginalBackup(payload, state, messageOriginalForTranslation(payload, state, true));
   if (!original) return null;
   return { payload, state, root:data?.root, original };
 }
-function fillOpenEditFieldWithOriginal(field, target) {
-  if (!field || field.__pdOriginalEditFilled) return false;
-  const data = originalTextForEditTarget(target || field);
-  if (!data?.original) return false;
-  try {
-    if (/^INPUT$/i.test(field.tagName || '')) {
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
-      if (setter) setter.call(field, data.original); else field.value = data.original;
-      field.dispatchEvent(new Event('input', { bubbles:true }));
-      field.dispatchEvent(new Event('change', { bubbles:true }));
-    } else {
-      setTextArea(field, data.original);
-    }
+let pdOriginalEditRestore = null;
+const PD_EDIT_FIELD_SELECTOR = '#curEditTextarea, textarea.edit_textarea, textarea.mes_edit_textarea, input.edit_textarea';
+function pdCancelOriginalEditRestore(session = pdOriginalEditRestore) {
+  if (!session) return;
+  for (const timer of session.timers) clearTimeout(timer);
+  if (pdOriginalEditRestore === session) pdOriginalEditRestore = null;
+}
+function fillOpenEditFieldWithOriginal(field, target, work = null) {
+  if (!field?.isConnected || !field.matches?.(PD_EDIT_FIELD_SELECTOR)) return false;
+  const mes = field.closest('.mes');
+  if (!mes || !mes.querySelector('.mes_text')?.contains(field)) return false;
+  if (!work) {
+    const payload = pdButtonPayloadForMountedMessage(mes);
+    work = pdCaptureMessageWork(payload);
+  }
+  if (!pdMessageWorkCurrent(work) || pdMountedMessageForWork(work) !== mes) return false;
+  if (field.__pdOriginalEditFilled) return true;
+  const extra = work.msg.extra;
+  // Ordinary ST editing already opens msg.mes. Do not create Phrase Desk
+  // backup fields or dispatch artificial input events for untouched messages.
+  if (!extra?.phraseDesk && !extra?.original_mes && !extra?.phraseDeskOriginal) { field.__pdOriginalEditFilled = true; return true; }
+  // A delayed fallback must never replace text already entered by the user.
+  // ST 1.18 fills the field from msg.mes before focus. The only other safe
+  // initial value is a known Phrase Desk translation (legacy edit renderers).
+  if (!sameDisplayedText(field.value, work.msg.mes) && !pdIsKnownTranslationText(work.msg, field.value)) {
     field.__pdOriginalEditFilled = true;
+    return true;
+  }
+  const data = originalTextForEditTarget(mes);
+  if (!data?.original || data.payload?.msg !== work.msg) return false;
+  try {
+    field.__pdOriginalEditFilled = true;
+    if (field.value !== data.original) {
+      if (/^INPUT$/i.test(field.tagName || '')) {
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+        if (setter) setter.call(field, data.original); else field.value = data.original;
+        field.dispatchEvent(new Event('input', { bubbles:true }));
+        field.dispatchEvent(new Event('change', { bubbles:true }));
+      } else setTextArea(field, data.original);
+    }
     if (data.state) data.state.editingOriginal = true;
     return true;
   } catch (e) {
+    delete field.__pdOriginalEditFilled;
     logDebug({ type:'edit-original-fill-error', error:e?.message || String(e) });
     return false;
   }
 }
 function restoreOriginalBeforeEdit(target) {
-  const editBtn = target?.closest?.('.mes_edit,.edit_mes,.mes_edit_button,[class*="mes_edit"],[class*="edit_mes"]');
+  const editBtn = target?.closest?.('.mes_edit,.edit_mes,.mes_edit_button');
   if (!editBtn || target?.closest?.('textarea,input')) return;
   const mes = editBtn.closest?.('.mes');
+  if (!mes) return;
+  pdCancelOriginalEditRestore();
+  const work = pdCaptureMessageWork(pdButtonPayloadForMountedMessage(mes));
+  if (!work) return;
+  const extra = work.msg.extra;
+  if (!extra?.phraseDesk && !extra?.original_mes && !extra?.phraseDeskOriginal) return;
+  const session = { work, mes, timers:[] };
+  pdOriginalEditRestore = session;
   const run = () => {
+    if (pdOriginalEditRestore !== session) return;
+    if (!pdMessageWorkCurrent(work) || pdMountedMessageForWork(work) !== mes) {
+      pdCancelOriginalEditRestore(session);
+      return;
+    }
     try {
-      const field = $(mes || document).find('textarea.edit_textarea:visible, textarea.mes_edit_textarea:visible, textarea:visible, input[type="text"]:visible').first()[0];
-      if (field) fillOpenEditFieldWithOriginal(field, mes || editBtn);
+      const field = mes.querySelector('.mes_text')?.querySelector(PD_EDIT_FIELD_SELECTOR);
+      if (field && fillOpenEditFieldWithOriginal(field, mes, work)) pdCancelOriginalEditRestore(session);
     } catch (e) { logDebug({ type:'edit-original-restore-error', error:e?.message || String(e) }); }
   };
-  setTimeout(run, 0);
-  try { requestAnimationFrame(run); } catch {}
-  setTimeout(run, 90);
-  setTimeout(run, 260);
+  for (const delay of [0,90,260]) session.timers.push(setTimeout(() => {
+    run();
+    if (delay === 260) pdCancelOriginalEditRestore(session);
+  }, delay));
 }
 
 
@@ -9514,13 +9670,18 @@ function setupDelegates(){
     }
   });
 
-  $(document).off('mousedown.phraseDeskEditOriginal').on('mousedown.phraseDeskEditOriginal', '.mes_edit,.edit_mes,.mes_edit_button,[class*="mes_edit"],[class*="edit_mes"]', function(e){
+  $(document).off('mousedown.phraseDeskEditOriginal').on('mousedown.phraseDeskEditOriginal', '.mes_edit,.edit_mes,.mes_edit_button', function(e){
     if ($(e.target).closest('textarea,input,.pd-message-translate-btn,.pd-selection-bubble').length) return;
     restoreOriginalBeforeEdit(this);
   });
-  $(document).off('focusin.phraseDeskEditOriginal').on('focusin.phraseDeskEditOriginal', '.mes textarea, .mes input[type="text"]', function(){
+  $(document).off('focusin.phraseDeskEditOriginal').on('focusin.phraseDeskEditOriginal', PD_EDIT_FIELD_SELECTOR, function(){
     const mes = this.closest?.('.mes');
-    if (mes) fillOpenEditFieldWithOriginal(this, mes.querySelector('.mes_edit,.edit_mes,.mes_edit_button,[class*="mes_edit"],[class*="edit_mes"]') || mes);
+    if (!mes) return;
+    const session = pdOriginalEditRestore;
+    if (session && session.mes !== mes) pdCancelOriginalEditRestore(session);
+    if (fillOpenEditFieldWithOriginal(this, mes, session?.mes === mes ? session.work : null)) {
+      pdCancelOriginalEditRestore();
+    }
   });
 
   $(document).off('pointerdown.phraseDeskInputRetranslate').on('pointerdown.phraseDeskInputRetranslate', '#pd-input-translate', function(e){
