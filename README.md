@@ -13,10 +13,16 @@ You can use message translation on its own, or turn saved expressions into vocab
 
 ## 📥 Installation and First Steps
 
+**Current version: 1.6.10.**
+
 1. In SillyTavern, open **Extensions → Install extension** (the option may be under extension management).
 2. Paste `https://github.com/AmbasaS2/phrase-desk`, install, and reload the page.
-3. Open **Extensions → Phrase Desk** to choose the translation engine and study/explanation languages.
+3. Open **Extensions → Phrase Desk** to choose the translation engine, study/explanation languages and translation display mode.
 4. Use the globe button on a message to translate it. Collecting phrases, quizzes, and answer practice are optional.
+
+**Translation only:** Keep roleplaying and tap the globe on a message; stop here if you do not want learning tools.
+
+**Optional study:** Select an original expression → Aa → save it → Phrase Notebook → quiz or AI answer practice. Set advanced prompts and automatic translation only if you want them.
 
 
 ## 🧭 From Translation to Practice
@@ -347,10 +353,16 @@ It is a good idea to export important Phrase Notebook and study records as a bac
 
 ## 📥 설치 및 처음 사용하기
 
+**현재 버전: 1.6.10.**
+
 1. SillyTavern의 **확장 프로그램 → 확장 설치** 메뉴를 엽니다. 버전에 따라 확장 관리 메뉴 안에 있을 수 있습니다.
 2. `https://github.com/AmbasaS2/phrase-desk`를 붙여넣어 설치하고 새로고침합니다.
-3. **확장 프로그램 → Phrase Desk**에서 번역 엔진, 학습 언어, 번역·설명 언어를 선택합니다.
+3. **확장 프로그램 → Phrase Desk**에서 번역 엔진, 학습 언어, 번역·설명 언어와 표시 방식을 선택합니다.
 4. 메시지의 지구본 버튼으로 번역합니다. 표현 저장·쪽지시험·답변 연습은 필요할 때만 사용해도 됩니다.
+
+**번역만 쓰실 분:** 평소처럼 롤플하다가 메시지 옆 지구본을 눌러 읽으면 끝!
+
+**공부하고 싶을 때:** 원문 표현 드래그 → Aa → 표현 저장 → 표현 노트 → 쪽지 시험 또는 AI 답변 연습. 고급 프롬프트와 자동 번역은 필요할 때 설정하세요.
 
 
 ## 🧭 번역에서 학습까지
