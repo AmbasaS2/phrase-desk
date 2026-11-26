@@ -8,7 +8,7 @@ You can use message translation on its own, or turn saved expressions into vocab
 ## 📸 Screenshots
 
 <p align="center">
-  <a href="assets/readme/mobile/phrase-desk-preview-mobile.webp"><img src="assets/readme/mobile/phrase-desk-preview-mobile.webp" alt="Phrase Desk translation, expression notebook and vocabulary quiz" width="520" /></a>
+  <a href="assets/readme/phrase-desk-bilingual.jpeg"><img src="assets/readme/phrase-desk-bilingual.jpeg" alt="Phrase Desk translation, expression notebook and vocabulary quiz" width="560" /></a>
 </p>
 
 ## 📥 Installation and First Steps
@@ -27,17 +27,13 @@ You can use message translation on its own, or turn saved expressions into vocab
 
 ## 🧭 From Translation to Practice
 
-<p align="center">
-  <a href="assets/readme/mobile/phrase-desk-workflow-guide-mobile.webp"><img src="assets/readme/mobile/phrase-desk-workflow-guide-mobile.webp" alt="Translate roleplay, save phrases, review them in the notebook, quiz or answer practice" width="520" /></a>
-</p>
+
 
 Translate messages on their own, or optionally save useful expressions and use them for review. Quizzes run locally without a model API; AI answer practice uses your selected connection profile.
 
 ## 🌍 Languages (v1.6.0)
 
-<p align="center">
-  <a href="assets/readme/mobile/phrase-desk-language-guide-mobile.webp"><img src="assets/readme/mobile/phrase-desk-language-guide-mobile.webp" alt="Phrase Desk language guide: separate study language and translation or explanation language settings" width="520" /></a>
-</p>
+
 
 The interface follows SillyTavern’s UI language automatically. Korean, English, Japanese, French, and Spanish are included; other UI locales use English labels. This does not restrict which languages can be translated or studied: actual language coverage and quality depend on the selected model or Google Translation.
 
@@ -56,7 +52,8 @@ Set the translation method and related options under **Extensions → Phrase Des
 **Translation settings** groups the connection, engine, translation mode, token limit, and language controls. It starts expanded and remembers your last open/closed choice. **Advanced settings** starts collapsed and contains the four extra options and all three prompt editors. The cache controls remain outside these groups.
 
 <p align="center">
-  <a href="assets/readme/mobile/phrase-desk-translation-settings-mobile.png"><img src="assets/readme/mobile/phrase-desk-translation-settings-mobile.png" alt="Translation settings panel" width="520" /></a>
+  <a href="assets/readme/screenshots/phrase-basic-current.webp"><img src="assets/readme/screenshots/phrase-basic-current.webp" alt="Current settings UI (test environment)" width="560" /></a>
+  <br /><sub>Current-version UI · test environment</sub>
 </p>
 
 **Translation Connection**
@@ -100,7 +97,8 @@ Set the translation method and related options under **Extensions → Phrase Des
 **Input and Translation Rules**
 
 <p align="center">
-  <a href="assets/readme/mobile/phrase-desk-advanced-settings-mobile.png"><img src="assets/readme/mobile/phrase-desk-advanced-settings-mobile.png" alt="Advanced settings and three prompt editors" width="520" /></a>
+  <a href="assets/readme/screenshots/phrase-advanced-current.webp"><img src="assets/readme/screenshots/phrase-advanced-current.webp" alt="Current settings UI (test environment)" width="560" /></a>
+  <br /><sub>Current-version UI · test environment</sub>
 </p>
 
 | Setting | Description |
@@ -117,9 +115,7 @@ Enabling automatic translation may create a translation request whenever a new m
 
 Each **input/output translation prompt selector and editor** has its own disk Save button; Save as New, Rename, Import, and confirmed Delete save their named action immediately. Unsaved changes require an in-page confirmation before switching. Both saved selections survive refresh/restart independently. The **Current Character Prompt** still auto-saves. Use the expand icon on any of the three editors to open a larger editor in SillyTavern's native popup; the same read-only, explicit-save, or auto-save rules apply. Changing output prompts does not erase existing translations or automatically retranslate; hold `🌐` to request a new translation.
 
-<p align="center">
-  <a href="assets/readme/mobile/phrase-desk-expanded-prompt-mobile.png"><img src="assets/readme/mobile/phrase-desk-expanded-prompt-mobile.png" alt="Expanded prompt editor and save behavior" width="520" /></a>
-</p>
+
 
 The Current Character Prompt is saved by character name rather than by chat. Character cards with exactly the same name share that prompt, and renaming a character may leave the prompt field for the new name empty until you set it again.
 
@@ -299,9 +295,7 @@ You can retake only the expressions in the wrong-answer notebook. Individual wro
 
 ## 🔌 API Usage
 
-<p align="center">
-  <a href="assets/readme/mobile/phrase-desk-api-guide-mobile.webp"><img src="assets/readme/mobile/phrase-desk-api-guide-mobile.webp" alt="Visual guide separating locally processed Phrase Desk functions from those that call a model API" width="520" /></a>
-</p>
+
 
 | Feature | API Usage |
 |---|---|
@@ -348,7 +342,7 @@ It is a good idea to export important Phrase Notebook and study records as a bac
 ## 📸 화면
 
 <p align="center">
-  <a href="assets/readme/mobile/phrase-desk-preview-mobile.webp"><img src="assets/readme/mobile/phrase-desk-preview-mobile.webp" alt="프레이즈 데스크 번역·표현 노트·쪽지시험 예시" width="520" /></a>
+  <a href="assets/readme/phrase-desk-bilingual.jpeg"><img src="assets/readme/phrase-desk-bilingual.jpeg" alt="프레이즈 데스크 번역·표현 노트·쪽지시험 예시" width="560" /></a>
 </p>
 
 ## 📥 설치 및 처음 사용하기
@@ -367,17 +361,13 @@ It is a good idea to export important Phrase Notebook and study records as a bac
 
 ## 🧭 번역에서 학습까지
 
-<p align="center">
-  <a href="assets/readme/mobile/phrase-desk-workflow-guide-mobile.webp"><img src="assets/readme/mobile/phrase-desk-workflow-guide-mobile.webp" alt="RP 번역, 표현 저장, 표현 노트, 쪽지시험과 AI 답변 연습으로 이어지는 흐름" width="520" /></a>
-</p>
+
 
 메시지 번역만 사용해도 되고, 필요할 때 표현을 저장해 복습할 수도 있습니다. 쪽지시험은 모델 API 없이 기기에서 처리하며 AI 답변 연습은 선택한 연결 프로필을 사용합니다.
 
 ## 🌍 언어 설정 (v1.6.0)
 
-<p align="center">
-  <a href="assets/readme/mobile/phrase-desk-language-guide-mobile.webp"><img src="assets/readme/mobile/phrase-desk-language-guide-mobile.webp" alt="프레이즈 데스크 학습 언어와 번역·설명 언어 설정의 기능 차이" width="520" /></a>
-</p>
+
 
 화면 언어는 SillyTavern 설정을 자동으로 따릅니다. 한국어·영어·일본어·프랑스어·스페인어 번역이 포함되어 있으며, 그 외 화면 언어에서는 영어로 표시합니다. 화면 번역이 없는 언어도 번역·학습 언어로 지정할 수 있습니다. 실제 지원 범위와 품질은 선택한 모델 또는 구글 번역에 따라 달라집니다.
 
@@ -396,7 +386,8 @@ It is a good idea to export important Phrase Notebook and study records as a bac
 **번역 설정**에는 연결 프로필, 번역 엔진, 번역 방식, 토큰 한도와 언어 설정이 모여 있습니다. 기본적으로 펼쳐져 있으며 마지막 접기·펼치기 상태를 기억합니다. **고급 설정**은 기본적으로 접혀 있고, 네 가지 추가 옵션과 세 프롬프트 편집기를 포함합니다. 캐시 관리 항목은 두 그룹 바깥에 있습니다.
 
 <p align="center">
-  <a href="assets/readme/mobile/phrase-desk-translation-settings-mobile.png"><img src="assets/readme/mobile/phrase-desk-translation-settings-mobile.png" alt="번역 설정 패널" width="520" /></a>
+  <a href="assets/readme/screenshots/phrase-basic-current.webp"><img src="assets/readme/screenshots/phrase-basic-current.webp" alt="현재 버전 설정 화면 (테스트 환경)" width="560" /></a>
+  <br /><sub>현재 버전 UI · 테스트 환경</sub>
 </p>
 
 **번역 연결**
@@ -440,7 +431,8 @@ It is a good idea to export important Phrase Notebook and study records as a bac
 **입력과 번역 규칙**
 
 <p align="center">
-  <a href="assets/readme/mobile/phrase-desk-advanced-settings-mobile.png"><img src="assets/readme/mobile/phrase-desk-advanced-settings-mobile.png" alt="고급 설정과 세 프롬프트 편집기" width="520" /></a>
+  <a href="assets/readme/screenshots/phrase-advanced-current.webp"><img src="assets/readme/screenshots/phrase-advanced-current.webp" alt="현재 버전 설정 화면 (테스트 환경)" width="560" /></a>
+  <br /><sub>현재 버전 UI · 테스트 환경</sub>
 </p>
 
 | 설정 | 설명 |
@@ -457,9 +449,7 @@ It is a good idea to export important Phrase Notebook and study records as a bac
 
 **입력과 출력의 프롬프트 선택·내용은 각자의 디스켓 저장 버튼으로 확정**합니다. 각각 마지막으로 저장한 선택을 새로고침·브라우저 재실행·서버 재시작 후에도 복원합니다. 새 프롬프트로 저장·이름 변경·가져오기·삭제 확인은 각 영역에서 독립적으로 동작하며, 미저장 수정 내용은 해당 번역에 적용되지 않습니다. **현재 캐릭터 전용 프롬프트는 기존대로 자동 저장**됩니다. 세 편집기의 크게 보기 아이콘을 누르면 SillyTavern 기본 팝업에서 넓게 편집할 수 있으며, 읽기 전용·수동 저장·자동 저장 규칙은 그대로 적용됩니다. 기존 출력 번역 캐시는 그대로 남고, 새 출력 프롬프트로 다시 번역하려면 🌐을 길게 누르면 됩니다.
 
-<p align="center">
-  <a href="assets/readme/mobile/phrase-desk-expanded-prompt-mobile.png"><img src="assets/readme/mobile/phrase-desk-expanded-prompt-mobile.png" alt="프롬프트 크게 보기와 저장 방법" width="520" /></a>
-</p>
+
 
 현재 캐릭터 전용 프롬프트는 채팅방이 아니라 캐릭터 이름을 기준으로 저장됩니다. 이름이 완전히 같은 캐릭터 카드는 같은 프롬프트를 공유하며, 캐릭터 이름을 바꾸면 새 이름의 프롬프트 칸은 다시 설정하기 전까지 비어 보일 수 있습니다.
 
@@ -639,9 +629,7 @@ Phrase Desk를 열고 오른쪽 위의 `⚙`을 누릅니다.
 
 ## 🔌 API 사용 안내
 
-<p align="center">
-  <a href="assets/readme/mobile/phrase-desk-api-guide-mobile.webp"><img src="assets/readme/mobile/phrase-desk-api-guide-mobile.webp" alt="프레이즈 데스크에서 모델 API가 필요한 기능과 필요하지 않은 기능 구분" width="520" /></a>
-</p>
+
 
 | 기능 | API 사용 |
 |---|---|
