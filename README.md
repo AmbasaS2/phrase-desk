@@ -8,7 +8,7 @@ You can use message translation on its own, or turn saved expressions into vocab
 ## 📸 Screenshots
 
 <p align="center">
-  <a href="assets/readme/phrase-desk-bilingual.jpeg"><img src="assets/readme/phrase-desk-bilingual.jpeg" alt="Phrase Desk translation, expression notebook and vocabulary quiz" width="560" /></a>
+  <a href="assets/readme/guides/preview.webp"><img src="assets/readme/guides/preview.webp" alt="번역부터 학습까지 / Translation to study" width="640" /></a>
 </p>
 
 ## 📥 Installation and First Steps
@@ -52,7 +52,7 @@ Set the translation method and related options under **Extensions → Phrase Des
 **Translation settings** groups the connection, engine, translation mode, token limit, and language controls. It starts expanded and remembers your last open/closed choice. **Advanced settings** starts collapsed and contains the four extra options and all three prompt editors. The cache controls remain outside these groups.
 
 <p align="center">
-  <a href="assets/readme/screenshots/phrase-basic-current.webp"><img src="assets/readme/screenshots/phrase-basic-current.webp" alt="Current settings UI (test environment)" width="560" /></a>
+  <a href="assets/readme/guides/basic.webp"><img src="assets/readme/guides/basic.webp" alt="번역 설정 / Translation settings" width="640" /></a>
   <br /><sub>Current-version UI · test environment</sub>
 </p>
 
@@ -69,7 +69,7 @@ Set the translation method and related options under **Extensions → Phrase Des
 **Chat Translation**
 
 <p align="center">
-  <a href="assets/readme/mobile/phrase-desk-translation-modes-mobile.webp"><img src="assets/readme/mobile/phrase-desk-translation-modes-mobile.webp" alt="Actual example screenshots comparing Translation Only, Full Bilingual and Bilingual Dialogue Only" width="520" /></a>
+  <a href="assets/readme/guides/translation-modes.webp"><img src="assets/readme/guides/translation-modes.webp" alt="번역 표시 방식 / Translation modes" width="640" /></a>
 </p>
 
 | Setting | Options |
@@ -86,7 +86,7 @@ Set the translation method and related options under **Extensions → Phrase Des
 **Bilingual Display**
 
 <p align="center">
-  <a href="assets/readme/mobile/phrase-desk-reading-tools-mobile.webp"><img src="assets/readme/mobile/phrase-desk-reading-tools-mobile.webp" alt="Earlier real screenshots of blur meanings, numbered translation notes and expanding notes" width="520" /></a>
+  <a href="assets/readme/guides/reading.webp"><img src="assets/readme/guides/reading.webp" alt="뜻 블러와 주석 / Reading tools" width="640" /></a>
 </p>
 
 | Setting | Description |
@@ -97,7 +97,7 @@ Set the translation method and related options under **Extensions → Phrase Des
 **Input and Translation Rules**
 
 <p align="center">
-  <a href="assets/readme/screenshots/phrase-advanced-current.webp"><img src="assets/readme/screenshots/phrase-advanced-current.webp" alt="Current settings UI (test environment)" width="560" /></a>
+  <a href="assets/readme/guides/advanced.webp"><img src="assets/readme/guides/advanced.webp" alt="고급 설정 / Advanced settings" width="640" /></a>
   <br /><sub>Current-version UI · test environment</sub>
 </p>
 
@@ -172,7 +172,7 @@ When a message is displayed in Scene Board format, Phrase Desk preserves its sou
 ## ✍️ Input Correction Before Sending
 
 <p align="center">
-  <a href="assets/readme/mobile/phrase-desk-writing-guide-mobile.webp"><img src="assets/readme/mobile/phrase-desk-writing-guide-mobile.webp" alt="Actual earlier screenshots of composer translation, Aa quick menu and before-send input correction" width="520" /></a>
+  <a href="assets/readme/guides/writing.webp"><img src="assets/readme/guides/writing.webp" alt="입력 번역과 교정 / Writing tools" width="640" /></a>
 </p>
 
 When **Correct Input Before Sending** is enabled, you can review the following before a message in the selected study language is sent:
@@ -193,7 +193,7 @@ Saving a correction to the Phrase Notebook does not create another API request. 
 ## 📚 Phrase Notebook
 
 <p align="center">
-  <a href="assets/readme/mobile/phrase-desk-notebook-guide-mobile.webp"><img src="assets/readme/mobile/phrase-desk-notebook-guide-mobile.webp" alt="Select text and use Aa, review phrases in the notebook, and find repeated-expression candidates" width="520" /></a>
+  <a href="assets/readme/guides/notebook-guide.webp"><img src="assets/readme/guides/notebook-guide.webp" alt="표현 노트 / Phrase notebook" width="640" /></a>
 </p>
 
 Open the Phrase Notebook from either of these locations:
@@ -254,7 +254,7 @@ This does not analyze a sentence you have selected. Phrase Desk presents up to 1
 ## 📝 Study Sheet Mode
 
 <p align="center">
-  <a href="assets/readme/mobile/phrase-desk-study-guide-mobile.webp"><img src="assets/readme/mobile/phrase-desk-study-guide-mobile.webp" alt="Real screenshots of the local quiz, AI answer practice and learning calendar" width="520" /></a>
+  <a href="assets/readme/guides/study.webp"><img src="assets/readme/guides/study.webp" alt="쪽지 시험과 답변 연습 / Study practice" width="640" /></a>
 </p>
 
 Use saved expressions for the **Quiz** and **AI Answer Practice**.
@@ -342,7 +342,7 @@ It is a good idea to export important Phrase Notebook and study records as a bac
 ## 📸 화면
 
 <p align="center">
-  <a href="assets/readme/phrase-desk-bilingual.jpeg"><img src="assets/readme/phrase-desk-bilingual.jpeg" alt="프레이즈 데스크 번역·표현 노트·쪽지시험 예시" width="560" /></a>
+  <a href="assets/readme/guides/preview.webp"><img src="assets/readme/guides/preview.webp" alt="번역부터 학습까지 / Translation to study" width="640" /></a>
 </p>
 
 ## 📥 설치 및 처음 사용하기
@@ -386,7 +386,7 @@ It is a good idea to export important Phrase Notebook and study records as a bac
 **번역 설정**에는 연결 프로필, 번역 엔진, 번역 방식, 토큰 한도와 언어 설정이 모여 있습니다. 기본적으로 펼쳐져 있으며 마지막 접기·펼치기 상태를 기억합니다. **고급 설정**은 기본적으로 접혀 있고, 네 가지 추가 옵션과 세 프롬프트 편집기를 포함합니다. 캐시 관리 항목은 두 그룹 바깥에 있습니다.
 
 <p align="center">
-  <a href="assets/readme/screenshots/phrase-basic-current.webp"><img src="assets/readme/screenshots/phrase-basic-current.webp" alt="현재 버전 설정 화면 (테스트 환경)" width="560" /></a>
+  <a href="assets/readme/guides/basic.webp"><img src="assets/readme/guides/basic.webp" alt="번역 설정 / Translation settings" width="640" /></a>
   <br /><sub>현재 버전 UI · 테스트 환경</sub>
 </p>
 
@@ -403,7 +403,7 @@ It is a good idea to export important Phrase Notebook and study records as a bac
 **채팅 번역**
 
 <p align="center">
-  <a href="assets/readme/mobile/phrase-desk-translation-modes-mobile.webp"><img src="assets/readme/mobile/phrase-desk-translation-modes-mobile.webp" alt="번역문만, 전체 병기, 대사만 병기 세 가지의 실제 화면 비교" width="520" /></a>
+  <a href="assets/readme/guides/translation-modes.webp"><img src="assets/readme/guides/translation-modes.webp" alt="번역 표시 방식 / Translation modes" width="640" /></a>
 </p>
 
 | 설정 | 선택 항목 |
@@ -420,7 +420,7 @@ It is a good idea to export important Phrase Notebook and study records as a bac
 **병기 표시**
 
 <p align="center">
-  <a href="assets/readme/mobile/phrase-desk-reading-tools-mobile.webp"><img src="assets/readme/mobile/phrase-desk-reading-tools-mobile.webp" alt="뜻 블러, 번호 주석 팝업, 주석 펼치기 기능의 이전 실제 화면" width="520" /></a>
+  <a href="assets/readme/guides/reading.webp"><img src="assets/readme/guides/reading.webp" alt="뜻 블러와 주석 / Reading tools" width="640" /></a>
 </p>
 
 | 설정 | 설명 |
@@ -431,7 +431,7 @@ It is a good idea to export important Phrase Notebook and study records as a bac
 **입력과 번역 규칙**
 
 <p align="center">
-  <a href="assets/readme/screenshots/phrase-advanced-current.webp"><img src="assets/readme/screenshots/phrase-advanced-current.webp" alt="현재 버전 설정 화면 (테스트 환경)" width="560" /></a>
+  <a href="assets/readme/guides/advanced.webp"><img src="assets/readme/guides/advanced.webp" alt="고급 설정 / Advanced settings" width="640" /></a>
   <br /><sub>현재 버전 UI · 테스트 환경</sub>
 </p>
 
@@ -506,7 +506,7 @@ HTML이나 사용자 정의 태그가 있는 메시지는 태그와 속성을 �
 ## ✍️ 보내기 전 입력 교정
 
 <p align="center">
-  <a href="assets/readme/mobile/phrase-desk-writing-guide-mobile.webp"><img src="assets/readme/mobile/phrase-desk-writing-guide-mobile.webp" alt="입력창 지구본 번역, Aa 빠른 메뉴, 보내기 전 문장 교정의 실제 예시 화면" width="520" /></a>
+  <a href="assets/readme/guides/writing.webp"><img src="assets/readme/guides/writing.webp" alt="입력 번역과 교정 / Writing tools" width="640" /></a>
 </p>
 
 설정에서 **보내기 전 입력 교정**을 켜면 학습 언어로 작성한 메시지를 전송하기 전에 다음 내용을 확인할 수 있습니다.
@@ -527,7 +527,7 @@ HTML이나 사용자 정의 태그가 있는 메시지는 태그와 속성을 �
 ## 📚 표현 노트
 
 <p align="center">
-  <a href="assets/readme/mobile/phrase-desk-notebook-guide-mobile.webp"><img src="assets/readme/mobile/phrase-desk-notebook-guide-mobile.webp" alt="표현 드래그와 Aa 메뉴, 표현 노트 카드, 반복 표현 후보 찾기 화면" width="520" /></a>
+  <a href="assets/readme/guides/notebook-guide.webp"><img src="assets/readme/guides/notebook-guide.webp" alt="표현 노트 / Phrase notebook" width="640" /></a>
 </p>
 
 표현 노트는 다음 위치에서 열 수 있습니다.
@@ -588,7 +588,7 @@ Phrase Desk를 열고 오른쪽 위의 `⚙`을 누릅니다.
 ## 📝 학습지 모드
 
 <p align="center">
-  <a href="assets/readme/mobile/phrase-desk-study-guide-mobile.webp"><img src="assets/readme/mobile/phrase-desk-study-guide-mobile.webp" alt="쪽지시험, AI 답변 연습, 학습 달력의 실제 사용 화면 비교" width="520" /></a>
+  <a href="assets/readme/guides/study.webp"><img src="assets/readme/guides/study.webp" alt="쪽지 시험과 답변 연습 / Study practice" width="640" /></a>
 </p>
 
 표현 노트에 저장한 표현으로 **쪽지 시험**과 **AI 답변 연습**을 할 수 있습니다.
