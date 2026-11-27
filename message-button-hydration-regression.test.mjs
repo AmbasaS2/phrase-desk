@@ -94,9 +94,9 @@ function fixture(count = 30, styleCost = 0) {
   }
 
   class MutationObserver {
-    constructor(callback) { this.callback = callback; observers.push(this); }
-    observe() {}
-    disconnect() {}
+    constructor(callback) { this.callback = callback; this.targets = new Map(); observers.push(this); }
+    observe(target, options) { this.targets.set(target, { ...options }); }
+    disconnect() { this.targets.clear(); }
   }
 
   const sandbox = {
@@ -316,4 +316,20 @@ test('hydration code performs no chat save or full-canonical re-render', () => {
   assert.doesNotMatch(code, /pdSchedulePendingMetadataRetry|PD_MESSAGE_BUTTON_RETRY_DELAY_MS/);
   assert.match(code, /characterData: true/);
   assert.match(code, /PD_MESSAGE_BUTTON_FRAME_LIMIT = 96/);
+});
+
+test('observer targets only chat structure, message roots and metadata; chat reset drops old targets', () => {
+  const t = fixture(2);
+  t.api.setupMessageButtonObserver(); t.flush();
+  const first = t.observers[0];
+  assert.equal(first.targets.size, 5);
+  assert.deepEqual(first.targets.get(t.chatElement), { childList: true });
+  for (const mes of t.messages) {
+    assert.deepEqual(first.targets.get(mes), { childList: true });
+    assert.deepEqual(first.targets.get(mes.metadata.meta), { childList: true, characterData: true, subtree: true });
+  }
+  t.api.setupMessageButtonObserver({ reset: true }); t.flush();
+  assert.equal(first.targets.size, 0);
+  assert.equal(t.observers[1].targets.size, 5);
+  assert.equal(t.stats.buttons, 2);
 });

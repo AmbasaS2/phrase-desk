@@ -13,7 +13,7 @@ You can use message translation on its own, or turn saved expressions into vocab
 
 ## 📥 Installation and First Steps
 
-**Current version: 1.6.10.**
+**Current version: 1.6.11.**
 
 1. In SillyTavern, open **Extensions → Install extension** (the option may be under extension management).
 2. Paste `https://github.com/AmbasaS2/phrase-desk`, install, and reload the page.
@@ -347,7 +347,7 @@ It is a good idea to export important Phrase Notebook and study records as a bac
 
 ## 📥 설치 및 처음 사용하기
 
-**현재 버전: 1.6.10.**
+**현재 버전: 1.6.11.**
 
 1. SillyTavern의 **확장 프로그램 → 확장 설치** 메뉴를 엽니다. 버전에 따라 확장 관리 메뉴 안에 있을 수 있습니다.
 2. `https://github.com/AmbasaS2/phrase-desk`를 붙여넣어 설치하고 새로고침합니다.

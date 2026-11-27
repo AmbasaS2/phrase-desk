@@ -55,7 +55,7 @@ function normalizeChatMaxTokens(value) {
   return Number.isFinite(amount) && amount > 0 ? Math.min(32768, Math.max(256, Math.round(amount))) : MAX_TOKENS;
 }
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.6.10";
+const PD_VERSION = "1.6.11";
 const CHAT_TRANSLATION_QUALITY_LIMITS = Object.freeze({
   partialCoverageMin:0.75,
   degradedCoverageMin:0.25,
@@ -6438,6 +6438,7 @@ function pdScheduleButtonHydrationFrame() {
       processed++;
       if (!mes?.isConnected || !chatEl.contains(mes)) continue;
       try {
+        pdGlobalState.observeMessageButtonMetadata?.(mes);
         const entry = pdPrepareMessageTranslateButton(mes);
         if (entry) prepared.push(entry);
       } catch (error) { console.warn('[Phrase Desk] button hydration skipped', error); }
@@ -6487,7 +6488,7 @@ function clearMessageObserverRetry() {
 function scheduleMessageButtonHydration() {
   setupMessageButtonObserver();
 }
-function setupMessageButtonObserver() {
+function setupMessageButtonObserver({ reset = false } = {}) {
   const chatEl = document.getElementById('chat') || document.getElementById('chat_container');
   if (!chatEl) {
     const attempts = Number(pdGlobalState.messageButtonObserverRetryAttempts || 0);
@@ -6501,8 +6502,32 @@ function setupMessageButtonObserver() {
   }
   clearMessageObserverRetry();
   pdGlobalState.messageButtonObserverRetryAttempts = 0;
-  if (pdGlobalState.messageButtonObserver && pdGlobalState.messageButtonObserverTarget === chatEl) return;
+  if (!reset && pdGlobalState.messageButtonObserver && pdGlobalState.messageButtonObserverTarget === chatEl) return;
   try { pdGlobalState.messageButtonObserver?.disconnect?.(); } catch {}
+
+  // One observer, narrow targets: chat/message structure plus the metadata
+  // wrapper where ST displays the message ID, timer and token count. Neither
+  // characterData nor childList mutations inside .mes_text are subscribed to.
+  const structureTargets = new WeakSet();
+  const metadataTargets = new WeakSet();
+  const observeStructure = node => {
+    if (!node || structureTargets.has(node) || metadataTargets.has(node)) return;
+    observer.observe(node, { childList: true });
+    structureTargets.add(node);
+  };
+  const observeMetadata = mes => {
+    if (!mes || !chatEl.contains(mes)) return;
+    // Native .mes is a direct chat child and .mesAvatarWrapper is a direct
+    // message child. Also support wrappers that already exist in custom DOMs.
+    for (let node = mes; node && node !== chatEl; node = node.parentElement) observeStructure(node);
+    const meta = mes.querySelector?.('.mesAvatarWrapper');
+    if (!meta) return;
+    for (let node = meta.parentElement; node && node !== mes; node = node.parentElement) observeStructure(node);
+    if (!metadataTargets.has(meta)) {
+      observer.observe(meta, { childList: true, characterData: true, subtree: true });
+      metadataTargets.add(meta);
+    }
+  };
 
   const observer = new MutationObserver(mutations => {
     const affected = new Set();
@@ -6513,6 +6538,7 @@ function setupMessageButtonObserver() {
       // Streamed body text cannot change the metadata anchors for the button.
       if (target?.closest?.('.mes_text')) continue;
       const owner = target?.closest?.('.mes');
+      if (owner && !chatEl.contains(owner)) continue;
       const inMetadata = !!(owner && target?.closest?.('.mesAvatarWrapper, .mesIDDisplay, .tokenCounterDisplay, .mes_timer'));
       const allAdded = Array.from(mutation.addedNodes || []);
       const added = allAdded.filter(node => node?.nodeType === 1);
@@ -6545,12 +6571,16 @@ function setupMessageButtonObserver() {
       }
     }
     for (const mes of mounted) pdGlobalState.decorateMountedMessage?.(mes);
-    for (const mes of affected) queueMessageButtonHydration(mes);
+    for (const mes of affected) {
+      observeMetadata(mes);
+      queueMessageButtonHydration(mes);
+    }
     for (const scope of scopes) queueMessageButtonHydration(scope);
   });
-  observer.observe(chatEl, { childList: true, characterData: true, subtree: true });
+  observeStructure(chatEl);
   pdGlobalState.messageButtonObserver = observer;
   pdGlobalState.messageButtonObserverTarget = chatEl;
+  pdGlobalState.observeMessageButtonMetadata = observeMetadata;
   hydrateMessageTranslateButtons(chatEl);
 }
 function messageIndexForPayload(payload) {
@@ -9449,7 +9479,8 @@ function setupMessageRenderHooks() {
         if (key === 'CHAT_CHANGED') {
           pdCancelDelayedChatWork();
           refreshCharacterPromptField(true);
-          setupMessageButtonObserver();
+          // Release old metadata targets even when ST reuses the same chat DOM.
+          setupMessageButtonObserver({ reset: true });
           queueMessageButtonHydration(document.getElementById('chat') || document);
           return;
         }
