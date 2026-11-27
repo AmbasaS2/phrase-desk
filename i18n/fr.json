@@ -329,5 +329,8 @@
   "phraseDesk.866c7eae": "Fermer",
   "phraseDesk.6282c847": "Impossible d’ouvrir le prompt.",
   "phraseDesk.e4cc50e9": "Paramètres avancés",
-  "phraseDesk.b607aced": "Paramètres de traduction"
+  "phraseDesk.b607aced": "Paramètres de traduction",
+  "phraseDesk.4b7e7288": "Impossible d’ouvrir le stockage du carnet de vocabulaire. La modification des données d’apprentissage a été désactivée pour protéger vos enregistrements. Veuillez consulter la console de développement.",
+  "phraseDesk.fd3210fb": "Impossible d’enregistrer le carnet de vocabulaire. Veuillez exporter vos notes au format JSON pour les conserver avant de fermer cet écran.",
+  "phraseDesk.34e40dca": "Impossible de réinitialiser les données d’apprentissage. Vos enregistrements existants sont conservés."
 }

@@ -329,5 +329,8 @@
   "phraseDesk.866c7eae": "Close",
   "phraseDesk.6282c847": "Could not open the prompt.",
   "phraseDesk.e4cc50e9": "Advanced settings",
-  "phraseDesk.b607aced": "Translation settings"
+  "phraseDesk.b607aced": "Translation settings",
+  "phraseDesk.4b7e7288": "Could not open the phrase notebook storage. Editing learning data has been disabled to protect your records. Please check the developer console.",
+  "phraseDesk.fd3210fb": "Could not save the phrase notebook. Please export your notes as JSON to preserve them before closing this screen.",
+  "phraseDesk.34e40dca": "Could not reset the learning data. Your existing records are preserved."
 }

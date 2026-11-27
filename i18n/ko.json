@@ -329,5 +329,8 @@
   "phraseDesk.866c7eae": "닫기",
   "phraseDesk.6282c847": "프롬프트를 열지 못했습니다.",
   "phraseDesk.e4cc50e9": "고급 설정",
-  "phraseDesk.b607aced": "번역 설정"
+  "phraseDesk.b607aced": "번역 설정",
+  "phraseDesk.4b7e7288": "단어장 저장소를 열지 못했습니다. 기록을 보호하기 위해 학습 편집을 중지했습니다. 개발자 콘솔을 확인해 주세요.",
+  "phraseDesk.fd3210fb": "단어장 저장에 실패했습니다. 이 화면을 닫기 전에 노트를 JSON으로 내보내 보존해 주세요.",
+  "phraseDesk.34e40dca": "학습 데이터 초기화에 실패했습니다. 기존 기록은 그대로 보존됩니다."
 }

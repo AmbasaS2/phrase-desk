@@ -1,5 +1,11 @@
 # Phrase Desk changelog
 
+## 1.6.12 — 2026-11-27 · Polite Korean storage and reset notices
+
+- Reword three learning-storage and reset error notices in polite Korean; add matching entries for all five UI locales. Keep learning data, error handling, prompts, examples and existing translations unchanged.
+- Validation: JavaScript syntax and five-catalog key, placeholder, tag, and lookup checks passed. Installed SillyTavern desktop/mobile and full Node regression suite were not run in this environment.
+- Rollback baseline: `c2161256ec79189d5e0a9886a0941e12c4528af0` (1.6.11); no data migration required.
+
 ## 1.6.10 — 2026-11-25 · Chat rendering and delayed-work safety
 
 - Coalesce bilingual decoration into bounded frames and skip unchanged rendered bodies using message/display provenance and DOM node identity. Hydrate only actual mounted translated messages when blur/notes are enabled; preserve blur reveal and expanded notes on duplicate events. Blur toggles no longer replace message HTML.

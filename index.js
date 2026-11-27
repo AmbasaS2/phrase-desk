@@ -55,7 +55,7 @@ function normalizeChatMaxTokens(value) {
   return Number.isFinite(amount) && amount > 0 ? Math.min(32768, Math.max(256, Math.round(amount))) : MAX_TOKENS;
 }
 const CONTEXT_COUNT = 3;
-const PD_VERSION = "1.6.11";
+const PD_VERSION = "1.6.12";
 const CHAT_TRANSLATION_QUALITY_LIMITS = Object.freeze({
   partialCoverageMin:0.75,
   degradedCoverageMin:0.25,
@@ -319,7 +319,7 @@ async function initializeLearningStorage() {
     console.error('[Phrase Desk] learning file migration/load blocked, legacy data was not removed', error);
     if (!learningStorageWarningShown) {
       learningStorageWarningShown = true;
-      toast(pdT('단어장 저장소를 열지 못했습니다. 기록을 보호하기 위해 학습 편집을 중지했어. 개발자 콘솔을 확인해줘.'), 'error');
+      toast(pdT('단어장 저장소를 열지 못했습니다. 기록을 보호하기 위해 학습 편집을 중지했습니다. 개발자 콘솔을 확인해 주세요.'), 'error');
     }
     return false;
   }
@@ -382,7 +382,7 @@ function saveLearningData() {
   // reappear there. Keep changed notes in memory for export or retry.
   void queueLearningSnapshot().catch(error => {
     console.error('[Phrase Desk] learning data was NOT saved', error);
-    toast(pdT('단어장 저장 실패! 이 화면을 닫기 전에 노트를 JSON으로 내보내서 보존해줘.'), 'error');
+    toast(pdT('단어장 저장에 실패했습니다. 이 화면을 닫기 전에 노트를 JSON으로 내보내 보존해 주세요.'), 'error');
   });
   return true;
 }
@@ -7865,7 +7865,7 @@ async function resetLearningData() {
     } catch (error) {
       learningImportBusy = false;
       console.error('[Phrase Desk] learning data reset was not saved', error);
-      toast(pdT('학습 데이터 초기화에 실패했어. 기존 기록은 그대로 보존돼.'), 'error');
+      toast(pdT('학습 데이터 초기화에 실패했습니다. 기존 기록은 그대로 보존됩니다.'), 'error');
       return;
     }
   }
