@@ -416,12 +416,6 @@
   cursor: pointer !important;
   vertical-align: middle !important;
 }
-.pd-message-translate-btn:hover,
-.pd-message-translate-btn.translated {
-  opacity: 1 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-}
 .pd-message-translate-btn.busy { opacity: .35 !important; pointer-events: none !important; }
 
 .pd-modal-backdrop {
