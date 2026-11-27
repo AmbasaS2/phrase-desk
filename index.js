@@ -5640,7 +5640,7 @@ function setupSettingsPanel() {
   const html = pdUi`
   <div id="phrase-desk-settings" class="inline-drawer pd-settings-root">
     <div class="inline-drawer-toggle inline-drawer-header">
-      <b>${esc(DISPLAY_NAME)}</b>
+      <b>${esc(DISPLAY_NAME.replace(/^🔤\s*/, ''))}</b>
       <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
     </div>
     <div class="inline-drawer-content pd-settings-content" style="display:none;">
