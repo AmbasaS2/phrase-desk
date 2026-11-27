@@ -18,7 +18,7 @@
   "phraseDesk.9138777b": "翻訳注釈${0}を表示",
   "phraseDesk.4ad9ef56": "併記翻訳の注釈",
   "phraseDesk.5e10f9b7": "<option value=\"\">接続プロファイルを選択</option>",
-  "phraseDesk.45ad8d70": "<button id=\"pd-open-debug\" type=\"button\" class=\"menu_button\">🐞 デバッグログ</button>",
+  "phraseDesk.f5d11721": "<button id=\"pd-open-debug\" type=\"button\" class=\"menu_button\"><i class=\"fa-solid fa-bug\" aria-hidden=\"true\"></i> デバッグログ</button>",
   "phraseDesk.78a92e74": "<div id=\"pd-debug-panel\" style=\"display:none;\"><div class=\"pd-debug-actions\"><button id=\"pd-copy-debug\" type=\"button\" class=\"menu_button\">ログをコピー</button><button id=\"pd-clear-debug\" type=\"button\" class=\"menu_button\">ログを消去</button></div><textarea id=\"pd-debug-output\" readonly rows=\"7\" placeholder=\"最近のPhrase Deskログがここに表示されます。\">${0}</textarea></div>",
   "phraseDesk.ca20d345": "全文併記モードに適用します。",
   "phraseDesk.456d1b15": "全文併記モードでのみ使用できます。",

@@ -5656,7 +5656,7 @@ function setupSettingsPanel() {
       <div class="pd-setting-row"><textarea id="pd-input-global-prompt" class="text_pole" rows="5" spellcheck="false"></textarea></div>
       <div class="pd-setting-row"><textarea id="pd-global-prompt" class="text_pole" rows="8" spellcheck="false"></textarea></div>
       <div class="pd-setting-row"><label>현재 캐릭터 전용 프롬프트 <small id="pd-char-name">${esc(char)}</small></label><textarea id="pd-char-prompt" class="text_pole" rows="3" placeholder="스펠링, 성별, 호칭, 말투 등 현재 캐릭터 번역에만 참고할 내용을 적어주세요.">${esc(currentPrompt())}</textarea></div>
-      <div class="pd-settings-foot"><span><b>${settings.notebook.length}</b>개 표현 저장됨</span><button id="pd-clear-chat-cache" type="button" class="menu_button">이 채팅방 번역 캐시 삭제</button>${SHOW_DEBUG ? pdT('<button id="pd-open-debug" type="button" class="menu_button">🐞 디버그 로그</button>') : ''}</div>
+      <div class="pd-settings-foot"><span><b>${settings.notebook.length}</b>개 표현 저장됨</span><button id="pd-clear-chat-cache" type="button" class="menu_button">이 채팅방 번역 캐시 삭제</button>${SHOW_DEBUG ? pdT('<button id="pd-open-debug" type="button" class="menu_button"><i class="fa-solid fa-bug" aria-hidden="true"></i> 디버그 로그</button>') : ''}</div>
       ${SHOW_DEBUG ? pdUi`<div id="pd-debug-panel" style="display:none;"><div class="pd-debug-actions"><button id="pd-copy-debug" type="button" class="menu_button">로그 복사</button><button id="pd-clear-debug" type="button" class="menu_button">로그 비우기</button></div><textarea id="pd-debug-output" readonly rows="7" placeholder="최근 Phrase Desk 로그가 여기에 표시됩니다.">${esc(debugText())}</textarea></div>` : ''}
       </div>
     </div>

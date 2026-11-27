@@ -18,7 +18,7 @@
   "phraseDesk.9138777b": "번역 주석 ${0} 보기",
   "phraseDesk.4ad9ef56": "병기 번역 주석",
   "phraseDesk.5e10f9b7": "<option value=\"\">연결 프로필 선택</option>",
-  "phraseDesk.45ad8d70": "<button id=\"pd-open-debug\" type=\"button\" class=\"menu_button\">🐞 디버그 로그</button>",
+  "phraseDesk.f5d11721": "<button id=\"pd-open-debug\" type=\"button\" class=\"menu_button\"><i class=\"fa-solid fa-bug\" aria-hidden=\"true\"></i> 디버그 로그</button>",
   "phraseDesk.78a92e74": "<div id=\"pd-debug-panel\" style=\"display:none;\"><div class=\"pd-debug-actions\"><button id=\"pd-copy-debug\" type=\"button\" class=\"menu_button\">로그 복사</button><button id=\"pd-clear-debug\" type=\"button\" class=\"menu_button\">로그 비우기</button></div><textarea id=\"pd-debug-output\" readonly rows=\"7\" placeholder=\"최근 Phrase Desk 로그가 여기에 표시됩니다.\">${0}</textarea></div>",
   "phraseDesk.ca20d345": "전체 원문·번역 병기에서 적용됩니다.",
   "phraseDesk.456d1b15": "전체 원문·번역 병기일 때만 적용됩니다.",

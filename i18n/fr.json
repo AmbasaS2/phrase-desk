@@ -18,7 +18,7 @@
   "phraseDesk.9138777b": "Afficher la note de traduction ${0}",
   "phraseDesk.4ad9ef56": "Notes de traduction bilingue",
   "phraseDesk.5e10f9b7": "<option value=\"\">Choisir un profil de connexion</option>",
-  "phraseDesk.45ad8d70": "<button id=\"pd-open-debug\" type=\"button\" class=\"menu_button\">🐞 Journal de débogage</button>",
+  "phraseDesk.f5d11721": "<button id=\"pd-open-debug\" type=\"button\" class=\"menu_button\"><i class=\"fa-solid fa-bug\" aria-hidden=\"true\"></i> Journal de débogage</button>",
   "phraseDesk.78a92e74": "<div id=\"pd-debug-panel\" style=\"display:none;\"><div class=\"pd-debug-actions\"><button id=\"pd-copy-debug\" type=\"button\" class=\"menu_button\">Copier le journal</button><button id=\"pd-clear-debug\" type=\"button\" class=\"menu_button\">Vider le journal</button></div><textarea id=\"pd-debug-output\" readonly rows=\"7\" placeholder=\"Les journaux récents de Phrase Desk apparaissent ici.\">${0}</textarea></div>",
   "phraseDesk.ca20d345": "S'applique au mode bilingue intégral.",
   "phraseDesk.456d1b15": "Disponible uniquement en mode bilingue intégral.",
